@@ -82,3 +82,6 @@
 ## Nii ignore
 *.[nN][iI][iI]
 *.ipynb_checkpoints
+
+## Mac ignore
+.DS_Store
