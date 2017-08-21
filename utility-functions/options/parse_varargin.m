@@ -43,8 +43,7 @@ function out = parse_varargin(in, out)
         key = in{i*2-1};
         value = in{i*2};
         % In case of option tree (i.e., struct of struct of ...)
-        key = split(key, '.');
-        key = mat2cell(key, ones(length(key), 1));
+        key = strsplit(key, '.');
         for j=1:length(key)
             key{j} = char(key{j});
         end
@@ -52,10 +51,10 @@ function out = parse_varargin(in, out)
             if j == 1
                 prev = out;
             else
-                prev = getfield(out, key{1:j-1});
+                prev = out.(key{1:j-1});
             end
             if ~isfield(prev, key{j}) || ~isstruct(prev.(key{j}))
-                out = setfield(out, key{1:j}, struct);
+                out.(key{1:j}) = struct;
             end
         end
         out = setfield(out, key{:}, value);
