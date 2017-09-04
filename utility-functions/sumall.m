@@ -19,9 +19,9 @@ function a = sumall(a, n)
         case 5
             a = sum(sum(sum(sum(sum(squeeze(a))))));
         case 6
-            a = sum(um(sum(sum(sum(sum(squeeze(a)))))));
+            a = sum(sum(sum(sum(sum(sum(squeeze(a)))))));
         case 7
-            a = sum(sum(um(sum(sum(sum(sum(squeeze(a))))))));
+            a = sum(sum(sum(sum(sum(sum(sum(squeeze(a))))))));
         case 8
             a = sum(sum(sum(sum(sum(sum(sum(sum(squeeze(a)))))))));
         case 9
