@@ -173,7 +173,7 @@ classdef Velocity < handle & DiskWorker
         % FORMAT obj.setLogMu(value, 'OptKey', opt_value, ...)
         % See 'help setNifti' for a description of possible options.
             s = obj.disableListeners('setLogMu');
-            obj.setLogMu = setNifti(value, obj.setLogMu, varargin{:});
+            obj.LogMu = setNifti(value, obj.LogMu, varargin{:});
             obj.statusChanged('a');
             obj.enableListeners(s, 'setLogMu');
         end
@@ -574,5 +574,7 @@ classdef Velocity < handle & DiskWorker
     
         dat2nii = DiskWorker.invertTranslation(Velocity.nii2dat)
         downdep = DiskWorker.invertDependencies(Velocity.dependencies)
+        
+        mappable = struct()
     end
 end
