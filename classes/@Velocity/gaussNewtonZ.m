@@ -112,25 +112,20 @@ function ok = lineSearchZ(obj, dz, varargin)
             if opt.Verbose
                 fprintf('| Success\n');
             end
-            obj.statusChanged('z', 'v', 'iphi', 'pf', 'pvox', 'llm', 'llz');
             obj.z.dim       = size(z);
             obj.z(:)        = z(:);
-            obj.utd.z       = true;
             obj.v.dim       = size(v);
             obj.v(:)        = v(:);
-            obj.utd.v       = true;
             obj.iphi.dim    = size(iphi);
             obj.iphi(:)     = iphi(:);
-            obj.utd.iphi    = true;
             obj.pf.dim      = size(pf);
             obj.pf(:)       = pf(:);
-            obj.utd.pf      = true;
             obj.pvox.dim    = size(pvox);
             obj.pvox(:)     = pvox(:);
-            obj.utd.pvox    = true;
             % Save likelihood
             obj.llm      = llm;
             obj.utd.llm  = true;
+            obj.statusChanged('z', 'v', 'iphi', 'pf', 'pvox', 'llm', 'llz');
             obj.logLikelihoodPriorZ(); % < full version;
             % OK
             ok           = true;

@@ -1,13 +1,8 @@
 function [g,h] = gradHessPriorZ(obj, z, regz)
-% FORMAT [g,h] = obj.gradHessPriorZ((g), (h))
-% obj - A velocity object
-% (g) - Gradient of the objective function w.r.t. (expected) latent 
-%       coordinates. Incremented by this function.
-% (h) - Hessian of the objective function w.r.t. (expected) latent 
-%       coordinates. Incremented by this function.
-%
-% Object fields [w, regz] are used by this function 
-% and should thus be correctly set before call.
+% FORMAT [g,h] = obj.gradHessPriorZ((z), (regz))
+% obj  - A velocity object
+% z    - Latent coordinates
+% regz - Inverse covariance matrix of Z (W'LW)
 %
 % Add the prior part to Gradient and Hessian
 % This function should only be called by computeGradHess.
@@ -37,11 +32,9 @@ function [g,h] = gradHessPriorZ(obj, z, regz)
     regz = single(numeric(regz));
     
     % --- Compute grad and hess
-    g = zeros([dim_latent 1]);
-    g = g + regz * z;
+    g = regz * z;
     if nargout > 1
-        h = zeros(dim_latent);
-        h = h + regz;
+        h = regz;
     end
 
 end

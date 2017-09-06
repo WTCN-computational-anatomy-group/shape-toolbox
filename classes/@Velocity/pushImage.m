@@ -1,6 +1,6 @@
-function [f, c] = pushImage(obj, iphi, f)
-% FORMAT ([pf, (c)]) = obj.pushImage((iphi), (f))
-% (iphi) - Inverse transform (warps mu to f). [default: obj.iphi]
+function [f, c] = pushImage(obj, ipsi, f)
+% FORMAT ([pf, (c)]) = obj.pushImage((ipsi), (f))
+% (ipsi) - Inverse transform (warps mu to f). [default: obj.ipsi]
 % (f)    - Observed image. [default: obj.f]
 % Output:
 % (pf)   - Pushed image in template space (if no argout, write to obj.pf)
@@ -17,13 +17,13 @@ function [f, c] = pushImage(obj, iphi, f)
     if nargin < 3
         f = obj.f;
         if nargin < 2
-            obj.exponentiateVelocity('iphi');
-            iphi = obj.iphi;
+            obj.reconstructIPsi();
+            ipsi = obj.ipsi;
         end
     end
     
     % --- Check that all arrays are ready to be used
-    if ~obj.checkarray(iphi) || ~obj.checkarray(f)
+    if ~obj.checkarray(ipsi) || ~obj.checkarray(f)
         if obj.Debug
             warning('Cannot push image: missing arrays');
         end
@@ -32,15 +32,11 @@ function [f, c] = pushImage(obj, iphi, f)
     if obj.Debug, fprintf('* pushImage\n'); end;
     
     % --- Load data
-    if isa(f, 'file_array')
-        f = single(numeric(f));
-    end
-    if isa(iphi, 'file_array')
-        iphi = single(numeric(iphi));
-    end
+    f = single(numeric(f));
+    ipsi = single(numeric(ipsi));
         
     % --- Push
-    [f, c] = spm_diffeo('pushc', f, iphi);
+    [f, c] = spm_diffeo('pushc', f, ipsi);
     f(~isfinite(f)) = nan;
     c(~isfinite(c)) = nan;
     
@@ -51,7 +47,5 @@ function [f, c] = pushImage(obj, iphi, f)
         obj.pvox.dim    = size(c);
         obj.pvox(:)     = c(:);
         obj.statusChanged('pf', 'pvox');
-        obj.utd.pf      = true;
-        obj.utd.pvox    = true;
     end
 end

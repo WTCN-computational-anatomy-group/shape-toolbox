@@ -24,9 +24,11 @@ function [g, h] = computeGradHessZ(obj)
     clear g1 h1
     
     % --- Additional regularisation in case H is singular
-    r = 1e-7 * max(diag(h)) * eye(dim_latent);
-    h = h + r;
-    clear r
+    while rcond(h) < 1e-5
+        r = 1e-7 * max(diag(h)) * eye(dim_latent);
+        h = h + r;
+        clear r
+    end
     
     if nargout == 0
         obj.hz.dim  = size(h);

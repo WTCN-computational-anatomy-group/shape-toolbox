@@ -70,7 +70,7 @@ function [g, h, htype] = gradHessMatchingVel(obj, mu, f, c, gmu)
         if obj.Debug, fprintf('* gradHessMatchingVel\n'); end;
     end
     
-    % --- Compute gradient ans hessian (select case)
+    % --- Compute gradient and hessian (select case)
     switch lower(obj.MatchingTerm)
         % E = log p(f | mu, v)
         case {'normal', 'gaussian', 'l2'}
@@ -304,7 +304,7 @@ function [g, h, htype] = ghBernoulli(mu, f, c, ga)
     % --- Compute residuals
     g  = (c .* mu) - f;
     if nargout > 1
-        h  = c .* (mu .* (1 - mu) + 1E-3);  % How to fix 1E-3 ?
+        h  = c .* (mu .* (1 - mu));  % How to fix 1E-3 ?
         htype = 'diagonal';
     end
     
@@ -319,7 +319,7 @@ function [g, h, htype] = ghBernoulli(mu, f, c, ga)
         g1 = zeros([dlat nvec], 'single');
         [g, g1] = deal(g1, g); % swap g and g1
         for d=1:nvec
-            g(:,:,:,d) = g(:,:,:,d) - g1 .* ga(:,:,:,1,d);
+            g(:,:,:,d) = -g1 .* ga(:,:,:,1,d);
         end
         clear g1
         

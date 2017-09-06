@@ -47,8 +47,8 @@ function ll = logLikelihoodPriorR(obj, r, fast)
     if ~fast
         ll = ll + count * log(2 * pi);
         
-        [~, ld] = spm_diffeo('kernel', lat, [obj.VoxelSize obj.RegParam]);
-        ll = ll - 0.5*ld;
+        [~, ld] = spm_shoot_greens('kernel', lat, [obj.VoxelSize obj.RegParam]);
+        ll = ll - 0.5*ld(1);
 %         if obj.Debug
 %             warning(['LL: discard 0.5 * det(L). ' ...
 %                      'Don''t know how to compute it (with the kernel?).']);
