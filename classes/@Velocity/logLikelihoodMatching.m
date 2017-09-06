@@ -19,16 +19,16 @@ function ll = logLikelihoodMatching(obj, varargin)
 % > Warping is done before call, loglikelihood is computed as if in 
 % native space.
 %
-% FORMAT (ll) = obj.logLikelihoodMatching(iphi, mu, f, (type))
-% iphi   - Inverse transform (warps mu to f)
+% FORMAT (ll) = obj.logLikelihoodMatching(ipsi, mu, f, (type))
+% ipsi   - Inverse transform (warps mu to f)
 % f      - Native observed image
 % mu     - Native template
 % type   - 'warp' > Template is warped in image space
 %          'push' > Image is pushed to template space
 % (ll)   - Log-likelihood [if no argout: write to obj.llm]
 %
-% FORMAT (ll) = obj.logLikelihoodMatching(iphi, (type))
-% iphi   - Inverse transform (warps mu to f)
+% FORMAT (ll) = obj.logLikelihoodMatching(ipsi, (type))
+% ipsi   - Inverse transform (warps mu to f)
 % type   - 'warp' > Template is warped in image space
 %          'push' > Image is pushed to template space
 % (ll)   - Log-likelihood [if no argout: write to obj.llm]
@@ -115,7 +115,7 @@ function ll = logLikelihoodMatching(obj, varargin)
 
             case 1
             % ll = obj.logLikelihood(iphi, (type))
-            % iphi = varargin{1}
+            % ipsi = varargin{1}
                 if strcmp(type, 'warp')
                     wmu = obj.warpTemplate(varargin{1});
                     wmu = obj.reconstructWarpedTemplate(wmu);
@@ -134,7 +134,7 @@ function ll = logLikelihoodMatching(obj, varargin)
 
             case 3
             % ll = obj.logLikelihood(iphi, mu, f, (type))
-            % iphi = varargin{1}
+            % ipsi = varargin{1}
             % mu   = varargin{2}
             % f    = varargin{3}
                 if strcmp(type, 'warp')
@@ -203,7 +203,7 @@ function ll = logLikelihoodWarped(obj, mu, f)
                 ll = ll ...
                     - 0.5 * count * log(s(k)) ...
                     - 0.5 * count * log(2 * pi) ...
-                    - 0.5 / s(k) * sumall((f1(msk) - mu1(msk)).^2);
+                    - 0.5 / s(k) * sumall((mu1(msk) - f1(msk)).^2);
                 
                 clear f1 mu1 msk
             end
@@ -227,7 +227,7 @@ function ll = logLikelihoodWarped(obj, mu, f)
                 % Compute log-likelihood
                 ll = ll ...
                     - count * log(2 * b(k)) ...
-                    - 1/b * sumall(abs(f1(msk) - mu1(msk)));
+                    - 1/b * sumall(abs(mu1(msk) - f1(msk)));
                 clear f1 mu1 msk
             end
             clear f mu
@@ -246,7 +246,8 @@ function ll = logLikelihoodWarped(obj, mu, f)
             mu = single(mu(:,:,:,1));
             f  = single(f(:,:,:,1));
             msk = isfinite(f) & isfinite(mu);
-            mu = max(eps('single'), min(1-eps('single'), mu)); % Correct for interpolation
+            % Just in case: correct for interpolation
+            mu = max(eps('single'), min(1-eps('single'), mu));
             % Compute log-likelihood
             ll = sumall(f(msk) .* log(mu(msk)) + (1 - f(msk)) .* log(1 - mu(msk)));
             clear f mu msk
@@ -319,7 +320,7 @@ function ll = logLikelihoodPushed(obj, mu, f, c)
                 ll = ll ...
                     - 0.5 * count * log(s(k)) ...
                     - 0.5 * count * log(2 * pi) ...
-                    - 0.5 /s(k) * sumall((f1(msk) - mu1(msk) .* c(msk)).^2);
+                    - 0.5 /s(k) * sumall((mu1(msk) .* c(msk) - f1(msk)).^2);
                 clear f1 mu1 msk
             end
             clear f mu c
@@ -343,7 +344,7 @@ function ll = logLikelihoodPushed(obj, mu, f, c)
                 % Compute log-likelihood
                 ll = ll ...
                     - count * log(2 * b(k)) ...
-                    - 1/b * sumall(abs(f1(msk) - mu1(msk) .* c(msk)));
+                    - 1/b * sumall(abs(mu1(msk) .* c(msk) - f1(msk)));
                 clear f1 mu1 msk
             end
             clear f mu c

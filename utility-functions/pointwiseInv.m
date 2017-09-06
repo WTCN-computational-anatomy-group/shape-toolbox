@@ -1,5 +1,5 @@
 function h = pointwiseInv(h, sym)
-% Performs the pointwise inversion of a tensor field. THe last two
+% Performs the pointwise inversion of a tensor field. The last two
 % dimensions are assumed to be that of the matrices, and the other that of
 % the lattice.
 

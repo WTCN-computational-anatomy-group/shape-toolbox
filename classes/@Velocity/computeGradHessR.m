@@ -10,6 +10,26 @@ function [g, h] = computeGradHessR(obj)
     [g, h] = obj.gradHessMatchingVel(); 
     g = g * obj.SigmaR;
     h = h * obj.SigmaR^2;
+    
+    % --- Deal with 2d case
+    if size(obj.mu, 3) == 1
+        h(:,:,:,[3 5 6]) = 0;
+        g(:,:,:,3)       = 0;
+    end
+    
+    % --- Additional regularisation in case H is singular
+    % Create Identity tensor field
+    r = zeros(size(h), 'like', h);
+    r(:,:,:,1:3) = 1;
+    % Multiply by the pointwise "maximum of diagonal"
+    r = 1e-7 * bsxfun(@times, r, max(h(:,:,:,1:3), [], 4));
+    h = h + r;
+    clear r
+
+    % --- Deal with 2d case
+    if size(obj.mu, 3) == 1
+        h(:,:,:,3) = 1;
+    end
 
     if nargout == 0
         obj.hr.dim  = size(h);

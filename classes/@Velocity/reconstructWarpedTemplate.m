@@ -19,6 +19,7 @@ function wmu = reconstructWarpedTemplate(obj, wa)
     end
     if ~any(strcmpi(obj.MatchingTerm, ...
             {'bernoulli', 'binomial', 'binary', 'categorical', 'multinomial'}))
+        wmu = wa;
         return
     end
     

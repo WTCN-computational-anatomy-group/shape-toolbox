@@ -1,7 +1,7 @@
 function ll = logLikelihoodPriorZ(obj, z, regz, fast)
 % FORMAT ll = obj.logLikelihoodPriorZ((z), (regz), (fast))
 % (z)    - Latent coordinates [default: obj.z]
-% (regz) - Covariance matrix of the prior [default: obj.regz]
+% (regz) - Inverse covariance matrix of the prior [default: obj.regz]
 % (ll)   - Log-likelihood of the input coordinates
 %          [if no argout: write to obj.llz]
 %
@@ -11,9 +11,7 @@ function ll = logLikelihoodPriorZ(obj, z, regz, fast)
     if nargin < 4
         fast = false;
         if nargin < 3
-            if ~obj.checkarray('regz')
-                obj.computeRegZ();
-            end
+            obj.computeRegZ();
             regz = obj.regz;
             if nargin < 2
                 z = obj.z;
@@ -55,8 +53,7 @@ function ll = logLikelihoodPriorZ(obj, z, regz, fast)
     ll = -0.5 * ll;
     
     if nargout == 0
-        obj.llz     = ll;
-        obj.utd.llz = true;
+        obj.llz = ll;
         obj.statusChanged('llz');
     end
 

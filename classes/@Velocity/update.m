@@ -3,18 +3,22 @@ function update(obj)
     if obj.Debug, fprintf('* update\n'); end;
 
     % --- Initialize R and Z if needed
-    if ~obj.checkarray('r')
-        obj.initR();
+    if ~obj.checkarray('q')
+        obj.initAffine();
     end
     if ~obj.checkarray('z')
         obj.initZ();
     end
+    if ~obj.checkarray('r')
+        obj.initR();
+    end
     
     % --- Gauss-Newton iterations
     for i=1:obj.MaxGNIt
+        okQ = gaussNewtonAffine(obj);
         okZ = gaussNewtonZ(obj);
         okR = gaussNewtonR(obj);
-        if (~okZ) && (~okR),  break; end
+        if (~okZ) && (~okR) && (~okQ),  break; end
     end
     
     if okZ

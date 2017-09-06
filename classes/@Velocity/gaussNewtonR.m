@@ -17,6 +17,11 @@ function ok = gaussNewtonR(obj)
     dr = spm_diffeo('fmg', single(h), single(g), [obj.VoxelSize obj.RegParam 2 2]);
     clear h g
     
+    % --- Deal with 2d case
+    if size(obj.mu, 3) == 1
+        dr(:,:,:,3) = 0;
+    end
+    
     % --- Line search to avoid overshoot
     ok = lineSearchR(obj, dr);
     
@@ -112,25 +117,19 @@ function ok = lineSearchR(obj, dr, varargin)
             if opt.Verbose
                 fprintf('| Success\n');
             end
-            obj.statusChanged('r', 'v', 'iphi', 'pf', 'pvox', 'llm', 'llr');
             obj.r.dim       = size(r);
             obj.r(:)        = r(:);
-            obj.utd.r       = true;
             obj.v.dim       = size(v);
             obj.v(:)        = v(:);
-            obj.utd.v       = true;
             obj.iphi.dim    = size(iphi);
             obj.iphi(:)     = iphi(:);
-            obj.utd.iphi    = true;
             obj.pf.dim      = size(pf);
             obj.pf(:)       = pf(:);
-            obj.utd.pf      = true;
             obj.pvox.dim    = size(pvox);
             obj.pvox(:)     = pvox(:);
-            obj.utd.pvox    = true;
             % Save likelihood
             obj.llm      = llm;
-            obj.utd.llm  = true;
+            obj.statusChanged('r', 'v', 'iphi', 'pf', 'pvox', 'llm', 'llr');
             obj.logLikelihoodPriorR(); % < full version;
             % OK
             ok           = true;

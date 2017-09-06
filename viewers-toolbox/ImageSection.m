@@ -53,9 +53,9 @@ classdef ImageSection < handle & AdvancedResize
             
             extract_section(obj);
             if opt.ScaledColor
-                obj.uiimage = imagesc(obj.uiaxes, obj.Section, 'Visible', 'off');
+                obj.uiimage = image(obj.Section, 'Parent', obj.uiaxes, 'Visible', 'off', 'CDataMapping', 'Scaled');
             else
-                obj.uiimage = image(obj.uiaxes, obj.Section, 'Visible', 'off');
+                obj.uiimage = image(obj.Section, 'Parent', obj.uiaxes, 'Visible', 'off');
             end
             if opt.FixedRatio
                 daspect(obj.uiaxes, [obj.VoxelSize(obj.WhichSection) 1]);
@@ -197,7 +197,7 @@ classdef ImageSection < handle & AdvancedResize
                     opt.Title = 'Sagittal';
                 end
             else
-                opt.Title = string(opt.Title);
+                opt.Title = char(opt.Title);
             end
             
             dim = size(obj.Data);
@@ -245,13 +245,13 @@ classdef ImageSection < handle & AdvancedResize
                     newtitle = 'Sagittal';
                 else
                     newtitle = ['[', ...
-                                char(string(obj.WhichSection(1))), ...
+                                char(obj.WhichSection(1)), ...
                                 ' ', ...
-                                char(string(obj.WhichSection(2))), ... 
+                                char(obj.WhichSection(2)), ... 
                                 ']'];
                 end
             else
-                newtitle = string(value);
+                newtitle = char(value);
             end
             obj.uititle = title(obj.uiaxes, newtitle);
             drawnow

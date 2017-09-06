@@ -7,20 +7,50 @@ function varargout = exponentiateVelocity(obj, varargin)
         v = varargin{1};
         varargin = varargin(2:end);
     else
-        if ~obj.checkarray('v')
-            obj.reconstructVelocity();
-        end
-        v = obj.v;
+        v = [];
     end
     
     % --- Read which computations to perform
     do      = struct;
     do.phi  = false;
-    do.iphi = true;
+    do.iphi = false;
     do.jac  = false;
     do.ijac = false;
     for i=1:length(varargin)
-        do.(varargin{i}) = true;
+        do.(lower(varargin{i})) = true;
+    end
+    if do.ijac
+        do.iphi = true;
+    end
+    if do.jac
+        do.phi = true;
+    end
+    
+    % --- Check nothing to do
+    out = struct;
+    if isempty(v)
+        do_something = false;
+        for i=1:length(varargin)
+            if obj.utd.(lower(varargin{i}))
+                out.(lower(varargin{i})) = obj.(lower(varargin{i}));
+                do.(lower(varargin{i})) = false;
+            end
+            do_something = do_something | do.(lower(varargin{i}));
+        end
+        if ~do_something
+            varargout = cell(size(varargin));
+            for i=1:length(varargin)
+                varargout{i} = out.(lower(varargin{i}));
+            end
+            return
+        end
+    end
+        
+    
+    % --- Default parameters
+    if isempty(v)
+        obj.reconstructVelocity();
+        v = obj.v;
     end
     
     % --- If input not usable, exit
@@ -34,7 +64,17 @@ function varargout = exponentiateVelocity(obj, varargin)
         end
         return;
     end
-    if obj.Debug, fprintf('* exponentiateVelocity\n'); end;
+    if obj.Debug
+        outputs = fieldnames(do);
+        strout = '';
+        for i=1:length(outputs)
+            if do.(outputs{i})
+                strout = [strout outputs{i} ','];
+            end
+        end
+        strout = strout(1:end-1);
+        fprintf('* exponentiateVelocity: %s\n', strout);
+    end;
     
     % --- Load data in memory
     if isa(v, 'file_array')
@@ -42,33 +82,81 @@ function varargout = exponentiateVelocity(obj, varargin)
     end
     
     % --- Deal with different cases
-    if do.iphi
-        if ~do.ijac && ~do.phi && ~do.jac
-            if nargout == 0 && obj.utd.iphi,  return; end % Nothing to do
-            iphi = pushIPhi(obj, v);
-            varargout{1} = iphi;
+    if do.iphi && ~do.phi
+        if do.ijac
+            [out.iphi, out.ijac] = pushIPhiJac(obj, v);
+        else
+            out.iphi = pushIPhi(obj, v);
+        end
+    elseif do.phi && ~do.iphi
+        if do.jac
+            [out.phi, out.jac] = pushPhiJac(obj, v);
+        else
+            out.phi = pushPhi(obj, v);
+        end
+    elseif do.phi && do.iphi
+        if (do.jac || do.ijac)
+            [out.iphi, out.ijac, out.phi, out.jac] = pushIPhiPhiJac(obj, v);
+        else
+            [out.iphi, out.phi] = pushIPhiPhi(obj, v);
         end
     end
 
     % --- Write on disk
     if nargout == 0
         if do.iphi
-            obj.iphi.dim = size(iphi);
-            obj.iphi(:)  = iphi(:);
-            obj.utd.iphi = true;
+            obj.iphi.dim = size(out.iphi);
+            obj.iphi(:)  = out.iphi(:);
             obj.statusChanged('iphi');
         end
+        if do.phi
+            obj.phi.dim = size(out.phi);
+            obj.phi(:)  = out.phi(:);
+            obj.statusChanged('phi');
+        end
+        if do.ijac
+            obj.ijac.dim = size(out.ijac);
+            obj.ijac(:)  = out.ijac(:);
+            obj.statusChanged('ijac');
+        end
+        if do.jac
+            obj.jac.dim = size(out.jac);
+            obj.jac(:)  = out.jac(:);
+            obj.statusChanged('jac');
+        end
+    else
+        varargout = cell(size(varargin));
+        for i=1:length(varargin)
+            varargout{i} = out.(lower(varargin{i}));
+        end
     end
-    
-    % For now I only do iphi because that's everything we need for the
-    % registration. What would probably be better would be to create a
-    % 'classical' Velocity class which implements geodesic shooting, and
-    % embed it in this 'latent' Velocity class.
-    % At the same time, if W = Id, the latent and clasic classes are
-    % identical, so it makes sense to leave everything at the same place.
 end
 
 % === Specialized/Optimized exonentiators =================================
+
+function phi = pushPhi(obj, v)
+    phi = spm_shoot3d(v, [obj.VoxelSize obj.RegParam], obj.Integration);
+end
+
+function [phi, jac] = pushPhiJac(obj, v)
+    [phi, jac] = spm_shoot3d(v, [obj.VoxelSize obj.RegParam], obj.Integration);
+end
+
+% function iphi = pushIPhi(obj, v)
+%     iphi = spm_shoot3di(v, [obj.VoxelSize obj.RegParam], obj.Integration);
+% end
+
+function [iphi, ijac] = pushIPhiJac(obj, v)
+    [iphi, ijac] = spm_shoot3di(v, [obj.VoxelSize obj.RegParam], obj.Integration);
+end
+
+function [iphi, phi] = pushIPhiPhi(obj, v)
+    [phi, ~, ~, iphi, ~] = spm_shoot3d(v, [obj.VoxelSize obj.RegParam], obj.Integration);
+end
+
+function [iphi, ijac, phi, jac] = pushIPhiPhiJac(obj, v)
+    [phi, jac, ~, iphi, ijac] = spm_shoot3d(v, [obj.VoxelSize obj.RegParam], obj.Integration);
+end
 
 function iphi = pushIPhi(obj, v)
 % FORMAT iphi = pushIPhi(obj, v, (N), (odim))

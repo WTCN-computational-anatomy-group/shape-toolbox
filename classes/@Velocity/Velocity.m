@@ -47,6 +47,9 @@ classdef Velocity < handle & DiskWorker
         Verbose        = false          % [bool]     Write additional information
         Graphic        = struct()       % [struct]   Set figures to see what's going on
         Debug          = false          % [bool]     Write super-additional information
+        AffineBasis    = affine_basis   % [4x4xQ d]  Affine basis
+        RegAffine      = eye(6)*1e8;
+        ApproxAffineHessian = false
     end
     % --- [Dependent] VoxelSize
     properties (Dependent, SetAccess = private)
@@ -83,9 +86,34 @@ classdef Velocity < handle & DiskWorker
         llm             % [double] Matching term: log p(F|Mu, W, Z*, R*)
         llz             % [double] Z prior: log p(Z*|W)
         llr             % [double] R prior: log p(R*)
+        llq             % [double] Affine prior: log p(q*)
         lll             % [double] Laplace approximation
     end
-    
+    %% == Affine transform ================================================
+    properties (GetObservable, SetObservable)
+        A           % [4x4 double] Exponentiated affine transform
+    end
+    properties (GetObservable, SetObservable)
+        q           % [6/7/12 double] Rigid/Sim/Affine parameters
+    end
+    properties (Dependent, SetAccess=?VelocityFriends)
+        Mf          % [4x4 double] Observed image voxel-to-world mapping 
+        Mmu         % [4x4 double] Template voxel-to-world mapping 
+    end
+    methods
+        function val = get.Mf(obj)
+            val = obj.Image.mat;
+        end
+        function set.Mf(obj, val)
+            obj.Image.mat = val;
+        end
+        function val = get.Mmu(obj)
+            val = obj.Mu.mat;
+        end
+        function set.Mmu(obj, val)
+            obj.Mu.mat = val;
+        end
+    end
     %% == Public niftis ===================================================
     % All "major" arrays that can be stored on disk are stored as nifti
     % images. We also add a few arrays which are not needed for the MAP
@@ -173,7 +201,7 @@ classdef Velocity < handle & DiskWorker
         % FORMAT obj.setLogMu(value, 'OptKey', opt_value, ...)
         % See 'help setNifti' for a description of possible options.
             s = obj.disableListeners('setLogMu');
-            obj.setLogMu = setNifti(value, obj.setLogMu, varargin{:});
+            obj.LogMu = setNifti(value, obj.LogMu, varargin{:});
             obj.statusChanged('a');
             obj.enableListeners(s, 'setLogMu');
         end
@@ -181,8 +209,12 @@ classdef Velocity < handle & DiskWorker
     % --- Output arrays ---
     properties (GetObservable, SetAccess = private)
         Vel      % [nifti] Reconstructed velocity
-        IPhi     % [nifti] Inverse transform (warps image to template ??)
-        Phi      % [nifti] Direct transform (warps template to image ??)
+        IPsi     % [nifti] Complete inverse transform IPsi = IPhi o IXi (warps template to image)
+        Psi      % [nifti] Complete direct transform Psi = Xi o Phi (warps image to template)
+        IPhi     % [nifti] Inverse diffeomorphic transform
+        Phi      % [nifti] Direct diffeomorphic 
+        JIPhi
+        JPhi
         WMu      % [nifti] Warped template in image space
         WLogMu   % [nifti] Warped log-template in image space (used with bi and multinomial matching terms)
         WImage   % [nifti] Warped image in template space
@@ -191,6 +223,7 @@ classdef Velocity < handle & DiskWorker
         PushedC  % [nifti] Number of image voxels pushed in each template voxel
         Hz       % [nifti] Hessian of LL w.r.t. Z (used for Laplace approximation)
         Hr       % [nifti] Hessian of LL w.r.t. R (used for Laplace approximation)
+        Hq
         Sz
         Sr
         Sv
@@ -203,8 +236,12 @@ classdef Velocity < handle & DiskWorker
         r        % [file_array] residual velocity field
         regz     % [file_array] Inverse covariance of the prior on Z (S^-1 in p(Z|W) = N(0, S))
         v        % [file_array] Reconstructed velocity
-        iphi     % [file_array] Inverse transform (f = mu(iphi))
-        phi      % [file_array] Direct transform (f(phi) = mu)
+        ipsi     % [file_array] Inverse complete transform (f = mu(ipsi))
+        psi      % [file_array] Direct complete transform (f(psi) = mu)
+        iphi     % [file_array] Inverse diffeo transform (f = mu(iphi))
+        phi      % [file_array] Direct diffeo transform (f(phi) = mu)
+        ijac
+        jac
         mu       % [file_array] Template
         a        % [file_array] "Log-template" (encoding of the template in log/rotnull space)
         f        % [file_array] Observed image
@@ -217,6 +254,7 @@ classdef Velocity < handle & DiskWorker
         pvox     % [file_array] Number of image voxels pushed in each template voxel
         hz       % [file_array] Hessian of LL w.r.t. Z (used for Laplace approximation)
         hr       % [file_array] Hessian of LL w.r.t. R (used for Laplace approximation)
+        hq       % [file_array] Hessian of LL w.r.t. Q (used for Laplace approximation)
         sz       % [file_array] Covariance matrix of Z's posterior (Laplace approximation)
         sr       % [file_array] Covariance matrix of R's posterior (Laplace approximation)
         swz      % [file_array] Covariance matrix of WZ's posterior (Laplace approximation)
@@ -229,6 +267,7 @@ classdef Velocity < handle & DiskWorker
         function val = get.pvox(obj),   val = obj.getDat('pvox');   end
         function val = get.hz(obj),     val = obj.getDat('hz');     end
         function val = get.hr(obj),     val = obj.getDat('hr');     end
+        function val = get.hq(obj),     val = obj.getDat('hq');     end
         function val = get.sz(obj),     val = obj.getDat('sz');     end
         function val = get.sr(obj),     val = obj.getDat('sr');     end
         function val = get.sv(obj),     val = obj.getDat('sv');     end
@@ -240,6 +279,10 @@ classdef Velocity < handle & DiskWorker
         function val = get.v(obj),      val = obj.getDat('v');      end
         function val = get.iphi(obj),   val = obj.getDat('iphi');   end
         function val = get.phi(obj),    val = obj.getDat('phi');    end
+        function val = get.ijac(obj),   val = obj.getDat('ijac');   end
+        function val = get.jac(obj),    val = obj.getDat('jac');    end
+        function val = get.ipsi(obj),   val = obj.getDat('ipsi');   end
+        function val = get.psi(obj),    val = obj.getDat('psi');    end
         function val = get.mu(obj),     val = obj.getDat('mu');     end
         function val = get.f(obj),      val = obj.getDat('f');      end
         function val = get.wmu(obj),    val = obj.getDat('wmu');    end
@@ -273,6 +316,7 @@ classdef Velocity < handle & DiskWorker
         function set.pvox(obj, val),   obj.setDat('pvox', val); end
         function set.hz(obj, val),     obj.setDat('hz', val);   end
         function set.hr(obj, val),     obj.setDat('hr', val);   end
+        function set.hq(obj, val),     obj.setDat('hq', val);   end
         function set.sz(obj, val),     obj.setDat('sz', val);   end
         function set.sr(obj, val),     obj.setDat('sr', val);   end
         function set.sv(obj, val),     obj.setDat('sv', val);   end
@@ -284,6 +328,10 @@ classdef Velocity < handle & DiskWorker
         function set.v(obj, val),      obj.setDat('v', val);    end
         function set.iphi(obj, val),   obj.setDat('iphi', val); end
         function set.phi(obj, val),    obj.setDat('phi', val);  end
+        function set.ijac(obj, val),   obj.setDat('ijac', val); end
+        function set.jac(obj, val),    obj.setDat('jac', val);  end
+        function set.ipsi(obj, val),   obj.setDat('ipsi', val); end
+        function set.psi(obj, val),    obj.setDat('psi', val);  end
         function set.mu(obj, val),     obj.setDat('mu', val);   end
         function set.f(obj, val),      obj.setDat('f', val);    end
         function set.wmu(obj, val),    obj.setDat('wmu', val);  end
@@ -452,14 +500,18 @@ classdef Velocity < handle & DiskWorker
         varargout = update(obj, varargin)
         varargout = updateZ(obj, varargin)
         varargout = updateR(obj, varargin)
+        varargout = updateAffine(obj, varargin)
         varargout = initZ(obj, varargin)
         varargout = initR(obj, varargin)
+        varargout = initQ(obj, varargin)
     end
     methods (Access = protected)
-        % -- Externaly defined
         varargout = setDat(obj, varargin)
         varargout = getDat(obj, varargin)
         varargout = checkarray(obj, varargin)
+    end
+    methods (Access = public)
+        % -- Externaly defined
         varargout = reconstructVelocity(obj, varargin)
         varargout = exponentiateVelocity(obj, varargin)
         varargout = pushImage(obj, varargin)
@@ -473,16 +525,18 @@ classdef Velocity < handle & DiskWorker
         varargout = gradHessMatchingVel(obj, varargin)
         varargout = gradHessMatchingZ(obj, varargin)
         varargout = gradHessMatchingR(obj, varargin)
+        varargout = gradHessMatchingAffine(obj, varargin)
         varargout = gradHessPriorZ(obj, varargin)
+        varargout = gradHessPriorAffine(obj, varargin)
         % varargout = gradHessRegZ(obj, varargin) % Additional reg
         varargout = logLikelihood(obj, varargin)         % TODO ?
         varargout = logLikelihoodMatching(obj, varargin) % log p(F | Z, R, W)
         varargout = logLikelihoodPriorZ(obj, varargin)   % log p(Z | W)
         varargout = logLikelihoodPriorR(obj, varargin)   % log p(R)
+        varargout = logLikelihoodPriorAffine(obj, varargin)   % log p(q)
         varargout = gaussNewtonZ(obj, varargin)
         varargout = gaussNewtonR(obj, varargin)
-        varargout = lineSearchZ(obj, varargin)
-        varargout = lineSearchR(obj, varargin)
+        varargout = gaussNewtonAffine(obj, varargin)
     end
     %% == Define DiskWorker properties ====================================
     properties (Constant, Access = protected)
@@ -496,15 +550,22 @@ classdef Velocity < handle & DiskWorker
             'v',    {{'z', 'w', 'r'}}, ...
             'iphi', {{'v', 'RegParam', 'Integration'}}, ...
             'phi',  {{'v', 'RegParam', 'Integration'}}, ...
+            'ijac', {{'v', 'RegParam', 'Integration'}}, ...
+            'jac',  {{'v', 'RegParam', 'Integration'}}, ...
+            'ipsi', {{'iphi', 'A'}}, ...
+            'psi',  {{'phi', 'A'}}, ...
+            'A',    {{'q', 'AffBasis'}}, ...
+            'q',    {{}}, ...
             'wmu',  {{'wa'}}, ...
-            'wa',   {{'a', 'iphi', 'Interpolation'}}, ...
+            'wa',   {{'a', 'ipsi', 'Interpolation'}}, ...
             'res',  {{'f', 'wmu', 'MatchingTerm', 'Normal', 'Laplace'}}, ...
-            'wf',   {{'f', 'phi', 'Interpolation'}}, ...
+            'wf',   {{'f', 'psi', 'Interpolation'}}, ...
             'gmu',  {{'a', 'Interpolation'}}, ...
-            'pf',   {{'f', 'iphi'}}, ...
-            'pvox', {{'f', 'iphi'}}, ...
+            'pf',   {{'f', 'ipsi'}}, ...
+            'pvox', {{'f', 'ipsi'}}, ...
             'hz',   {{'w', 'pf', 'pvox', 'gmu', 'mu', 'a', 'MatchingTerm', 'Normal', 'Laplace'}}, ...
             'hr',   {{'w', 'pf', 'pvox', 'gmu', 'mu', 'a', 'MatchingTerm', 'Normal', 'Laplace'}}, ...
+            'hq',   {{'w', 'pf', 'pvox', 'gmu', 'mu', 'a', 'MatchingTerm', 'Normal', 'Laplace'}}, ...
             'sz',   {{'hz'}}, ...
             'sr',   {{'hr', 'RegParam'}}, ...
             'swz',  {{'sz', 'w'}}, ...
@@ -527,6 +588,10 @@ classdef Velocity < handle & DiskWorker
             'Vel',      'v',    ...
             'IPhi',     'iphi', ...
             'Phi',      'phi',  ...
+            'JIPhi',    'ijac', ...
+            'JPhi',     'jac',  ...
+            'IPsi',     'ipsi', ...
+            'Psi',      'psi',  ...
             'WMu',      'wmu',  ...
             'WLogMu',   'wa',   ...
             'Res',      'res',  ...
@@ -536,6 +601,7 @@ classdef Velocity < handle & DiskWorker
             'PushedC',  'pvox', ...
             'Hz',       'hz',   ...
             'Hr',       'hr',   ...
+            'Hq',       'hq',   ...
             'Sz',       'sz',   ...
             'Sr',       'sr',   ...
             'Swz',      'swz',  ...
@@ -551,7 +617,12 @@ classdef Velocity < handle & DiskWorker
             'f',    @(X){}, ...
             'v',    @reconstructVelocity, ...
             'iphi', @(X)exponentiateVelocity(X,'iphi'), ...
-            'phi',  @(X)exponentiateVelocity(X,'phi'), ...
+            'phi',  @(X)exponentiateVelocity(X,'phi', 'jac'), ...
+            'ijac', @(X)exponentiateVelocity(X,'iphi'), ...
+            'jac',  @(X)exponentiateVelocity(X,'phi', 'jac'), ...
+            'ipsi', @reconstructIPsi, ...
+            'psi',  @reconstructPsi, ...
+            'A',    @exponentiateAffine, ...
             'wmu',  @reconstructWarpedTemplate, ...
             'wa',   @warpTemplate, ...
             'res',  @residuals, ...
@@ -568,11 +639,14 @@ classdef Velocity < handle & DiskWorker
             'llm',  @logLikelihoodMatching, ...
             'llz',  @logLikelihoodPriorZ, ...
             'llr',  @logLikelihoodPriorR, ...
+            'lla',  @logLikelihoodPriorAffine, ...
             'lll',  @logLikelihoodLaplace, ...
             'll',   @logLikelihood ...
         )
     
         dat2nii = DiskWorker.invertTranslation(Velocity.nii2dat)
         downdep = DiskWorker.invertDependencies(Velocity.dependencies)
+        
+        mappable = struct()
     end
 end

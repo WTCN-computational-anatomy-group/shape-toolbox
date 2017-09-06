@@ -13,8 +13,10 @@ function ok = checkarray(obj, name)
 
     if ischar(name)
         ok = obj.utd.(name) ...
-             && prod(size(obj.(name))) ~= 0 ...
-             && exist(obj.(name).fname, 'file');
+             && prod(size(obj.(name))) ~= 0;
+         if isa(obj.(name), 'file_array')
+             ok = ok && exist(obj.(name).fname, 'file');
+         end
     elseif isa(name, 'file_array')
         ok = prod(size(name)) ~= 0 && exist(name.fname, 'file');
     else

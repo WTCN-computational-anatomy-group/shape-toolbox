@@ -20,6 +20,10 @@ function ll = logLikelihood(obj)
             obj.logLikelihoodPriorR();
             obj.ll = obj.ll + obj.llr;
         end
+        if obj.checkarray('q')
+            obj.logLikelihoodPriorAffine();
+            obj.ll = obj.ll + obj.llq;
+        end
         obj.statusChanged('ll');
         obj.utd.ll = true;
     else
@@ -29,6 +33,10 @@ function ll = logLikelihood(obj)
         end
         if obj.checkarray('r')
             ll = ll + obj.logLikelihoodPriorR();
+        endbj.logLikelihoodPriorZ();
+        end
+        if obj.checkarray('q')
+            ll = ll + obj.logLikelihoodPriorAffine();
         end
     end
 end

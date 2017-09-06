@@ -8,8 +8,8 @@ function varargout = residuals(obj, varargin)
 % > Warping is done before call, loglikelihood is computed as if in 
 % native space.
 %
-% FORMAT ([r, dr]) = obj.residuals(iphi, mu, f, (type))
-% iphi   - Inverse transform (warps mu to f)
+% FORMAT ([r, dr]) = obj.residuals(ipsi, mu, f, (type))
+% ipsi   - Inverse transform (warps mu to f)
 % f      - Native observed image
 % mu     - Native template
 % type   - 'warp' > Template is warped in image space
@@ -19,8 +19,8 @@ function varargout = residuals(obj, varargin)
 % (dr)   - Residuals used for gradient of matching term
 %          [if no argout: write to obj.presd (push)]
 %
-% FORMAT ([r, dr]) = obj.residuals(iphi, (type))
-% iphi   - Inverse transform (warps mu to f)
+% FORMAT ([r, dr]) = obj.residuals(ipsi, (type))
+% ipsi   - Inverse transform (warps mu to f)
 % type   - 'warp' > Template is warped in image space
 %          'push' > Image is pushed to template space
 % (r)    - Residuals used for matching term
@@ -65,7 +65,7 @@ function varargout = residuals(obj, varargin)
             
         case 1
         % ll = obj.residuals(iphi, (type))
-        % iphi = varargin{1}
+        % ipsi = varargin{1}
             if strcmp(type, 'warp')
                 wmu = obj.warpTemplate(varargin{1});
                 wmu = obj.reconstructWarpedTemplate(wmu);
@@ -84,7 +84,7 @@ function varargout = residuals(obj, varargin)
             
         case 3
         % ll = obj.residuals(iphi, mu, f, (type))
-        % iphi = varargin{1}
+        % ipsi = varargin{1}
         % mu   = varargin{2}
         % f    = varargin{3}
             if strcmp(type, 'warp')

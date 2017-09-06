@@ -11,7 +11,11 @@ function prev_state = disableListeners(obj, varargin)
 
     if numel(varargin) == 0
     % --- Disable all
-        prev_state = zeros([1 numel(obj.alllisteners)], 'logical');
+        try
+            prev_state = zeros([1 numel(obj.alllisteners)], 'logical');
+        catch
+            prev_state = zeros([1 numel(obj.alllisteners)], 'uint8');
+        end
         for j=1:numel(obj.alllisteners)
             prev_state(j) = obj.alllisteners{j}.Enabled;
             obj.alllisteners{j}.Enabled = false;
@@ -19,7 +23,11 @@ function prev_state = disableListeners(obj, varargin)
         
     else
     % --- Disable arguments
-        prev_state = zeros([1 numel(varargin)], 'logical');
+        try
+            prev_state = zeros([1 numel(varargin)], 'logical');
+        catch
+            prev_state = zeros([1 numel(varargin)], 'uint8');
+        end
         for i=1:numel(varargin)
             if isfield(obj.listeners, varargin{i})
                 prev_state(i) = false;

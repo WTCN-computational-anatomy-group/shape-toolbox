@@ -130,10 +130,10 @@ classdef DiscreteSlider < handle & AdvancedResize
                     case 3
                         value = 'Z';
                     otherwise
-                        value = string(value);
+                        value = char(value);
                 end
             else
-                value = string(value);
+                value = char(value);
             end
             obj.uilabel.String = value;
         end
@@ -186,7 +186,7 @@ classdef DiscreteSlider < handle & AdvancedResize
                 value = obj.Max;
             end
             obj.uislider.Value = value;
-            obj.uivalue.String = string(value);
+            obj.uivalue.String = char(value);
             obj.ValueChanged = ~obj.ValueChanged;
         end
         function valuechanged(obj)
@@ -197,7 +197,7 @@ classdef DiscreteSlider < handle & AdvancedResize
             elseif value > obj.Max
                 value = obj.Max;
             end
-            obj.uivalue.String = string(value);
+            obj.uivalue.String = char(value);
             obj.uislider.Value = value;
             obj.ValueChanged = ~obj.ValueChanged;
         end
@@ -281,10 +281,10 @@ classdef DiscreteSlider < handle & AdvancedResize
                     case 3
                         opt.Name = 'Z';
                     otherwise
-                        opt.Name = string(opt.Name);
+                        opt.Name = char(opt.Name);
                 end
             else
-                opt.Name = string(opt.Name);
+                opt.Name = char(opt.Name);
             end
             if isfield(opt, 'Length')
                 opt.Max = opt.Min + opt.Length - 1;

@@ -1,6 +1,6 @@
-function wa = warpTemplate(obj, iphi, a)
+function wa = warpTemplate(obj, ipsi, a)
 % FORMAT (wa) = obj.warpTemplate((iphi), (a))
-% (iphi) - Inverse transform (warps mu to f). [default: obj.iphi]
+% (ipsi) - Inverse transform (warps mu to f). [default: obj.ipsi]
 % (a)    - Template. [default: obj.mu/obj.a]
 % (wa)   - Warped template [if no argout: write to obj.wmu/obj.wa]
 % obj    - Velocity object. This function uses property 'Interpolation'
@@ -16,15 +16,15 @@ function wa = warpTemplate(obj, iphi, a)
     if nargin < 3
         a = obj.a;  % There's a direction toward mu for normal/laplace
         if nargin < 2
-            if ~obj.checkarray('iphi'), obj.exponentiateVelocity('iphi'); end
-            iphi = obj.iphi;
+            obj.reconstructIPsi();
+            ipsi = obj.ipsi;
         end
     end
     
     % --- If all empty, get out
     % I have to check this way because for file_arrays, numel and
     % isempty do not work the same way as for arrays
-    if ~obj.checkarray(iphi) || ~obj.checkarray(a)
+    if ~obj.checkarray(ipsi) || ~obj.checkarray(a)
         if obj.Debug
             warning('Cannot warp template: missing arrays\n')
         end
@@ -37,7 +37,7 @@ function wa = warpTemplate(obj, iphi, a)
     dim = [size(a) 1 1 1 1];
     dim = dim(1:4);
     nc  = dim(4);               % Number of classes/modalities
-    dim = [size(iphi) 1 1 1 1];
+    dim = [size(ipsi) 1 1 1 1];
     dim = dim(1:4);
     lat = dim(1:3);             % Dimension of the output lattice
     
@@ -45,11 +45,9 @@ function wa = warpTemplate(obj, iphi, a)
     if nargout == 0
         obj.wa.dim = [lat nc];
         wa         = obj.wa;
-        warp(iphi, a, obj.Interpolation, wa);
-        % --- Up-to-date
+        warp(ipsi, a, obj.Interpolation, wa);
         obj.statusChanged('wa');
-        obj.utd.wa = true;
     else
-        wa = warp(iphi, a, obj.Interpolation);
+        wa = warp(ipsi, a, obj.Interpolation);
     end
 end
