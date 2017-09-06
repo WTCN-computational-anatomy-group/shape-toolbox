@@ -1,8 +1,11 @@
 function swz = uncertaintyWZ(obj)
 
-    if ~obj.checkarray('sz')
-        obj.uncertaintyZ();
+    if nargin == 1 && obj.checkarray('swz')
+        swz = obj.swz;
+        return
     end
+    
+    obj.uncertaintyZ();
     if ~obj.checkarray('sz') || ~obj.checkarray('w')
         if obj.Debug
             warning('Cannot compute WZ''s uncertainty. Missing arrays.')
@@ -19,7 +22,6 @@ function swz = uncertaintyWZ(obj)
     obj.swz.dim = size(swz);
     obj.swz(:)  = swz(:);
     obj.statusChanged('swz');
-    obj.utd.swz = true;
     swz         = obj.swz;
     
 end

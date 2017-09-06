@@ -8,7 +8,8 @@ function v = reconstructVelocity(obj, a1, a2, a3)
 % Reconstruct the velocity field from its latent PC coordinates.
 
     % --- Check if nothing to do
-    if nargout == 0 && obj.checkarray('v')
+    if nargin == 1 && obj.checkarray('v')
+        v = obj.v;
         return
     end
     

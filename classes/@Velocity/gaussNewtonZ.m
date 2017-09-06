@@ -125,7 +125,7 @@ function ok = lineSearchZ(obj, dz, varargin)
             % Save likelihood
             obj.llm      = llm;
             obj.utd.llm  = true;
-            obj.statusChanged('z', 'v', 'iphi', 'pf', 'pvox', 'llm', 'llz');
+            obj.statusChanged('z', 'v', 'iphi', 'pf', 'pvox', 'llm');
             obj.logLikelihoodPriorZ(); % < full version;
             % OK
             ok           = true;

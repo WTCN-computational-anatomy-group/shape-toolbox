@@ -1,5 +1,10 @@
 function sz = uncertaintyZ(obj)
 
+    if nargin == 1 && obj.checkarray('sz')
+        sz = obj.sz;
+        return
+    end
+
     if ~obj.checkarray('hz')
         if obj.Debug
             warning('Cannot compute Z''s uncertainty. Missing arrays.')
@@ -14,7 +19,6 @@ function sz = uncertaintyZ(obj)
     sz = inv(numeric(hz));
     obj.sz(:) = sz(:);
     obj.statusChanged('sz');
-    obj.utd.sz = true;
     sz = obj.sz;
     
 end

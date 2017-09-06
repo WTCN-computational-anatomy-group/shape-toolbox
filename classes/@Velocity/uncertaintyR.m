@@ -1,5 +1,10 @@
 function sr = uncertaintyR(obj)
 
+    if nargin == 1 && obj.checkarray('sr')
+        sr = obj.sr;
+        return
+    end
+    
     if ~obj.checkarray('hr')
         if obj.Debug
             warning('Cannot compute R''s uncertainty. Missing arrays.')
@@ -10,11 +15,10 @@ function sr = uncertaintyR(obj)
     
     hr = obj.hr;
     
-    sr = pointwiseInv(hr, true);
+    sr = pointwise3(hr, 'i');
     obj.sr.dim = size(sr);
     obj.sr(:) = sr(:);
     obj.statusChanged('sr');
-    obj.utd.sr = true;
     sr = obj.sr;
     
 end

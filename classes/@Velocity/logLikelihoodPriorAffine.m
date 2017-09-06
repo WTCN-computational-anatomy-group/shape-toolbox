@@ -19,7 +19,7 @@ function ll = logLikelihoodPriorAffine(obj, q, regq, fast)
     end
     
     % --- Check up-to-date
-    if nargout == 0 && obj.utd.llq && ~fast
+    if nargin == 1 && obj.utd.llq
         ll = obj.llq;
         return
     end
