@@ -81,6 +81,8 @@
 
 ## Nii ignore
 *.[nN][iI][iI]
+*.hdr
+*.img
 *.ipynb_checkpoints
 
 ## Mac ignore
