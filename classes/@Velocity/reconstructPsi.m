@@ -2,7 +2,7 @@ function psi = reconstructPsi(obj, A, phi, lat)
 
     % --- Return if nothing to do
     if nargin == 1 && checkarray('psi')
-        psi = obj.ipsi;
+        psi = obj.psi;
         return
     end
 

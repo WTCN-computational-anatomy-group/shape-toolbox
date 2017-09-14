@@ -8,11 +8,13 @@ function mu = reconstructTemplate(obj, a)
 % useful for matching terms binomial and multinomial.
 
     % --- Check if nothing to do
-    if nargout == 0 && obj.checkarray('mu')
+    if nargin == 1 && obj.checkarray('mu')
+        mu = obj.mu;
         return
     end
     if ~any(strcmpi(obj.MatchingTerm, ...
             {'bernoulli', 'binomial', 'binary', 'categorical', 'multinomial'}))
+        mu = obj.mu;
         return
     end
 

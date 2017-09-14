@@ -8,7 +8,8 @@ function gmu = computeTemplateGrad(obj, mu)
 % image.
 
     % --- Check if nothing to do
-    if nargout == 0 && obj.checkarray('gmu')
+    if nargin == 1 && obj.checkarray('gmu')
+        gmu = obj.gmu;
         return
     end
 

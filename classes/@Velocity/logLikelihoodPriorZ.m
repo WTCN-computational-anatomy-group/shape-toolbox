@@ -20,7 +20,7 @@ function ll = logLikelihoodPriorZ(obj, z, regz, fast)
     end
     
     % --- Check up-to-date
-    if nargout == 0 && obj.utd.llz && ~fast
+    if nargin == 1 && obj.utd.llz
         ll = obj.llz;
         return
     end

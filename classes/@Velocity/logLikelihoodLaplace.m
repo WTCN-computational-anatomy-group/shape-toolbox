@@ -21,7 +21,7 @@ function ll = logLikelihoodLaplace(obj, hz, hr, hq)
 % This function thus returns:
 % ll = -0.5 * KNQ * log(2pi) + 0.5 * log(|-H(Z*)|) + 0.5 * log(|-H(R*)|) + 0.5 * log(|-H(q*)|)
 
-    if nargout == 0 && obj.utd.lll
+    if nargin == 1 && obj.utd.lll
         ll = obj.lll;
         return
     end

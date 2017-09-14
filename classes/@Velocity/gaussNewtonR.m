@@ -129,7 +129,7 @@ function ok = lineSearchR(obj, dr, varargin)
             obj.pvox(:)     = pvox(:);
             % Save likelihood
             obj.llm      = llm;
-            obj.statusChanged('r', 'v', 'iphi', 'pf', 'pvox', 'llm', 'llr');
+            obj.statusChanged('r', 'v', 'iphi', 'pf', 'pvox', 'llm');
             obj.logLikelihoodPriorR(); % < full version;
             % OK
             ok           = true;

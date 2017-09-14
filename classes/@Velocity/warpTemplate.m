@@ -8,7 +8,7 @@ function wa = warpTemplate(obj, ipsi, a)
 % Warp the template in image space
 
     % --- Check if nothing to do
-    if nargout == 0 && obj.checkarray('wa')
+    if nargin == 1 && obj.checkarray('wa')
         return
     end
     

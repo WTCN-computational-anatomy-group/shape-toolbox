@@ -1,11 +1,12 @@
 function sv = uncertaintyVel(obj)
 
-    if ~obj.checkarray('sr')
-        obj.uncertaintyR();
+    if nargin == 1 && obj.checkarray('sv')
+        sv = obj.sv;
+        return
     end
-    if ~obj.checkarray('swz')
-        obj.uncertaintyWZ();
-    end
+    
+    obj.uncertaintyR();
+    obj.uncertaintyWZ();
 
     if ~obj.checkarray('swz') && ~obj.checkarray('sr')
         if obj.Debug
@@ -42,7 +43,6 @@ function sv = uncertaintyVel(obj)
     obj.sv.dim = size(sv);
     obj.sv(:) = sv(:);
     obj.statusChanged('sv');
-    obj.utd.sv = true;
     sv = obj.sv;
     
 end

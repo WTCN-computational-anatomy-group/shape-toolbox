@@ -10,7 +10,8 @@ function ww = computeRegZ(obj, w)
 
 
     % --- Check up-to-date
-    if nargout == 0 && obj.utd.regz
+    if nargin == 1 && obj.checkarray('regz')
+        ww = obj.regz;
         return
     end
 
@@ -64,7 +65,7 @@ function ww = computeRegZ(obj, w)
         obj.regz.dim    = size(ww);
         obj.regz(:)     = ww(:);
         ww              = obj.regz;
-        obj.utd.regz    = true;
+        obj.statusChanged('regz');
     end
         
 end

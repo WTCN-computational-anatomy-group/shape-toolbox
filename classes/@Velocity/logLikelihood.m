@@ -2,7 +2,7 @@ function ll = logLikelihood(obj)
 % FORMAT (ll) = obj.logLikelihood()
 % ll - Model log-likelihood [if no argout: write to obj.ll]
 
-    if nargout == 0 && obj.utd.ll
+    if nargin == 1 && obj.utd.ll
         ll = obj.ll;
         return
     end

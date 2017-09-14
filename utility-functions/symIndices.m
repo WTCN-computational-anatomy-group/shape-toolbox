@@ -9,9 +9,10 @@ function [ind, n] = symIndices(k, side)
 % corresponding linear index when the data is stored "sparsely" to save
 % redunduncies.
 
-    side = false;
     if nargin == 2
         side = strcmpi(side, 'n');
+    else
+        side = false;
     end
 
     % 1) Compute n

@@ -9,7 +9,9 @@ function [f, c] = pushImage(obj, ipsi, f)
 % Push the image to template space
 
     % --- Check if nothing to do
-    if nargout == 0 && obj.checkarray('pf') && obj.checkarray('pvox')
+    if nargin == 1 && obj.checkarray('pf') && obj.checkarray('pvox')
+        f = obj.pf;
+        c = obj.pvox;
         return
     end
     

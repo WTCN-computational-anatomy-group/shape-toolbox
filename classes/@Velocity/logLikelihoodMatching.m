@@ -44,7 +44,7 @@ function ll = logLikelihoodMatching(obj, varargin)
 %         * Use property 'MatchingTerm'.
 %         * May use properties 'Interpolation', 'Normal.s', 'Laplace.b'.
 
-    if nargout == 0 && obj.utd.llm
+    if nargin == 1 && obj.utd.llm
         ll = obj.llm;
         return
     end

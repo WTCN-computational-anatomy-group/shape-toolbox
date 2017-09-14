@@ -8,7 +8,8 @@ function wmu = reconstructWarpedTemplate(obj, wa)
 % useful for matching terms binomial and multinomial.
 
     % --- Check if nothing to do
-    if nargout == 0 && obj.checkarray('wmu')
+    if nargin == 1 && obj.checkarray('wmu')
+        wmu = obj.wmu;
         return
     end
     

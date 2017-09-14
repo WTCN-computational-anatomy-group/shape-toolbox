@@ -8,7 +8,7 @@ function wf = warpImage(obj, psi, f)
 % Warp the image in template space
 
     % --- Check if nothing to do
-    if nargout == 0 && obj.checkarray('wf')
+    if nargin == 1 && obj.checkarray('wf')
         return
     end
     

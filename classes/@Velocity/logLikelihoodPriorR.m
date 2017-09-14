@@ -7,7 +7,7 @@ function ll = logLikelihoodPriorR(obj, r, fast)
 % Returns log p(R)
 % 
 
-    if nargout == 0 && obj.utd.llr
+    if nargin == 1 && obj.utd.llr
         ll = obj.llr;
         return
     end
