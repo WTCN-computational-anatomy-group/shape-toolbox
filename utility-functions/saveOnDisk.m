@@ -56,7 +56,9 @@ function out = saveOnDisk(where, obj, varargin)
     elseif isa(where, 'file_array')
         out = where;
     else
-        error('Target not handled. Must be a file_array or path')
+        out = obj;
+        return
+%         error('Target not handled. Must be a file_array or path')
     end
     
     out.dim = size(obj);

@@ -7,8 +7,10 @@ function ok = checkarray(array)
 
     if isa(array, 'file_array')
         ok = prod(size(array)) ~= 0 && exist(array.fname, 'file');
-    else
+    elseif isnumeric(array)
         ok = ~isempty(array);
+    else
+        ok = false;
     end
         
 end

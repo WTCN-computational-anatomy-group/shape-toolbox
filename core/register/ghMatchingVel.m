@@ -2,7 +2,10 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
 % FORMAT [g,h] = ghMatchingVel(model, mu, f, c, (gmu), ...)
 %
 % ** Required **
-% model - 'normal', 'laplace', 'bernoulli' or 'categorical'
+% model - Structure with fields:
+%           * 'name'    : 'normal', 'laplace', 'bernoulli' or 'categorical'
+%           * ('sigma2'): Normal variance  [1]
+%           * ('b')     : Laplace variance [1]
 % mu    - Template image ([nx ny nz nc])
 % f     - Observed image pushed into template space ([nx ny nz nc])
 % c     - Pushed voxel count ([nx ny nz nc])
@@ -11,12 +14,10 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
 %         If not provided, do not use: it's deal with outside (useful
 %         when computing grad/hess w.r.t. Z)
 % ** Keyword arguments **
-% sigma2- Noise variance for the normal case [default: 1]
-% b     - Noise variance for the laplace case [default: 1]
 % loop  - Specify how to split data processing
 %         ('slice', 'component' or 'none' [default])
 % par   - If true, parallelise processing. [default: false]
-% ** Outputs **
+% ** Output **
 % g     - First derivatives w.r.t. full velocity ([nx ny nz nc])
 % h     - Second derivatives w.r.t. full velocity
 %         (diagonal approximation: [nx ny nz nc], except for the multinomial 
@@ -41,13 +42,11 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
     % --- Parse inputs
     p = inputParser;
     p.FunctionName = 'ghMatchingVel';
-    p.addRequired('model',  @ischar);
+    p.addRequired('model',  @(X) isstruct(X) && isfield(X, 'name'));
     p.addRequired('mu',  @checkarray);
     p.addRequired('f',   @checkarray);
     p.addRequired('c',   @checkarray);
     p.addOptional('gmu', []);
-    p.addParameter('sigma2',   1,   @isscalar);
-    p.addParameter('b',        1,   @isscalar);
     p.addParameter('loop',   '',    @ischar);
     p.addParameter('par',    false, @isscalar);
     p.addParameter('output', []);
@@ -59,19 +58,25 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
     
     
     % --- Compute gradient and hessian (select case)
-    switch lower(model)
+    switch lower(model.name)
         % E = -log p(f | mu, v)
         case {'normal', 'gaussian', 'l2'}
+            if ~isfield(model, 'sigma2')
+                model.sigma2 = 1;
+            end
             [varargout{1:nargout}] = ...
-                ghNormal(mu, f, c, p.Results.sigma2, gmu, ...
+                ghNormal(mu, f, c, model.sigma2, gmu, ...
                         'loop',   p.Results.loop, ...
                         'par',    p.Results.par, ...
                         'output', p.Results.output, ...
                         'debug',  p.Results.debug);
 
         case {'laplace', 'l1'}
+            if ~isfield(model, 'b')
+                model.b = 1;
+            end
             [varargout{1:nargout}] = ...
-                ghLaplace(mu, f, c, p.Results.b, gmu, ...
+                ghLaplace(mu, f, c, model.b, gmu, ...
                         'loop',   p.Results.loop, ...
                         'par',    p.Results.par, ...
                         'output', p.Results.output, ...

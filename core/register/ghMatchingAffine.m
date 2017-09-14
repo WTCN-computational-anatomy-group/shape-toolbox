@@ -2,7 +2,10 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
 % FORMAT [g, (h)] = ghMatchingAffine(mu, f, c, gmu, A, basis, (phi), (jac), ...)
 % 
 % ** Required **
-% model - 'normal', 'laplace', 'bernoulli', 'categorical'
+% model - Structure with fields:
+%           * 'name'    : 'normal', 'laplace', 'bernoulli' or 'categorical'
+%           * ('sigma2'): Normal variance  [1]
+%           * ('b')     : Laplace variance [1]
 % mu    - (Reconstructed) template image ([nx ny nz nc])
 % f     - Observed image pushed into template space ([nx ny nz nc])
 % c     - Pushed voxel count ([nx ny nz nc])
@@ -13,13 +16,11 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
 % phi   - Direct (image-to-template) diffeomorphism [default: none]
 % jac   - Jacobian of phi [default: recompute]
 % ** Keyword arguments **
-% sigma2- Noise variance for the normal case [default: 1]
-% b     - Noise variance for the laplace case [default: 1]
 % Mmu   - Template voxel-to-world affine transform [default: eye(4)]
 % approx- Approximate hessian [default: true]
 % loop  - How to split: 'none', 'component', 'slice' [default: auto]
 % par   - Parallelise: false/true/number of workers [default: false]
-% ** Outputs **
+% ** Output **
 % g     - First derivatives w.r.t. affine parameters ([nq])
 % h     - Second derivatives w.r.t. affine parameters ([nq nq])
 %
@@ -28,7 +29,7 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
     % --- Parse inputs
     p = inputParser;
     p.FunctionName = 'ghMatchingAffine';
-    p.addRequired('model',  @ischar);
+    p.addRequired('model',  @(X) isstruct(X) && isfield(X, 'name'));
     p.addRequired('mu',     @checkarray);
     p.addRequired('f',      @checkarray);
     p.addRequired('c',      @checkarray);
@@ -37,8 +38,6 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
     p.addRequired('basis',  @(X) issame(size(X(:,:,1)), [4 4]));
     p.addOptional('phi',       []);
     p.addOptional('jac',       []);
-    p.addParameter('sigma2',   1,       @isscalar);
-    p.addParameter('b',        1,       @isscalar);
     p.addParameter('Mmu',      eye(4),  @(X) issame(size(X), [4 4]));
     p.addParameter('approx',   true,    @islogical);
     p.addParameter('loop',     '',      @ischar);
@@ -54,8 +53,6 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
     
     % --- Gradient/Hessian w.r.t. initial velocity
     [gv, hv] = ghMatchingVel(model, mu, f, c, gmu, ...
-        'sigma2',   p.Results.sigma2, ...
-        'b',        p.Results.b, ...
         'loop',     p.Results.loop, ...
         'par',      p.Results.par, ...
         'debug',    p.Results.debug);
@@ -116,7 +113,7 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
             for j=1:nq
                 Bij = B(:,:,i) * B(:,:,j);
                 if any(any(Bij))
-                    dXij =  obj.Mmu \ A \ Bij * A * obj.Mmu;
+                    dXij =  Mmu \ A \ Bij * A * Mmu;
                     if ~isempty(phi)
                         dXij = warps('compose', dXij, phi);
                         dXij = pointwise3(jac, dXij, 'i');

@@ -1,7 +1,10 @@
 function A = exponentiateAffine(q, B, varargin)
-% FORMAT A = obj.exponentiateAffine(q, B)
+% FORMAT A = exponentiateAffine(q, B, ...)
+%
+% ** Required **
 % q - Affine transform parameters in the Lie algebra
 % B - Basis matrices of the Lie algebra
+% ** Output **
 % A - Reconstructed affine transform = exp(sum_k q_k * B_k)
 
     % --- Parse inputs

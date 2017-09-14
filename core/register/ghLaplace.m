@@ -197,10 +197,10 @@ function [g, h, htype] = ghLaplace(mu, f, c, varargin)
     
     % --- Write on disk
     if ~isempty(output{1})
-        g = saveOnDisk(g, output{1}, 'name', 'g');
+        g = saveOnDisk(output{1}, g, 'name', 'g');
     end
     if nargout > 1 && ~isempty(output{2})
-        h = saveOnDisk(h, output{2}, 'name', 'h');
+        h = saveOnDisk(output{2}, h, 'name', 'h');
     end
     
 end

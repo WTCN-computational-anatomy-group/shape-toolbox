@@ -1,8 +1,12 @@
 function gmu = templateGrad(mu, varargin)
-% FORMAT gmu = obj.computeTemplateGrad(mu, (itrp), (bnd))
+% FORMAT gmu = templateGrad(mu, (itrp), (bnd), ...)
+%
+% ** Required **
 % mu   - Template
-% itrp - Interpolation order [default: 1 1 1]
-% bnd  - Boundary condition (0/1 = mirror/circulant) [default: 1 1 1]
+% ** Optional **
+% itrp - 1 or 3 Interpolation order [1]
+% bnd  - 1 or 3 Boundary condition (0/1 = mirror/circulant) [1]
+% ** Output **
 % gmu  - Template spatial gradients
 %
 % Compute spatial gradients (w.r.t. local deformations) of the template
@@ -12,13 +16,28 @@ function gmu = templateGrad(mu, varargin)
     p = inputParser;
     p.FunctionName = 'templateGrad';
     p.addRequired('mu', @checkarray);
-    p.addOptional('itrp', [1 1 1]);
-    p.addOptional('bnd', [1 1 1]);
+    p.addOptional('itrp', 1, @isnumeric);
+    p.addOptional('bnd',  1, @isnumeric);
     p.addParameter('output', []);
     p.addParameter('debug', false);
     p.parse(mu, varargin{:});
+    itrp   = p.Results.itrp;
+    bnd    = p.Results.bnd;
+    output = p.Results.output;
+    debug  = p.Results.debug;
     
-    if p.Results.debug, fprintf('* templateGrad\n'); end;
+    
+    if debug, fprintf('* templateGrad\n'); end;
+    
+    % --- Default parameters
+    if numel(itrp) == 1
+        itrp = itrp * [double(size(mu, 1) > 1) ...
+                       double(size(mu, 2) > 1) ...
+                       double(size(mu, 3) > 1)];
+    end
+    if numel(bnd) == 1
+        bnd = [bnd bnd bnd];
+    end
 
     % --- Read dimensions
     dim = [size(mu) 1 1 1 1];
@@ -28,8 +47,8 @@ function gmu = templateGrad(mu, varargin)
     id  = single(warps('identity', lat)); % Identity transform
 
     % --- Reserve space for the complete gradient images
-    if ~isempty(p.Results.output)
-        gmu = prepareOnDisk(p.Results.output, [dim 3]);
+    if ~isempty(output)
+        gmu = prepareOnDisk(output, [dim 3]);
     else
         gmu = zeros([dim 3], 'single');
     end
@@ -41,8 +60,8 @@ function gmu = templateGrad(mu, varargin)
     % 4) Store data
     for i=1:nc
         mu1 = single(mu(:,:,:,i));
-        c = spm_diffeo('bsplinc', mu1, [p.Results.itrp p.Results.bnd]);
-        [~, G1, G2, G3] = spm_diffeo('bsplins', c, id, [p.Results.itrp p.Results.bnd]);
+        c = spm_diffeo('bsplinc', mu1, [itrp bnd]);
+        [~, G1, G2, G3] = spm_diffeo('bsplins', c, id, [itrp bnd]);
         gmu(:,:,:,i,1) = G1;
         gmu(:,:,:,i,2) = G2;
         gmu(:,:,:,i,3) = G3;
@@ -50,8 +69,8 @@ function gmu = templateGrad(mu, varargin)
     end
 
     % --- Write on disk
-    if ~isempty(p.Results.output)
-        gmu = saveOnDisk(p.Results.output, gmu, 'name', 'gmu');
+    if ~isempty(output)
+        gmu = saveOnDisk(output, gmu, 'name', 'gmu');
     end
         
 end

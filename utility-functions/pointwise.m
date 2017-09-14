@@ -405,7 +405,7 @@ function c = tmavb(a, b)
     end
     
     dim = [size(a) 1 1];
-    c = zeros([dim(1:3) n], 'like', a);
+    c = zeros([dim(1:3) n], 'like', numeric(a(1)));
     
     if ~transpose
         for i=1:size(a,5)

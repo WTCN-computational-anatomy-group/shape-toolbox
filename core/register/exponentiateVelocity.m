@@ -4,11 +4,15 @@ function varargout = exponentiateVelocity(v, varargin)
 %   ('itgr', itgr),
 %   ('vs',   vs),
 %   ('prm',  prm),
+%
+% ** Required **
 % v      - Inital velocity (in template space)
+% ** Optional **
 % 'iphi' - Compute iphi (f = mu(iphi) -> Warps template to image)
 % 'ijac' - Compute D(iphi)
 % 'phi'  - Compute phi (f(phi) = mu -> Warps image to template)
 % 'jac'  - Compute D(phi)
+% ** Keyword arguments ии
 % itgr   - Number of integration step (for geodesic shooting) [auto]
 % vs     - Voxel size of the initial velocity lattice [1 1 1]
 % prm    - Parameters of the L operator (see spm_diffeo) 
@@ -59,11 +63,14 @@ function varargout = exponentiateVelocity(v, varargin)
     p.addParameter('output', []);
     p.addParameter('debug',  false);
     p.parse(v, varargin{:});
+    itgr   = p.Results.itgr;
+    vs     = p.Results.vs;
+    prm    = p.Results.prm;
+    debug  = p.Results.debug;
+    output = p.Results.output;
     
-    if p.Results.debug, fprintf('* exponentiateVelocity\n'); end;
-    itgr = p.Results.itgr;
-    vs   = p.Results.vs;
-    prm  = p.Results.prm;
+    
+    if debug, fprintf('* exponentiateVelocity\n'); end;
     
     % --- Load data in memory
     v = single(numeric(v));
@@ -91,9 +98,12 @@ function varargout = exponentiateVelocity(v, varargin)
 
     % --- Write on disk // Return objects in the right order
     varargout = cell(size(which));
+    if ~iscell(output)
+        output = {output};
+    end
     for i=1:numel(which)
-        if ~isempty(p.Results.output) && ~isempty(p.Results.output{i})
-            varargout{i} = saveOnDisk(p.Results.output{i}, out.(which{i}), 'name', which{i});
+        if numel(output) >= i && ~isempty(output{i})
+            varargout{i} = saveOnDisk(output{i}, out.(which{i}), 'name', which{i});
         else
             varargout{i} = out.(which{i});
         end

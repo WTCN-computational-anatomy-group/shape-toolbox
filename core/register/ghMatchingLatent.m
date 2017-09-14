@@ -2,19 +2,19 @@ function [g, h] = ghMatchingLatent(model, mu, f, c, gmu, w, varargin)
 % FORMAT [g, h] = obj.ghMatchingLatent(model, mu, f, c, gmu, w)
 %
 % ** Required **
-% model - 'normal', 'laplace', 'bernoulli', 'categorical'
+% model - Structure with fields:
+%           * 'name'    : 'normal', 'laplace', 'bernoulli' or 'categorical'
+%           * ('sigma2'): Normal variance  [1]
+%           * ('b')     : Laplace variance [1]
 % mu    - (Reconstructed) template image ([nx ny nz nc])
 % f     - Observed image pushed into template space ([nx ny nz nc])
 % c     - Pushed voxel count ([nx ny nz nc])
 % gmu   - Template spatial gradients.
 % w     - Principal subspace
 % ** Keyword arguments **
-% sigma2- Noise variance for the normal case [default: 1]
-% b     - Noise variance for the laplace case [default: 1]
 % loop  - How to split: 'none', 'slice' [default: auto]
 % par   - Parallelise: false/true/number of workers [default: auto]
-% approx- Approximate hessian [default: true]
-% ** Outputs **
+% ** Output **
 % g     - First derivatives w.r.t. latent PC parameters ([nq])
 % h     - Second derivatives w.r.t. latent PC parameters ([nq nq])
 %
@@ -24,21 +24,17 @@ function [g, h] = ghMatchingLatent(model, mu, f, c, gmu, w, varargin)
     % --- Parse inputs
     p = inputParser;
     p.FunctionName = 'ghMatchingLatent';
-    p.addRequired('model',  @ischar);
+    p.addRequired('model',  @(X) isstruct(X) && isfield(X, 'name'));
     p.addRequired('mu',     @checkarray);
     p.addRequired('f',      @checkarray);
     p.addRequired('c',      @checkarray);
     p.addRequired('gmu',    @checkarray);
     p.addRequired('w',      @checkarray);
-    p.addParameter('sigma2',   1,       @isscalar);
-    p.addParameter('b',        1,       @isscalar);
     p.addParameter('loop',     '',      @ischar);
     p.addParameter('par',      true,    @isscalar);
     p.addParameter('output',   []);
     p.addParameter('debug',    false,   @isscalar);
     p.parse(model, mu, f, c, gmu, w, varargin{:});
-    s       = p.Results.sigma2;
-    b       = p.Results.b;
     loop    = p.Results.loop;
     par     = p.Results.par;
     output  = p.Results.output;
@@ -71,8 +67,6 @@ function [g, h] = ghMatchingLatent(model, mu, f, c, gmu, w, varargin)
                 [g1, h1] = onMemory(model, ...
                     mu(:,:,z,:), f(:,:,z,:), c(:,:,z), ...
                     gmu(:,:,z,:,:), w(:,:,z,:,:), ...
-                    'sigma2',   s, ...
-                    'b',        b, ...
                     'loop',     'none', ...
                     'par',      false);
                 g = g + g1;
@@ -83,8 +77,6 @@ function [g, h] = ghMatchingLatent(model, mu, f, c, gmu, w, varargin)
                 g1 = onMemory(model, ...
                     mu(:,:,z,:), f(:,:,z,:), c(:,:,z), ...
                     gmu(:,:,z,:,:), w(:,:,z,:,:), ...
-                    'sigma2',   s, ...
-                    'b',        b, ...
                     'loop',     'none', ...
                     'par',      false);
                 g = g + g1;
@@ -97,15 +89,11 @@ function [g, h] = ghMatchingLatent(model, mu, f, c, gmu, w, varargin)
         end
         if do_hessian
             [g, h] = onMemory(model, mu, f, c, gmu, w, ...
-                'sigma2',   s, ...
-                'b',        b, ...
                 'loop',     loop, ...
                 'par',      par, ...
                 'debug',    debug);
         else
             g = onMemory(model, mu, f, c, gmu, w, ...
-                'sigma2',   s, ...
-                'b',        b, ...
                 'loop',     loop, ...
                 'par',      par, ...
                 'debug',    debug);
@@ -127,10 +115,10 @@ function [g, h] = ghMatchingLatent(model, mu, f, c, gmu, w, varargin)
         output = [output {[]}];
     end
     if ~isempty(output{1})
-        g = saveOnDisk(g, output{1}, 'name', 'g');
+        g = saveOnDisk(output{1}, g, 'name', 'g');
     end
     if nargout > 1 && ~isempty(output{2})
-        h = saveOnDisk(h, output{2}, 'name', 'h');
+        h = saveOnDisk(output{2}, h, 'name', 'h');
     end
 end
 
