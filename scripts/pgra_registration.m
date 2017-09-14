@@ -1,5 +1,5 @@
 function opt = pgra_registration(opt)
-% FORMAT opt = pgr_registration(opt)
+% FORMAT opt = pgra_registration(opt)
 %
 % Combines affine and diffeomorphic registration of a template towards
 % a target image, based on a "principal geodesic" model + a residual 
@@ -8,7 +8,7 @@ function opt = pgra_registration(opt)
 % The input option structure (opt) should at least contain the fields:
 % fnames.f  / dat.f  - the target image (as a file or array)
 % fnames.mu / dat.mu - the template image (as a file or array)
-% fnames.w  / dat.w  - the principal sibspace (as a file or array)
+% fnames.w  / dat.w  - the principal subspace (as a file or array)
 %
 % The following parameters can be overriden by specifying them in the
 % input option structure:

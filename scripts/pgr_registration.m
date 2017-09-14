@@ -8,7 +8,7 @@ function opt = pgr_registration(opt)
 % The input option structure (opt) should at least contain the fields:
 % fnames.f  / dat.f  - the target image (as a file or array)
 % fnames.mu / dat.mu - the template image (as a file or array)
-% fnames.w  / dat.w  - the principal sibspace (as a file or array)
+% fnames.w  / dat.w  - the principal subspace (as a file or array)
 %
 % The following parameters can be overriden by specifying them in the
 % input option structure:
