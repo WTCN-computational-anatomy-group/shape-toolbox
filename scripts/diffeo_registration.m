@@ -390,9 +390,9 @@ function [ll, savell] = plotLikelihood(verbose, savell, varargin)
             llmatch = varargin{i};
         else
             if mod(i-2, 2)
-                llreg = llreg + varargin{i};
-            else
                 llprec = llprec + varargin{i};
+            else
+                llreg = llreg + varargin{i};
             end
         end
     end
@@ -409,7 +409,7 @@ function [ll, savell] = plotLikelihood(verbose, savell, varargin)
     savell.match(end+1) = llmatch;
     savell.reg(end+1)   = llreg;
     savell.prec(end+1)  = llprec;
-    x = (1:length(savell.ll))/3;
+    x = (1:length(savell.ll));
     
     if verbose
         fprintf('LL = %f\n', ll);

@@ -660,9 +660,9 @@ function [ll, savell] = plotLikelihood(verbose, savell, varargin)
             llmatch = varargin{i};
         else
             if mod(i-2, 2)
-                llreg = llreg + varargin{i};
-            else
                 llprec = llprec + varargin{i};
+            else
+                llreg = llreg + varargin{i};
             end
         end
     end

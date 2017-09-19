@@ -273,6 +273,7 @@ function opt = affine_registration(opt)
     end
     
     opt.dat.savell = [];
+    opt.dat.lllq   = [];
     
     % ---------------------------------------------------------------------
     %    Processing
@@ -304,14 +305,10 @@ function opt = affine_registration(opt)
         % ---------------------------------------------------------
         
         opt.dat.lllq = llLaplace(opt.dat.h, 'debug', opt.debug);
-        opt.dat.ll = opt.dat.llm + opt.dat.llq + opt.dat.lllq;
-        opt.dat.savell(end+1) = opt.dat.ll;
-        if opt.verbose
-            fprintf('LL = %f\n', opt.dat.ll);
-            plot(opt.dat.savell)
-            title('Model log-likelihood')
-            drawnow
-        end
+        
+        [opt.dat.ll, opt.dat.savell] = plotLikelihood(opt.verbose, ...
+            opt.dat.savell, opt.dat.llm, ...
+            opt.dat.llq, opt.dat.lllq);
         
         % Compute ascent direction
         % ------------------------
@@ -360,18 +357,68 @@ function opt = affine_registration(opt)
         opt.dat.h = loadDiag(opt.dat.h); % Additional regularisation for robustness
     end
     opt.dat.lllq = llLaplace(opt.dat.h, 'debug', opt.debug);
-    opt.dat.ll = opt.dat.llm + opt.dat.llq + opt.dat.lllq;
-    opt.dat.savell(end+1) = opt.dat.ll;
-    if opt.verbose
-        fprintf('LL = %f\n', opt.dat.ll);
-        plot(opt.dat.savell)
-        title('Model log-likelihood')
-        drawnow
-    end
+    
+    [opt.dat.ll, opt.dat.savell] = plotLikelihood(opt.verbose, ...
+        opt.dat.savell, opt.dat.llm, ...
+        opt.dat.llq, opt.dat.lllq);
     
     % Warp template to image
     % ----------------------
     opt.dat.wmu = warp(opt.dat.ipsi, opt.dat.mu, opt.itrp, opt.bnd, ...
         'par', opt.par, 'output', opt.dat.wmu);
     
+end
+
+function [ll, savell] = plotLikelihood(verbose, savell, varargin)
+    ll = 0;
+    llreg = 0;
+    llprec = 0;
+    llmatch = 0;
+    for i=1:numel(varargin)
+        if isempty(varargin{i})
+            ll = 0;
+            return;
+        end
+        ll = ll + varargin{i};
+        if i == 1
+            llmatch = varargin{i};
+        else
+            if mod(i-2, 2)
+                llprec = llprec + varargin{i};
+            else
+                llreg = llreg + varargin{i};
+            end
+        end
+    end
+    
+    if isempty(savell)
+        savell       = struct;
+        savell.ll    = [];
+        savell.match = [];
+        savell.reg   = [];
+        savell.prec  = [];
+    end
+    
+    savell.ll(end+1)    = ll;
+    savell.match(end+1) = llmatch;
+    savell.reg(end+1)   = llreg;
+    savell.prec(end+1)  = llprec;
+    x = (1:length(savell.ll));
+    
+    if verbose
+        fprintf('LL = %f\n', ll);
+        subplot(2, 2, 1)
+        plot(x, savell.ll,    'b-')
+        title('Model log-likelihood')
+        subplot(2, 2, 2)
+        plot(x, savell.match, 'r-')
+        title('Model log-likelihood (matching)')
+        subplot(2, 2, 3)
+        plot(x, savell.reg,   'g-')
+        title('Model log-likelihood (regularisation)')
+        subplot(2, 2, 4)
+        plot(x, savell.prec,  'k-')
+        title('Model log-likelihood (precision)')
+        drawnow
+    end
 end
