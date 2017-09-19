@@ -377,6 +377,15 @@ function opt = pgra_registration(opt)
         opt.dat.llq = 0;
     end
     
+    opt.dat.llr = llPriorVelocity(opt.dat.r, ...
+        'vs', sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), ...
+        'prm', opt.prm, 'debug', opt.debug);
+    
+    opt.dat.lllq   = [];
+    opt.dat.lllz   = [];
+    opt.dat.lllr   = [];
+    opt.dat.savell = [];
+    
     % For Affine grad/hess: direct diffeomorphism
     % -------------------------------------------
     [opt.dat.phi, opt.dat.jac] = exponentiateVelocity(opt.dat.v, 'phi', 'jac', ...
@@ -414,9 +423,20 @@ function opt = pgra_registration(opt)
         
         opt.dat.hq = loadDiag(opt.dat.hq); % Additional regularisation for robustness
         
+        opt.dat.lllq = llLaplace(opt.dat.hq, 'debug', opt.debug);
+        
+        % Update full model likelihood (with Laplace approximation)
+        % ---------------------------------------------------------
+        
+        [opt.dat.ll, opt.dat.savell] = plotLikelihood(opt.verbose, ...
+            opt.dat.savell, opt.dat.llm, ...
+            opt.dat.llz, opt.dat.lllz, ...
+            opt.dat.llr, opt.dat.lllr, ...
+            opt.dat.llq, opt.dat.lllq);
+        
         % Compute ascent direction
         % ------------------------
-        opt.dat.dq = opt.dat.hq \ opt.dat.gq;
+        opt.dat.dq = -opt.dat.hq \ opt.dat.gq;
         
         % Line search
         % -----------
@@ -457,6 +477,17 @@ function opt = pgra_registration(opt)
         
         opt.dat.hz = loadDiag(opt.dat.hz); % Additional regularisation for robustness
         
+        opt.dat.lllz = llLaplace(opt.dat.hz, 'debug', opt.debug);
+        
+        % Update full model likelihood (with Laplace approximation)
+        % ---------------------------------------------------------
+        
+        [opt.dat.ll, opt.dat.savell] = plotLikelihood(opt.verbose, ...
+            opt.dat.savell, opt.dat.llm, ...
+            opt.dat.llz, opt.dat.lllz, ...
+            opt.dat.llr, opt.dat.lllr, ...
+            opt.dat.llq, opt.dat.lllq);
+        
         % Compute ascent direction
         % ------------------------
         opt.dat.dz = -opt.dat.hz \ opt.dat.gz;
@@ -495,9 +526,24 @@ function opt = pgra_registration(opt)
             opt.dat.mu, opt.dat.pf, opt.dat.c, opt.dat.gmu, ...
             'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
         
+        opt.dat.gr = opt.dat.gr + ghPriorVel(opt.dat.r, ...
+            sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), opt.prm);
+        
+        opt.dat.lllr = llLaplace(opt.dat.hr, ...
+            sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), opt.prm, 'debug', opt.debug);
+        
+        % Update full model likelihood (with Laplace approximation)
+        % ---------------------------------------------------------
+        
+        [opt.dat.ll, opt.dat.savell] = plotLikelihood(opt.verbose, ...
+            opt.dat.savell, opt.dat.llm, ...
+            opt.dat.llz, opt.dat.lllz, ...
+            opt.dat.llr, opt.dat.lllr, ...
+            opt.dat.llq, opt.dat.lllq);
+        
         % Compute ascent direction
         % ------------------------
-        opt.dat.dr = spm_diffeo('fmg', single(opt.dat.hr), single(opt.dat.gr), ...
+        opt.dat.dr = -spm_diffeo('fmg', single(opt.dat.hr), single(opt.dat.gr), ...
             [sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)) opt.prm 2 2]);
         
         % Line search
@@ -541,7 +587,7 @@ function opt = pgra_registration(opt)
     
     % Update hessian for Laplace aproximation
     % ---------------------------------------
-    if okq
+    if okq || okz || okr
         [opt.dat.gq, opt.dat.hq] = ghMatchingAffine(opt.model, ...
             opt.dat.mu, opt.dat.pf, opt.dat.c, ...
             opt.dat.gmu, opt.dat.A, opt.affine_basis, ...
@@ -555,8 +601,12 @@ function opt = pgra_registration(opt)
             opt.dat.hq = opt.dat.hq + hq;
             clear gq hq
         end
+        
+        opt.dat.hq = loadDiag(opt.dat.hq); % Additional regularisation for robustness
+        
+        opt.dat.lllq = llLaplace(opt.dat.hq, 'debug', opt.debug);
     end
-    if okz
+    if okz || okr
         [opt.dat.gz, opt.dat.hz] = ghMatchingLatent(opt.model, ...
             opt.dat.mu, opt.dat.pf, opt.dat.c, ...
             opt.dat.gmu, opt.dat.w, ...
@@ -566,11 +616,85 @@ function opt = pgra_registration(opt)
         opt.dat.gz = opt.dat.gz + gz;
         opt.dat.hz = opt.dat.hz + hz;
         clear gz hz
+        
+        opt.dat.hz = loadDiag(opt.dat.hz); % Additional regularisation for robustness
+        
+        opt.dat.lllz = llLaplace(opt.dat.hz, 'debug', opt.debug);
     end
+    if okr
+        [opt.dat.gr, opt.dat.hr] = ghMatchingVel(opt.model, ...
+            opt.dat.mu, opt.dat.pf, opt.dat.c, opt.dat.gmu, ...
+            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
+        
+        opt.dat.gr = opt.dat.gr + ghPriorVel(opt.dat.r, ...
+            sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), opt.prm);
+        
+        opt.dat.lllr = llLaplace(opt.dat.hr, ...
+            sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), opt.prm, 'debug', opt.debug);
+    end
+    [opt.dat.ll, opt.dat.savell] = plotLikelihood(opt.verbose, ...
+        opt.dat.savell, opt.dat.llm, ...
+        opt.dat.llz, opt.dat.lllz, ...
+        opt.dat.llr, opt.dat.lllr, ...
+        opt.dat.llq, opt.dat.lllq);
     
     
     % Warp template to image
     % ----------------------
     opt.dat.wmu = warp(opt.dat.ipsi, opt.dat.mu, opt.itrp, opt.bnd, ...
         'par', opt.par, 'output', opt.dat.wmu, 'debug', opt.debug);
+end
+
+function [ll, savell] = plotLikelihood(verbose, savell, varargin)
+    ll = 0;
+    llreg = 0;
+    llprec = 0;
+    llmatch = 0;
+    for i=1:numel(varargin)
+        if isempty(varargin{i})
+            ll = 0;
+            return;
+        end
+        ll = ll + varargin{i};
+        if i == 1
+            llmatch = varargin{i};
+        else
+            if mod(i-2, 2)
+                llreg = llreg + varargin{i};
+            else
+                llprec = llprec + varargin{i};
+            end
+        end
+    end
+    
+    if isempty(savell)
+        savell       = struct;
+        savell.ll    = [];
+        savell.match = [];
+        savell.reg   = [];
+        savell.prec  = [];
+    end
+    
+    savell.ll(end+1)    = ll;
+    savell.match(end+1) = llmatch;
+    savell.reg(end+1)   = llreg;
+    savell.prec(end+1)  = llprec;
+    x = (1:length(savell.ll))/3;
+    
+    if verbose
+        fprintf('LL = %f\n', ll);
+        subplot(2, 2, 1)
+        plot(x, savell.ll,    'b-')
+        title('Model log-likelihood')
+        subplot(2, 2, 2)
+        plot(x, savell.match, 'r-')
+        title('Model log-likelihood (matching)')
+        subplot(2, 2, 3)
+        plot(x, savell.reg,   'g-')
+        title('Model log-likelihood (regularisation)')
+        subplot(2, 2, 4)
+        plot(x, savell.prec,  'k-')
+        title('Model log-likelihood (precision)')
+        drawnow
+    end
 end

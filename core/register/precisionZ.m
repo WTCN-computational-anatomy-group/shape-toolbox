@@ -1,5 +1,5 @@
 function ww = precisionZ(w, varargin)
-% FORMAT ww = obj.precisionZ(w, (vs), (prm))
+% FORMAT ww = precisionZ(w, (vs), (prm))
 % w   - Principal subspace
 % vs  - Voxel size of the initial velocity lattice [1 1 1]
 % prm - Parameters of the L operator (see spm_diffeo)

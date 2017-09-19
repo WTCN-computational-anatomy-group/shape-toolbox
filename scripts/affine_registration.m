@@ -272,6 +272,8 @@ function opt = affine_registration(opt)
         opt.dat.llq = 0;
     end
     
+    opt.dat.savell = [];
+    
     % ---------------------------------------------------------------------
     %    Processing
     % ---------------------------------------------------------------------
@@ -298,9 +300,22 @@ function opt = affine_registration(opt)
         
         opt.dat.h = loadDiag(opt.dat.h); % Additional regularisation for robustness
         
+        % Update full model likelihood (with Laplace approximation)
+        % ---------------------------------------------------------
+        
+        opt.dat.lllq = llLaplace(opt.dat.h, 'debug', opt.debug);
+        opt.dat.ll = opt.dat.llm + opt.dat.llq + opt.dat.lllq;
+        opt.dat.savell(end+1) = opt.dat.ll;
+        if opt.verbose
+            fprintf('LL = %f\n', opt.dat.ll);
+            plot(opt.dat.savell)
+            title('Model log-likelihood')
+            drawnow
+        end
+        
         % Compute ascent direction
         % ------------------------
-        opt.dat.dq = opt.dat.h \ opt.dat.g;
+        opt.dat.dq = -opt.dat.h \ opt.dat.g;
         
         % Line search
         % -----------
@@ -323,6 +338,7 @@ function opt = affine_registration(opt)
         else
             break
         end
+        
     end
     
     % Update hessian for Laplace aproximation
@@ -340,6 +356,17 @@ function opt = affine_registration(opt)
             opt.dat.h = opt.dat.h + h;
             clear g h
         end
+        
+        opt.dat.h = loadDiag(opt.dat.h); % Additional regularisation for robustness
+    end
+    opt.dat.lllq = llLaplace(opt.dat.h, 'debug', opt.debug);
+    opt.dat.ll = opt.dat.llm + opt.dat.llq + opt.dat.lllq;
+    opt.dat.savell(end+1) = opt.dat.ll;
+    if opt.verbose
+        fprintf('LL = %f\n', opt.dat.ll);
+        plot(opt.dat.savell)
+        title('Model log-likelihood')
+        drawnow
     end
     
     % Warp template to image

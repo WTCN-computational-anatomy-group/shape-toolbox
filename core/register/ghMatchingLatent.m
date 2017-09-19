@@ -135,7 +135,7 @@ function [g, h] = onMemory(model, mu, f, c, gmu, w, varargin)
     if nargout > 1
         [g, h, htype] = ghMatchingVel(model, mu, f, c, varargin{:});
     else
-        g = gradHessMatchingVel(model, mu, f, c, varargin{:});
+        g = ghMatchingVel(model, mu, f, c, varargin{:});
     end
     clear mu f c
 

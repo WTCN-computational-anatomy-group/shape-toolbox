@@ -223,7 +223,7 @@ function [g, h] = onMemory(mu, f, c, b, gmu)
     g  = sign(bsxfun(@times, c, mu) - f);
     g  = bsxfun(@times, b, g);
     if ~isempty(gmu)
-        g = pointwise(gmu, g, 't');
+        g = -pointwise(gmu, g, 't');
     end
     if nargout > 1
         h = bsxfun(@times, b, c);

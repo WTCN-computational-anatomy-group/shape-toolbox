@@ -253,7 +253,7 @@ function opt = diffeo_registration(opt)
     latf = [size(opt.dat.f) 1];
     latf= latf(1:3);
     opt.dat.ipsi = reconstructIPsi(eye(4), opt.dat.iphi, ...
-        'lat', latf, 'Mf', opt.dat.Mf, 'Mmu', opt.dat.Mmu, ...
+        'lat', latf, ...
         'output', opt.dat.ipsi, 'debug', opt.debug);
     
     
@@ -287,6 +287,9 @@ function opt = diffeo_registration(opt)
         'vs', sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), 'prm', opt.prm, ...
         'debug', opt.debug);
     
+    opt.dat.savell = [];
+    opt.dat.lllv   = [];
+    
     % ---------------------------------------------------------------------
     %    Processing
     % ---------------------------------------------------------------------
@@ -302,9 +305,26 @@ function opt = diffeo_registration(opt)
             opt.dat.mu, opt.dat.pf, opt.dat.c, opt.dat.gmu, ...
             'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
         
+        opt.dat.g = opt.dat.g + ghPriorVel(opt.dat.v, ...
+            sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), opt.prm);
+        
+        if size(opt.dat.mu, 3) == 1
+            opt.dat.h(:,:,:,3) = 1;
+        end
+        
+        % Update full model likelihood (with Laplace approximation)
+        % ---------------------------------------------------------
+        
+        opt.dat.lllv = llLaplace(opt.dat.h, ...
+            sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), opt.prm, 'debug', opt.debug);
+        
+        [opt.dat.ll, opt.dat.savell] = plotLikelihood(opt.verbose, ...
+            opt.dat.savell, opt.dat.llm, ...
+            opt.dat.llv, opt.dat.lllv);
+        
         % Compute ascent direction
         % ------------------------
-        opt.dat.dv = spm_diffeo('fmg', single(opt.dat.h), single(opt.dat.g), ...
+        opt.dat.dv = -spm_diffeo('fmg', single(opt.dat.h), single(opt.dat.g), ...
             [sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)) opt.prm 2 2]);
         
         % Line search
@@ -312,8 +332,7 @@ function opt = diffeo_registration(opt)
         [ok, v, llm, llv, iphi, pf, c, ipsi] = lsVelocity(...
             opt.model, opt.dat.dv, opt.dat.v, opt.dat.llm, ...
             opt.dat.mu, opt.dat.f, ...
-            'Mf', opt.dat.Mf, 'Mmu', opt.dat.Mmu, 'nit', opt.lsit, ...
-            'itgr', opt.itgr, 'prm', opt.prm, ...
+            'nit', opt.lsit,  'itgr', opt.itgr, 'prm', opt.prm, ...
             'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
         
         % Store better values
@@ -329,11 +348,83 @@ function opt = diffeo_registration(opt)
         else
             break
         end
+        
     end
     
+    % Update hessian for Laplace aproximation
+    % ---------------------------------------
+    if ok
+
+        [opt.dat.g, opt.dat.h] = ghMatchingVel(opt.model, ...
+            opt.dat.mu, opt.dat.pf, opt.dat.c, opt.dat.gmu, ...
+            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
+        
+        opt.dat.g = opt.dat.g + ghPriorVel(opt.dat.v, ...
+            sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), opt.prm);
+        
+        opt.dat.lllv = llLaplace(opt.dat.h, ...
+            sqrt(sum(opt.dat.Mmu(1:3,1:3).^2)), opt.prm, 'debug', opt.debug);
+    end
+    [opt.dat.ll, opt.dat.savell] = plotLikelihood(opt.verbose, ...
+        opt.dat.savell, opt.dat.llm, ...
+        opt.dat.llv, opt.dat.lllv);
     
     % Warp template to image
     % ----------------------
     opt.dat.wmu = warp(opt.dat.ipsi, opt.dat.mu, opt.itrp, opt.bnd, ...
         'par', opt.par, 'output', opt.dat.wmu, 'debug', opt.debug);
+end
+
+function [ll, savell] = plotLikelihood(verbose, savell, varargin)
+    ll = 0;
+    llreg = 0;
+    llprec = 0;
+    llmatch = 0;
+    for i=1:numel(varargin)
+        if isempty(varargin{i})
+            ll = 0;
+            return;
+        end
+        ll = ll + varargin{i};
+        if i == 1
+            llmatch = varargin{i};
+        else
+            if mod(i-2, 2)
+                llreg = llreg + varargin{i};
+            else
+                llprec = llprec + varargin{i};
+            end
+        end
+    end
+    
+    if isempty(savell)
+        savell       = struct;
+        savell.ll    = [];
+        savell.match = [];
+        savell.reg   = [];
+        savell.prec  = [];
+    end
+    
+    savell.ll(end+1)    = ll;
+    savell.match(end+1) = llmatch;
+    savell.reg(end+1)   = llreg;
+    savell.prec(end+1)  = llprec;
+    x = (1:length(savell.ll))/3;
+    
+    if verbose
+        fprintf('LL = %f\n', ll);
+        subplot(2, 2, 1)
+        plot(x, savell.ll,    'b-')
+        title('Model log-likelihood')
+        subplot(2, 2, 2)
+        plot(x, savell.match, 'r-')
+        title('Model log-likelihood (matching)')
+        subplot(2, 2, 3)
+        plot(x, savell.reg,   'g-')
+        title('Model log-likelihood (regularisation)')
+        subplot(2, 2, 4)
+        plot(x, savell.prec,  'k-')
+        title('Model log-likelihood (precision)')
+        drawnow
+    end
 end
