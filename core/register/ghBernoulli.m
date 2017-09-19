@@ -1,13 +1,18 @@
 function [g, h, htype] = ghBernoulli(mu, f, c, varargin)
 % FORMAT [g, (h, htype)] = ghBernoulli(mu, f, c, (ga),
 %                                   ('loop', loop), ('par', par))
-% mu   - Reconsturcted probability template
+%
+% ** Required **
+% mu   - Reconstructed probability template.
 % f    - Observed image pushed in the template space.
 % c    - Pushed voxel count.
+% ** Optional **
 % ga   - Spatial gradients of the log-probability template.
+% ** Keyword arguments **
 % loop - Specify how to split data processing
-%        ('component', 'slice' or 'none' [default])
+%        ('component', 'slice' or 'none' [default: auto])
 % par  - If true, parallelise processing [default: false]
+% ** Output **
 % g    - Gradient
 % h    - Hessian
 % htype - Shape of the hessian ('diagonal', 'symtensor')
@@ -211,7 +216,7 @@ function [g, h] = onMemory(mu, f, c, gmu)
     
     g  = (c .* mu) - f;
     if ~isempty(gmu)
-        g = pointwise(gmu, g, 't');
+        g = -pointwise(gmu, g, 't');
     end
     if nargout > 1
         h  = c .* (mu .* (1 - mu)) + 1E-3; % Avoid null hessian

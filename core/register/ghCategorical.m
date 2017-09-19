@@ -168,19 +168,19 @@ function [g, h] = onMemory(mu, f, c, gmu)
     
     g  = bsxfun(@times, c, mu) - f;
     if ~isempty(gmu)
-        g = pointwise(gmu, g, 't');
+        g = -pointwise(gmu, g, 't');
     end
     if nargout > 1
         [ind, length] = symIndices(nc, 'n');
         h = zeros([lat length], 'like', g);
         % Diagonals of the tensors
         for k=1:nc
-            h(:,:,:,ind(k,k)) = c .* (  mu(:,:,:,k) - mu(:,:,:,k).^2 );
+            h(:,:,:,ind(k,k)) = -c .* ( mu(:,:,:,k).^2 - mu(:,:,:,k) );
         end
         % Upper/Lower part
         for l=1:nc
             for m=(l+1):nc
-                h(:,:,:,ind(l,m)) = - c .* mu(:,:,:,l) .* mu(:,:,:,m);
+                h(:,:,:,ind(l,m)) = -c .* mu(:,:,:,l) .* mu(:,:,:,m);
             end
         end
         if ~isempty(gmu)
