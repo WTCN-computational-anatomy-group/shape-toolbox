@@ -65,6 +65,9 @@ function opt = pg_model_default(opt)
     if ~isfield(opt, 'A0')
         opt.A0 = 1;
     end
+    if ~isfield(opt, 'wpz0')
+        opt.wpz0 = [1 5];
+    end
     if ~isfield(opt, 'wpz')
         opt.wpz = [1 1];
     end

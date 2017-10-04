@@ -27,6 +27,8 @@ function [model, dat] = pg_model(opt, dat, model, cont)
 % itgr         - Number of integration steps for geodesic shooting [auto]
 % prm          - Parameters of the geodesic differential operator
 %                [1e-4 1e-3 0.2 0.05 0.2]
+% wpz          - Weights on both parts (A and W'LW) of the prior on z [1 1]
+% wpz0         - Initial weights for more robustness [1 5]
 % verbose      - Talk during line search [true]
 % debug        - Further debuging talk [false]
 % loop         - How to split array processing 'subject', 'slice' or 'none'
@@ -90,13 +92,11 @@ function [model, dat] = pg_model(opt, dat, model, cont)
     % guess by how much we will overshoot based on the previous EM 
     % iteration.
     model.armijo = 1;
-    % In our model ln p(z | W,A) = ln p(z | A) + wpz * ln p(z | W)
-    % ln p(z | W) is necessary during the first iterations, when the
-    % Wishart prior is not very accurate, as a "smoothing" constraint.
-    % Its weight is lowered after each EM iteration.
-    % The rescaling starts with 0.5 and the cumulative product is very
-    % quickly close to 0.
-    wpzscl = logspace(log10(0.5), 0, opt.emit);
+    % In our model ln p(z | W,A) = wpz1 * ln p(z | A) + wpz2 * ln p(z | W)
+    % We allow to start with higher or lower weights, and to only use the
+    % final weight for the lasts iterations.
+    wpzscl1 = logspace(log10(opt.wpz0(1)/opt.wpz(1)), log10(1), opt.emit);
+    wpzscl2 = logspace(log10(opt.wpz0(2)/opt.wpz(2)), log10(1), opt.emit);
     
     % ---------------------------------------------------------------------
     %    EM iterations
@@ -106,6 +106,9 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         if opt.verbose
             fprintf(['EM %4d | ' repmat('=',1,70) '\n'], emit);
         end
+        
+        model.wpz(1) = opt.wpz(1) * wpzscl1(emit);
+        model.wpz(2) = opt.wpz(2) * wpzscl2(emit);
         
         % -----------------------------------------------------------------
         %    M-step (Principal subspace)
@@ -126,6 +129,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         
         % Search direction
         % ----------------
+        model.dw = prepareOnDisk(model.dw, size(model.w));
         for k=1:opt.K
             model.dw(:,:,:,:,k) = -spm_diffeo('fmg', ...
                 single(model.h(:,:,:,:,k)), single(model.g(:,:,:,:,k)), ...
@@ -168,8 +172,6 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         
         save(fullfile(opt.directory, opt.fnames.result), 'model', 'dat', 'opt');
         
-        model.wpz(2) = model.wpz(2) * wpzscl(emit);
-        
     end % < EM loop
     
 end
@@ -205,9 +207,10 @@ end
 
 function [dat, model] = initAll(dat, model, opt)
 
-    % Init latent coordinates
-    % -----------------------
 
+    % Init identity transforms
+    % ------------------------
+    
     % --- Zero init of W
     if ~checkarray(model.w)
         model.w = initSubspace(opt.lat, opt.K, 'type', 'zero', ...
@@ -217,9 +220,45 @@ function [dat, model] = initAll(dat, model, opt)
         model.ww = precisionZ(model.w, opt.vs, opt.prm, ...
             'debug', opt.debug, 'output', model.ww);
     end
+    
+    % --- Zero init of Z
+    [dat, model] = batchProcess('Init', 'zero', dat, model, opt);
+    
+    % --- Init of subject specific arrays
+    dat = batchProcess('Update', dat, model, opt, ...
+        {'v', 'ipsi', 'iphi', 'pf', 'c'}, 'clean', {'ipsi', 'iphi'});
+
+    % --- Init template + Compute template spatial gradients + Build TPMs
+    if opt.tpm
+        model.a = updateMuML(opt.model, dat.pf, dat.c, ...
+                             'par', opt.par, 'debug', opt.debug, ...
+                             'output', model.a);
+        model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
+            'debug', opt.debug, 'output', model.gmu);
+        model.mu = reconstructProbaTemplate(model.a, ...
+            'loop', '', 'par', opt.par, 'debug', opt.debug, ...
+            'output', model.mu);
+    else
+        model.mu = updateMuML(opt.model, dat.pf, dat.c, ...
+                              'par', opt.par, 'debug', opt.debug, ...
+                              'output', model.mu);
+        model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
+            'debug', opt.debug, 'output', model.gmu);
+    end
+    
+    % Compute initial matching LL
+    % ---------------------------
+    dat = batchProcess('Update', dat, model, opt, {'llm'});
+    model.llm = 0;
+    for n=1:opt.N
+        model.llm = model.llm + dat(n).llm;
+    end
+    
+    % Init latent coordinates
+    % -----------------------
 
     % --- Random init of E[z]
-    [dat, model] = batchProcess('init', dat, model, opt);
+    [dat, model] = batchProcess('Init', 'rand', dat, model, opt);
 
     % --- Orthogonalise sum{E[z]E[z]'}
     [U,S] = svd(model.zz);
@@ -230,60 +269,38 @@ function [dat, model] = initAll(dat, model, opt)
 
     % Init precision of z
     % -------------------
-    model.A = saveOnDisk(model.A, numeric(model.A0) * model.n0);
-    model.n = model.n0;
+%     model.A = saveOnDisk(model.A, numeric(model.A0) * model.n0);
+%     model.n = model.n0;
+    model.A = saveOnDisk(model.A, zeros(size(model.zz)));
 
-    % Init subject-specific arrays
-    % ----------------------------
-    dat = batchProcess('Update', dat, model, opt, ...
-        {'v', 'ipsi', 'iphi', 'pf', 'c'}, 'clean', {'ipsi', 'iphi'});
-
-    % Init template + Compute template spatial gradients + Build TPMs
-    % ---------------------------------------------------------------
-    if opt.tpm
-        model.a = updateMuML(opt.model, dat.pf, dat.c, ...
-                             'par', opt.par, 'debug', opt.debug, ...
-                             'output', model.a);
-        model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
-            'debug', opt.debug, 'output', model.gmu);
-        model.mu = reconstructProbaTemplate(model.a, ...
-            'loop', '', 'par', opt.par, 'debug', opt.debug, ...
-            'output', model.mu);
-    else
-        model.mu = updateMuML(opt.model, dat.pf, dat.c, ...
-                              'par', opt.par, 'debug', opt.debug, ...
-                              'output', model.mu);
-        model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
-            'debug', opt.debug, 'output', model.gmu);
-    end
-
-    % Start with M step
-    % -----------------
-    % It is easier to generate random latent coordinate than random
-    % principal components.
-
-    [dat, model] = stepM0(dat, model, opt);
-    plotAll(model, opt)
-    [dat, model] = batchProcess('E', dat, model, opt);
-
-    %  Update template
-    % ----------------
-    if opt.tpm
-        model.a = updateMuML(opt.model, dat.pf, dat.c, ...
-                             'par', opt.par, 'debug', opt.debug, ...
-                             'output', model.a);
-        model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
-            'debug', opt.debug, 'output', model.gmu);
-        model.mu = reconstructProbaTemplate(model.a, ...
-            'loop', '', 'par', opt.par, 'debug', opt.debug, ...
-            'output', model.mu);
-    else
-        model.mu = updateMuML(opt.model, dat.pf, dat.c, ...
-                              'par', opt.par, 'debug', opt.debug, ...
-                              'output', model.mu);
-        model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
-            'debug', opt.debug, 'output', model.gmu);
-    end
+% 
+%     % Start with M step
+%     % -----------------
+%     % It is easier to generate random latent coordinate than random
+%     % principal components.
+% 
+%     [dat, model] = stepM0(dat, model, opt);
+%     plotAll(model, opt)
+%     [dat, model] = batchProcess('E', dat, model, opt);
+% 
+%     %  Update template
+%     % ----------------
+%     if opt.tpm
+%         model.a = updateMuML(opt.model, dat.pf, dat.c, ...
+%                              'par', opt.par, 'debug', opt.debug, ...
+%                              'output', model.a);
+%         model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
+%             'debug', opt.debug, 'output', model.gmu);
+%         model.mu = reconstructProbaTemplate(model.a, ...
+%             'loop', '', 'par', opt.par, 'debug', opt.debug, ...
+%             'output', model.mu);
+%     else
+%         model.mu = updateMuML(opt.model, dat.pf, dat.c, ...
+%                               'par', opt.par, 'debug', opt.debug, ...
+%                               'output', model.mu);
+%         model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
+%             'debug', opt.debug, 'output', model.gmu);
+%     end
 
 end
 

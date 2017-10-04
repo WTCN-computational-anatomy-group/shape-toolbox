@@ -85,9 +85,18 @@ end
 %    Init
 % -------------------------------------------------------------------------
 
-function [dat, model] = batchInit(dat, model, opt)
+function [dat, model] = batchInit(mode, dat, model, opt)
 
     % --- Don't parallelise here, there is no need
+    
+    switch lower(mode)
+        case 'zero'
+            create = @zeros;
+        case 'rand'
+            create = @randn;
+        otherwise
+            error('Unknwon mode %s', mode)
+    end
     
     % Init model
     % ----------
@@ -99,7 +108,7 @@ function [dat, model] = batchInit(dat, model, opt)
     if opt.verbose, before = plotBatchBegin('Init'); end;
     for n=1:opt.N
         if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
-        z        = randn([opt.K, 1]);
+        z        = create([opt.K, 1]);
         dat(n).z = saveOnDisk(dat(n).z, z);
         mz       = mz  + z;
         mzz      = mzz + z*z';
@@ -523,12 +532,17 @@ function [dat, model] = batchE(dat, model, opt)
     
     % Orthogonalise
     % -------------
-    [U, iU] = orthogonalisationMatrix(model.zz + model.S, model.ww);
+    [U, iU] = orthogonalisationMatrix(mzz + mS, model.ww);
 %     [U, iU] = gnScalePG(model.ww, model.zz, model.S, opt.N, U, iU, model.A0, opt.A0);
     [model, dat] = rotateAll(model, dat, opt, U, iU);
-    [A, n] = precisionZWishart(model.A0, model.n0, model.zz + model.S, opt.N);
+%     [A, n] = precisionZWishart(model.A0, model.n0, mzz + mS, opt.N);
+%     model.A = saveOnDisk(model.A, A);
+%     model.n = n;
+    A = numeric(model.zz) + numeric(model.S);
+    A = loadDiag(A);
+    A = opt.N .* inv(A);
     model.A = saveOnDisk(model.A, A);
-    model.n = n;
+    
 
 end
 
