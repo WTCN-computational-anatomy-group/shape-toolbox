@@ -74,7 +74,7 @@ function ll = llLaplace(varargin)
         [~, ld] = spm_shoot_greens('kernel', dim(1:3), [vs prm]);
         ll = ll - 0.5 * ld(1);
         if isempty(H)
-            ll = ll - 0.5 * ld(2) * log(2*pi);
+            ll = ll - 0.5 * ld(2) * 3 * log(2*pi);
         end
     end
     

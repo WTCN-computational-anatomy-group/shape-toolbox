@@ -26,19 +26,27 @@ function out = prepareOnDisk(where, dim, varargin)
     p.parse(where, dim, varargin{:});
     
     
-    if isempty(where) || ischar(where)
+    if isempty(where) || ischar(where) || isnumeric(where)
         
-        if isempty(where) || endsWith(where, '.mat')
+        if isempty(where) || isnumeric(where)
             type = p.Results.type;
-            if strcmpi(type, 'float32')
+            if startsWith(lower(type), 'float32')
                 type = 'single';
+            elseif startsWith(lower(type), 'float64')
+                type = 'double';
             end
             out = zeros(dim, type);
             return
             
         elseif endsWith(where, '.nii')
+            type = p.Results.type;
+            if startsWith(lower(type), 'single')
+                type = 'float32';
+            elseif startsWith(lower(type), 'double')
+                type = 'float64';
+            end
             out = file_array(where);
-            out.dtype = p.Results.type;
+            out.dtype = type;
             n = nifti;
             n.dat = out;
             n.mat = p.Results.mat;
@@ -47,7 +55,7 @@ function out = prepareOnDisk(where, dim, varargin)
             out = n.dat;
             
         else
-            error('Extension not handled. Must be .nii or .mat')
+            error('Extension not handled. Must be .nii')
             
         end
         
@@ -55,7 +63,7 @@ function out = prepareOnDisk(where, dim, varargin)
         out = where;
         
     else
-        error('Target not handled. Must be a file_array or path')
+        error('Target not handled. Must be a matlab array, file_array or path')
     end
     
     out.dim = dim;

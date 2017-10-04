@@ -20,28 +20,14 @@ function out = saveOnDisk(where, obj, varargin)
     p = inputParser;
     p.addRequired('where');
     p.addRequired('obj');
-    p.addOptional('append', 'no');
-    p.addParameter('name', 'obj');
+    p.addParameter('name', 'obj'); % Unused now, need to remove it
     p.addParameter('mat', eye(4));
     p.addParameter('mat0', eye(4));
     p.addParameter('type', 'float32');
     p.parse(where, obj, varargin{:});
     
-    append = strcmpi(p.Results.append, 'append');
-    
     if ischar(where)
-        if endsWith(where, '.mat')
-            if ~strcmp(p.Results.name, 'obj')
-                eval([p.Results.name ' = obj;']);
-            end
-            if append
-                save(where, p.Results.name, '-append');
-            else
-                save(where, p.Results.name);
-            end
-            out = obj;
-            return
-        elseif endsWith(where, '.nii')
+        if endsWith(where, '.nii')
             out = file_array(where);
             out.dtype = p.Results.type;
             n = nifti;
@@ -58,7 +44,6 @@ function out = saveOnDisk(where, obj, varargin)
     else
         out = obj;
         return
-%         error('Target not handled. Must be a file_array or path')
     end
     
     out.dim = size(obj);

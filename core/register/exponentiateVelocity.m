@@ -1,5 +1,5 @@
 function varargout = exponentiateVelocity(v, varargin)
-% FORMAT ([iphi, iJ, phi, J]) = obj.exponentiateVelocity(v,
+% FORMAT ([iphi, iJ, phi, J]) = exponentiateVelocity(v,
 %   ('iphi'), ('ijac'), ('phi'), ('jac'),
 %   ('itgr', itgr),
 %   ('vs',   vs),

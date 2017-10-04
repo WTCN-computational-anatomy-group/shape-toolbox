@@ -20,6 +20,11 @@ function [par, loop] = autoParLoop(par, loop, isfa, nz, nc)
         nc = 1;
     end
 
+    
+    if strcmpi(loop, 'auto')
+        loop = '';
+    end
+    
     % --- Splitting scheme
     if isempty(loop)
         if nz > 1
