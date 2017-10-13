@@ -109,5 +109,5 @@ function v = lat2vel(z, W)
     nv = dim(4);
     nk = dim(5);
     
-    v = reshape(reshape(W, [], nk) * z(:), [lat nv]);
+    v = reshape(reshape(numeric(W), [], nk) * z(:), [lat nv]);
 end

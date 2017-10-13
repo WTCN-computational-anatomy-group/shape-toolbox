@@ -19,8 +19,10 @@ function ww = precisionZ(w, varargin)
     p.addParameter('output', []);
     p.addParameter('debug', false);
     p.parse(w, varargin{:});
+    output = p.Results.output;
+    debug  = p.Results.debug;
     
-    if p.Results.debug, fprintf('* precisionZ\n'); end;
+    if debug, fprintf('* precisionZ\n'); end;
     
     % --- Dim info
     dim         = [size(w) 1 1 1];
@@ -47,8 +49,6 @@ function ww = precisionZ(w, varargin)
     end
         
     % --- Write on disk
-    if ~isempty(p.Results.output)
-        ww = saveOnDisk(p.Results.output, ww, 'name', 'ww');
-    end
+    ww = saveOnDisk(output, ww);
         
 end

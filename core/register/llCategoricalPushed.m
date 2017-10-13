@@ -134,6 +134,6 @@ function ll = onMemoryLog(a, f, c)
     f     = single(numeric(f));
     c     = single(numeric(c));
     msk   = isfinite(f) & isfinite(a);
-    msk   = bsxfun(@and, msk, c);
+    msk   = bsxfun(@and, msk, c > 0);
     ll    = sumall(sum(f(msk) .* a(msk), 4) - log(sum(exp(a(msk)), 4)));
 end
