@@ -8,7 +8,7 @@ function [T, iT] = orthogonalisationMatrix(ezz, ww)
 % T   - Orthogonalisation matrix,  s.t.  T * ezz * T' ~ diag
 % iT  - Almost inverse of T,       s.t. iT' * ww * iT ~ diag
 %
-% Copied from John's code. I still don't get everythong.
+% Copied from John's code. I still don't get everything.
 
 
     [Vz, Dz2]  = svd(double(ezz));
@@ -20,7 +20,5 @@ function [T, iT] = orthogonalisationMatrix(ezz, ww)
     Dw         = loadDiag(Dw);
     T          = D * V' * (Dz \ Vz');
     iT         = Vw * (Dw \ U);
-%     T          = V' * (Dz \ Vz');
-%     iT         = Vw * (Dw \ U) / D;
     
 end

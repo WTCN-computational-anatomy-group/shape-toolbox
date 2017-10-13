@@ -81,20 +81,6 @@ function [opt, dat, model] = pg_model_data(opt, dat, model)
     if ~isfield(model, 'n0')
         model.n0 = opt.n0;
     end
-    if ~isfield(model, 'A0')
-        if opt.ondisk.model.A0 && ~isempty(opt.fnames.model.A0)
-            model.A0 = createFA(opt.fnames.model.A0, [0 0], 'float32');
-        else
-            model.A0 = single([]);
-        end
-        if isscalar(opt.A0)
-            model.A0 = saveOnDisk(model.A0, opt.A0 * eye(opt.K) / opt.n0);
-        elseif issame(size(opt.A0), [K K])
-            model.A0 = saveOnDisk(model.A0, opt.A0);
-        else
-            error('Size of provided A0 conflicts with K')
-        end
-    end
     if ~isfield(model, 'wpz')
         model.wpz = opt.wpz;
     end

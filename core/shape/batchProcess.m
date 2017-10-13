@@ -13,18 +13,12 @@ function varargout = batchProcess(id, varargin)
 %   Update>> dat.z, dat.zz, dat.S
 %
 % FORMAT dat = batchProcess('Centre', dat, opt, (mean))
+% > Subtract the mean to all latent coordinates
+%   Update>> dat.z, dat.zz
 %
 % FORMAT [dat, model] = batchProcess('E', dat, model, opt)
 %
 % FORMAT [dat, model] = batchProcess('M', dat, model, opt)
-%
-% FORMAT [dat, model] = batchProcess('EM', dat, model, opt)
-%
-% FORMAT dat = batchProcess('M0', dat, opt)
-% > Specific updates for the initial M step: compute log-likelihood, 
-%   gradient and hessian of the matching term w.r.t. W.
-%   Update>> dat.llm, model.g, model.h, model.llm
-%   Compute&Clean>> dat.gv, dat.hv
 %
 % FORMAT dat = batchProcess('Update', dat, model, opt, {...}, 'clean', {...})
 % > Generic tool to update specified subject variables. Names of variables
@@ -64,7 +58,7 @@ end
 
 function before = plotBatchBegin(name)
     before = 0;
-    fprintf('Batch | %8s | ', name);
+    fprintf('%10s | %10s | ', 'Batch', name);
     tic;
 end
 
@@ -157,7 +151,7 @@ function dat = batchCentre(dat, opt, mean)
     
     % Center subjects
     % ---------------
-    if opt.verbose, before = plotBatchBegin('Center'); end;
+    if opt.verbose, before = plotBatchBegin('Centre'); end;
     for n=1:opt.N
         if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
         z = numeric(dat(n).z) - mean;
@@ -180,190 +174,12 @@ function dat = batchRotate(dat, opt, R)
     if opt.verbose, before = plotBatchBegin('Rotate'); end;
     for n=1:opt.N
         if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
-        z = R' * numeric(dat(n).z);
+        z = R * numeric(dat(n).z);
         dat(n).z  = saveOnDisk(dat(n).z, z);
         dat(n).zz = saveOnDisk(dat(n).z, z*z');
-        dat(n).S  = saveOnDisk(dat(n).S, R' * numeric(dat(n).S) * R);
+        dat(n).S  = saveOnDisk(dat(n).S, R * numeric(dat(n).S) * R');
     end
     if opt.verbose, plotBatchEnd; end;
-end
-
-% -------------------------------------------------------------------------
-%    Combined EM
-% -------------------------------------------------------------------------
-
-function dat = oneStepEM(dat, model, opt)
-
-    % Detect parallelisation scheme
-    % -----------------------------
-    if strcmpi(opt.loop, 'subject')
-        opt.loop = '';
-        opt.par  = 0;
-    else
-        opt.loop = opt.loop;
-        opt.par  = opt.par;
-    end
-    
-    % Gauss-Newton iterations
-    % -----------------------
-    % It is useful to actually find a mode of the posterior (and not only
-    % an improved value) when we use the Laplace precision for the update
-    % of W. In that case, setting gnit > 1 might help converge faster.
-    for i=1:opt.gnit
-
-        % Compute gradient/hessian
-        % ------------------------
-
-        [dat.g, dat.h] = ghMatchingLatent(opt.model, ...
-            model.mu, dat.pf, dat.c, model.gmu, model.w, ...
-            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
-            'output', {dat.g, dat.h});
-
-        [g, h] = ghPriorLatent(dat.z, model.ww, 'debug', opt.debug);
-        dat.g = dat.g + g;
-        dat.h = dat.h + h;
-
-        dat.h = loadDiag(dat.h); % Additional regularisation for robustness
-        
-        dat.lllz = llLaplace(dat.h); % Laplace approximation of p(z|f, W, mu)
-
-        % Compute search direction
-        % ------------------------
-        dat.dz = -dat.h \ dat.g;
-
-        % Line search
-        % -----------
-        [ok, z, llm, llz, v, iphi, pf, c, ipsi] = lsLatent(...
-            opt.model, dat.dz, dat.z, dat.v, dat.llm, ...
-            model.w, model.mu, dat.f, ...
-            'regz', model.wpz(1) * model.A + model.wpz(2) * model.ww, ...
-            'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
-            'itgr', opt.itgr, 'prm', opt.prm);
-
-        % Store better values
-        % -------------------
-        if ok
-            dat.z       = z;
-            dat.zz      = z * z';
-            dat.llm     = llm;
-            dat.llz     = llz;
-            dat.v(:)    = v(:);
-            dat.iphi(:) = iphi(:);
-            dat.pf(:)   = pf(:);
-            dat.c(:)    = c(:);
-            dat.ipsi(:) = ipsi(:);
-        else
-            break
-        end
-
-        dat.ll = dat.llm + dat.llz + dat.lllz;
-        
-    end
-
-    % Compute grad/hess for subspace update
-    % -------------------------------------
-
-    if ok
-        [~, dat.h] = ghMatchingLatent(opt.model, ...
-            model.mu, dat.pf, dat.c, model.gmu, model.w);
-
-        [~, h] = ghPriorLatent(dat.z, model.ww);
-        dat.h = dat.h + h;
-
-        dat.h = loadDiag(dat.h); % Additional regularisation for robustness
-        
-        dat.lllz = llLaplace(dat.h); % Laplace approximation of p(z|f, W, mu)
-        
-        dat.S = inv(dat.h);
-    end
-    
-    [dat.gv, dat.hv] = ghMatchingVel(opt.model, ...
-        model.mu, dat.pf, dat.c, model.gmu, ...
-        'output', {dat.gv, dat.hv});
-    
-        
-    % Cleaning
-    % --------
-    % I should probably clear variables and remove files that are not
-    % useful anymore. This will cause less disk and broadband usage.
-    toclean = {'g', 'h', 'iphi', 'ipsi'};
-    for i=1:numel(toclean)
-        field = toclean{i};
-        dat.(field) = rmarray(dat.(field));
-    end
-    if isfield(dat, 'dz')
-        dat = rmfield(dat, 'dz');
-    end
-    if isfield(dat, 'll')
-        dat = rmfield(dat, 'll');
-    end
-end
-
-function [dat, model] = batchEM(dat, model, opt)
-
-    % --- Detect parallelisation scheme
-    if strcmpi(opt.loop, 'subject') && opt.par > 0
-        par = opt.par;
-        batch = opt.batch;
-    else
-        par   = 0;
-        batch = 1;
-    end
-
-    % Init gradient/hessian
-    % ---------------------
-    dim = [size(model.w) 1 1 1];
-    model.g   = prepareOnDisk(model.g, [dim(1:3) 3 dim(5)], 'type', 'float32');
-    model.h   = prepareOnDisk(model.h, [dim(1:3) 6 dim(5)], 'type', 'float32');
-    model.llm  = 0;
-    model.llz  = 0;
-    model.lllz = 0;
-    mz         = zeros(opt.K, 1);
-    mzz        = zeros(opt.K, opt.K);
-    mS         = zeros(opt.K, opt.K);
-    
-    % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('EM'); end;
-    for i=1:ceil(opt.N/batch)
-        n1 = (i-1)*batch + 1;
-        ne = min(opt.N, i*batch);
-
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
-    
-        % Compute subjects grad/hess w.r.t. initial velocity
-        % --------------------------------------------------
-        parfor (n=n1:ne, double(par))
-            dat(n) = oneStepEM(dat(n), model, opt);
-        end
-        
-        for n=n1:ne
-            
-            % Add individual contributions
-            % ----------------------------
-            for k=1:opt.K
-                model.g(:,:,:,:,k) = model.g(:,:,:,:,k) + numeric(dat(n).gv) * single(dat(n).z(k));
-                model.h(:,:,:,:,k) = model.h(:,:,:,:,k) + numeric(dat(n).hv) * single(dat(n).z(k))^2;
-            end
-            mz         = mz  + dat(n).z;
-            mzz        = mzz + dat(n).zz;
-            mS         = mS  + dat(n).S;
-            model.llm  = model.llm  + dat(n).llm;
-            model.llz  = model.llz  + dat(n).llz;
-            model.lllz = model.lllz  + dat(n).lllz;
-            
-            % Clear individual grad/hess
-            % --------------------------
-            dat(n).gv = rmarray(dat(n).gv);
-            dat(n).hv = rmarray(dat(n).hv);
-        end
-        
-    end
-    if opt.verbose, plotBatchEnd; end;
-    
-    model.z    = saveOnDisk(model.z, mz);
-    model.zz   = saveOnDisk(model.zz, mzz);
-    model.S    = saveOnDisk(model.S, mS);
-
 end
 
 % -------------------------------------------------------------------------
@@ -397,7 +213,7 @@ function dat = oneStepE(dat, model, opt)
             'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
             'output', {dat.g, dat.h});
 
-        [g, h] = ghPriorLatent(dat.z, model.ww, 'debug', opt.debug);
+        [g, h] = ghPriorLatent(dat.z, model.regz, 'debug', opt.debug);
         dat.g = dat.g + g;
         dat.h = dat.h + h;
 
@@ -414,7 +230,7 @@ function dat = oneStepE(dat, model, opt)
         [ok, z, llm, llz, v, iphi, pf, c, ipsi] = lsLatent(...
             opt.model, dat.dz, dat.z, dat.v, dat.llm, ...
             model.w, model.mu, dat.f, ...
-            'regz', model.wpz(1) * model.A + model.wpz(2) * model.ww, ...
+            'regz', model.regz, ...
             'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
             'itgr', opt.itgr, 'prm', opt.prm);
 
@@ -446,7 +262,7 @@ function dat = oneStepE(dat, model, opt)
         [~, dat.h] = ghMatchingLatent(opt.model, ...
             model.mu, dat.pf, dat.c, model.gmu, model.w);
 
-        [~, h] = ghPriorLatent(dat.z, model.ww);
+        [~, h] = ghPriorLatent(dat.z, model.regz);
         dat.h = dat.h + h;
 
         dat.h = loadDiag(dat.h); % Additional regularisation for robustness
@@ -529,20 +345,6 @@ function [dat, model] = batchE(dat, model, opt)
     model.z    = saveOnDisk(model.z, mz);
     model.zz   = saveOnDisk(model.zz, mzz);
     model.S    = saveOnDisk(model.S, mS);
-    
-    % Orthogonalise
-    % -------------
-    [U, iU] = orthogonalisationMatrix(mzz + mS, model.ww);
-%     [U, iU] = gnScalePG(model.ww, model.zz, model.S, opt.N, U, iU, model.A0, opt.A0);
-    [model, dat] = rotateAll(model, dat, opt, U, iU);
-%     [A, n] = precisionZWishart(model.A0, model.n0, mzz + mS, opt.N);
-%     model.A = saveOnDisk(model.A, A);
-%     model.n = n;
-    A = numeric(model.zz) + numeric(model.S);
-    A = loadDiag(A);
-    A = opt.N .* inv(A);
-    model.A = saveOnDisk(model.A, A);
-    
 
 end
 
@@ -609,79 +411,6 @@ function [dat, model] = batchM(dat, model, opt)
 end
 
 % -------------------------------------------------------------------------
-%    M0
-% -------------------------------------------------------------------------
-
-function dat = oneStepM0(dat, model, opt)
-    if strcmpi(opt.loop, 'subject')
-        loop = '';
-        par  = 0;
-    else
-        loop = opt.loop;
-        par  = opt.par;
-    end
-    [dat.gv, dat.hv] = ghMatchingVel(opt.model, ...
-        model.mu, dat.pf, dat.c, model.gmu, ...
-        'loop', loop, 'par', par, 'output', {dat.gv, dat.hv}, ...
-        'debug', opt.debug);
-    dat.llm = llMatching(opt.model, model.mu, dat.pf, dat.c, ...
-        'loop', loop, 'par', par, 'debug', opt.debug);
-end
-
-function [dat, model] = batchM0(dat, model, opt)
-
-    % --- Detect parallelisation scheme
-    if strcmpi(opt.loop, 'subject') && opt.par > 0
-        par = opt.par;
-        batch = opt.batch;
-    else
-        par   = 0;
-        batch = 1;
-    end
-
-    % Init gradient/hessian
-    % ---------------------
-    dim = [size(model.w) 1 1 1];
-    model.g   = prepareOnDisk(model.g, [dim(1:3) 3 dim(5)], 'type', 'float32');
-    model.h   = prepareOnDisk(model.h, [dim(1:3) 6 dim(5)], 'type', 'float32');
-    model.llm = 0;
-    
-    % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('M0'); end;
-    for i=1:ceil(opt.N/batch)
-        n1 = (i-1)*batch + 1;
-        ne = min(opt.N, i*batch);
-
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
-    
-        % Compute subjects grad/hess w.r.t. initial velocity
-        % --------------------------------------------------
-        parfor (n=n1:ne, double(par))
-            dat(n) = oneStepM0(dat(n), model, opt);
-        end
-        
-        for n=n1:ne
-            
-            % Add individual contributions
-            % ----------------------------
-            for k=1:opt.K
-                model.g(:,:,:,:,k) = model.g(:,:,:,:,k) + numeric(dat(n).gv) * single(dat(n).z(k));
-                model.h(:,:,:,:,k) = model.h(:,:,:,:,k) + numeric(dat(n).hv) * single(dat(n).z(k))^2;
-            end
-            model.llm = model.llm + dat(n).llm;
-            
-            % Clear individual grad/hess
-            % --------------------------
-            dat(n).gv = rmarray(dat(n).gv);
-            dat(n).hv = rmarray(dat(n).hv);
-        end
-        
-    end
-    if opt.verbose, plotBatchEnd; end;
-
-end
-
-% -------------------------------------------------------------------------
 %    Update
 % -------------------------------------------------------------------------
 
@@ -735,7 +464,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
             'loop', loop, 'par', par);
 
-        [g, h] = ghPriorLatent(dat.z, model.ww);
+        [g, h] = ghPriorLatent(dat.z, model.regz);
         dat.g = dat.g + g;
         dat.h = dat.h + h;
     elseif isfield(todo, 'h')
@@ -743,14 +472,14 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
             'loop', loop, 'par', par);
 
-        [~, h] = ghPriorLatent(dat.z, model.ww);
+        [~, h] = ghPriorLatent(dat.z, model.regz);
         dat.h = dat.h + h;
     elseif isfield(todo, 'g')
         dat.g = ghMatchingLatent(opt.model, ...
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
             'loop', loop, 'par', par);
 
-        g = ghPriorLatent(dat.z, model.ww);
+        g = ghPriorLatent(dat.z, model.regz);
         dat.g = dat.g + g;
     end
     if isfield(todo, 'h')
@@ -776,7 +505,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         dat.h = rmarray(dat.h);
     end
     if isfield(todo, 'llz')
-        dat.llz = llPriorLatent(dat.z, model.ww, 'debug', opt.debug);
+        dat.llz = llPriorLatent(dat.z, model.regz, 'debug', opt.debug);
     end
 end
 

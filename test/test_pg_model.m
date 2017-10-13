@@ -23,6 +23,8 @@
     opt.loop         = 'subject';
     opt.debug        = false;
     opt.batch        = 10;
+    opt.n0           = 0;
+    opt.wpz0         = [1 1];
 
     [model, dat] = pg_model(opt);
     

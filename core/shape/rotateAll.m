@@ -41,6 +41,6 @@ function [model, dat] = rotateAll(model, dat, opt, R, iR)
     model.S(:,:)  = R   * numeric(model.S)  * R';
     
     % Rotate subjects
-    dat = batchProcess('Rotate', dat, opt, R');
+    dat = batchProcess('Rotate', dat, opt, R);
 
 end
