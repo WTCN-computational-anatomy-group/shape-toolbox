@@ -8,13 +8,15 @@ function lb = lbLatent(dat, model, opt)
 % > E[ln p(z)] - E[ln q(z)]
 
 
-    lb = - opt.K*opt.N/2*(log(2*pi) - 1);
     if model.n0 == 0
+        lb = - opt.K*opt.N/2*(log(2*pi) - 1);
         lb = lb + model.wpz(1)*opt.N/2*proba('ELogDetWishart', model.A/(model.n0+opt.N), model.n0+opt.N);
+        lb = lb + model.wpz(2)*opt.N/2*proba('LogDet', model.ww);
     else
-        lb = lb + model.wpz(1)*opt.N/2*proba('LogDet', model.A);
+        lb = opt.K*opt.N/2;
+        lb = lb + opt.N/2*proba('LogDet', ...
+            model.wpz(1) * model.A + model.wpz(2) * model.ww);
     end
-    b = lb + model.wpz(2)*opt.N/2*proba('LogDet', model.ww);
     lb = lb - 0.5 * ( model.wpz(1) * trace((model.zz + model.S)*model.A) + ...
                       model.wpz(2) * trace((model.zz + model.S)*model.ww) );
     

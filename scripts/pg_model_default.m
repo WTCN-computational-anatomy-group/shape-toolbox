@@ -60,13 +60,18 @@ function opt = pg_model_default(opt)
         end
     end
     if ~isfield(opt, 'n0')
-        opt.n0 = 20;
+        opt.n0 = opt.K;
     end
     if ~isfield(opt, 'wpz0')
         opt.wpz0 = [1 5];
     end
     if ~isfield(opt, 'wpz')
         opt.wpz = [1 1];
+    end
+    
+    if 0 < opt.n0 && opt.n0 < opt.K
+        warning('Wishart prior: n0 must be greater or equal to K. Fixing it.')
+        opt.n0 = opt.K;
     end
     
     % ---------------------------------------------------------------------

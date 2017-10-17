@@ -203,7 +203,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end;
         ezz = U*(numeric(model.zz)+numeric(model.S))*U';
         if model.n0 == 0
-            [Q, iQ] = scalePG(ezz, model.n0, opt.N);
+            [Q, iQ] = scalePG(opt.N, opt.K);
         else
             [Q, iQ] = gnScalePG(ezz, model.n0, opt.N, model.wpz(2));
         end

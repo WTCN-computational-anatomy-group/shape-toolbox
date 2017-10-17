@@ -36,9 +36,13 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
     if isfield(model, 'armijo'),    armijo = model.armijo;
     else                            armijo = 1; end;
     llm0  = model.llm;
-    llz0 = - 0.5 * trace(model.ww * (model.S + model.zz)) ...
-           + 0.5 * opt.N * proba('LogDet', model.ww);
-    llz0 = llz0 * model.wpz(2);
+    llz0 = - 0.5 * trace(model.wpz(2) * model.ww * (model.S + model.zz));
+    if model.n0 == 0
+        llz0 = llz0 + 0.5 * opt.N * proba('LogDet', ...
+            model.wpz(1) * model.A + model.wpz(2) * model.ww);
+    else
+        llz0 = llz0 + model.wpz(2) * 0.5 * opt.N * proba('LogDet', model.ww);
+    end
     llw0 = - 0.5 * trace(model.ww);
     ll0  = llm0 + llz0 + llw0;
     ok   = false;
@@ -69,9 +73,13 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
         for n=1:opt.N
             llm = llm + dat(n).llm;
         end
-        llz = - 0.5 * trace(model.ww * (model.S + model.zz)) ...
-              + 0.5 * opt.N * proba('LogDet', model.ww);
-        llz = llz * model.wpz(2);
+        llz = - 0.5 * trace(model.wpz(2) * model.ww * (model.S + model.zz));
+        if model.n0 == 0
+            llz = llz + 0.5 * opt.N * proba('LogDet', ...
+                model.wpz(1) * model.A + model.wpz(2) * model.ww);
+        else
+            llz = llz + model.wpz(2) * 0.5 * opt.N * proba('LogDet', model.ww);
+        end
         llw = - 0.5 * trace(model.ww);
         
         ll = llm + llz + llw;
