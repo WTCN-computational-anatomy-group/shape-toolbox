@@ -80,10 +80,8 @@ function mu = loopSlice(f, c, par, output)
             tmpf = tmpf + single(f{n}(:,:,z,:));
         end
         tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
-        tmpf(:,:,:,nc) = 0;
-        tmpf = bsxfun(@rdivide, tmpf, 1-sum(tmpf,4));
-        tmpf(:,:,:,1:(nc-1)) = tmpf(tmpf(:,:,:,1:(nc-1)));
-        mu(:,:,z,:) = tmpf(:,:,:,:);
+        tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
+        mu(:,:,z,:) = log(tmpf(:,:,:,:));
     end
     
     if ~isempty(output)
@@ -104,9 +102,8 @@ function mu = loopNone(f, c, output)
         tmpc = tmpc + single(numeric(c{n}));
     end
     mu = bsxfun(@rdivide, mu, tmpc);
-    mu(:,:,:,nc) = 0;
-    mu = bsxfun(@rdivide, mu, max(eps('single'),min(1-eps('single'),1-sum(mu,4))));
-    mu(:,:,:,1:(nc-1)) = log(mu(:,:,:,1:(nc-1)));
+    mu = bsxfun(@rdivide, mu, max(eps('single'),mu(:,:,:,nc)));
+    mu = log(mu);
     
     if ~isempty(output)
         mu = saveOnDisk(output, mu, 'name', 'mu');
