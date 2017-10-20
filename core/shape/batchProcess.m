@@ -6,11 +6,11 @@ function varargout = batchProcess(id, varargin)
 % FORMAT [dat, model] = batchProcess('Init', dat, model, opt)
 % > Initialise latent coordinates and insure they are zero-centered (but
 %   orthogonalisation is not done here).
-%   Update>> dat.z, dat.zz, dat.S, model.z, model.zz, model.S
+%   Update>> dat.z, dat.zz, dat.Sz, model.z, model.zz, model.Sz
 %
 % FORMAT dat = batchProcess('Rotate', dat, opt, R)
 % > Apply a rotation matrix to all latent coordinates
-%   Update>> dat.z, dat.zz, dat.S
+%   Update>> dat.z, dat.zz, dat.Sz
 %
 % FORMAT dat = batchProcess('Centre', dat, opt, (mean))
 % > Subtract the mean to all latent coordinates
@@ -118,12 +118,12 @@ function [dat, model] = batchInit(mode, dat, model, opt)
         
         dat(n).z  = saveOnDisk(dat(n).z, z);
         dat(n).zz = saveOnDisk(dat(n).z, z*z');
-        dat(n).S  = saveOnDisk(dat(n).S, zeros(opt.K));
+        dat(n).Sz = saveOnDisk(dat(n).Sz, zeros(opt.K));
     end
     if opt.verbose, plotBatchEnd; end;
-    model.z  = saveOnDisk(model.z, zeros(opt.K, 1));
-    model.zz = saveOnDisk(model.z, mzz - mz*mz'/opt.N);
-    model.S  = saveOnDisk(model.z, zeros(opt.K));
+    model.z  = saveOnDisk(model.z,  zeros(opt.K, 1));
+    model.zz = saveOnDisk(model.zz, mzz - mz*mz'/opt.N);
+    model.Sz  = saveOnDisk(model.Sz,  zeros(opt.K));
 
 end
 
@@ -177,7 +177,7 @@ function dat = batchRotate(dat, opt, R)
         z = R * numeric(dat(n).z);
         dat(n).z  = saveOnDisk(dat(n).z, z);
         dat(n).zz = saveOnDisk(dat(n).z, z*z');
-        dat(n).S  = saveOnDisk(dat(n).S, R * numeric(dat(n).S) * R');
+        dat(n).Sz = saveOnDisk(dat(n).Sz, R * numeric(dat(n).Sz) * R');
     end
     if opt.verbose, plotBatchEnd; end;
 end
@@ -219,15 +219,13 @@ function dat = oneStepE(dat, model, opt)
 
         dat.h = loadDiag(dat.h); % Additional regularisation for robustness
         
-        dat.lllz = llLaplace(dat.h); % Laplace approximation of p(z|f, W, mu)
-
         % Compute search direction
         % ------------------------
         dat.dz = -dat.h \ dat.g;
 
         % Line search
         % -----------
-        [ok, z, llm, llz, v, iphi, pf, c, ipsi] = lsLatent(...
+        [okz, z, llm, ~, v, iphi, pf, c, ipsi] = lsLatent(...
             opt.model, dat.dz, dat.z, dat.v, dat.llm, ...
             model.w, model.mu, dat.f, ...
             'regz', model.regz, ...
@@ -236,12 +234,11 @@ function dat = oneStepE(dat, model, opt)
 
         % Store better values
         % -------------------
-        dat.ok = ok;
-        if ok
+        dat.okz = okz;
+        if okz
             dat.z       = z;
             dat.zz      = z * z';
             dat.llm     = llm;
-            dat.llz     = llz;
             dat.v(:)    = v(:);
             dat.iphi(:) = iphi(:);
             dat.pf(:)   = pf(:);
@@ -250,15 +247,12 @@ function dat = oneStepE(dat, model, opt)
         else
             break
         end
-
-        dat.ll = dat.llm + dat.llz + dat.lllz;
         
     end
 
-    % Compute grad/hess for subspace update
-    % -------------------------------------
-
-    if ok
+    % Compute Laplace covariance
+    % --------------------------
+    if okz
         [~, dat.h] = ghMatchingLatent(opt.model, ...
             model.mu, dat.pf, dat.c, model.gmu, model.w);
 
@@ -267,9 +261,7 @@ function dat = oneStepE(dat, model, opt)
 
         dat.h = loadDiag(dat.h); % Additional regularisation for robustness
         
-        dat.lllz = llLaplace(dat.h); % Laplace approximation of p(z|f, W, mu)
-        
-        dat.S = inv(dat.h);
+        dat.Sz = inv(dat.h);
     end
         
     % Cleaning
@@ -303,8 +295,6 @@ function [dat, model] = batchE(dat, model, opt)
     % Init gradient/hessian
     % ---------------------
     model.llm  = 0;
-    model.llz  = 0;
-    model.lllz = 0;
     mz         = zeros(opt.K, 1);
     mzz        = zeros(opt.K, opt.K);
     mS         = zeros(opt.K, opt.K);
@@ -330,11 +320,9 @@ function [dat, model] = batchE(dat, model, opt)
             % ----------------------------
             mz         = mz  + dat(n).z;
             mzz        = mzz + dat(n).zz;
-            mS         = mS  + dat(n).S;
+            mS         = mS  + dat(n).Sz;
             model.llm  = model.llm  + dat(n).llm;
-            model.llz  = model.llz  + dat(n).llz;
-            model.lllz = model.lllz + dat(n).lllz;
-            okz        = okz + dat(n).ok;
+            okz        = okz + dat(n).okz;
             
         end
         
@@ -344,7 +332,7 @@ function [dat, model] = batchE(dat, model, opt)
     
     model.z    = saveOnDisk(model.z, mz);
     model.zz   = saveOnDisk(model.zz, mzz);
-    model.S    = saveOnDisk(model.S, mS);
+    model.Sz    = saveOnDisk(model.Sz, mS);
 
 end
 
@@ -373,8 +361,8 @@ function [dat, model] = batchM(dat, model, opt)
     % Init gradient/hessian
     % ---------------------
     dim     = [size(model.w) 1 1 1];
-    model.g = prepareOnDisk(model.g, [dim(1:3) 3 dim(5)], 'type', 'float32');
-    model.h = prepareOnDisk(model.h, [dim(1:3) 6 dim(5)], 'type', 'float32');
+    model.gw = prepareOnDisk(model.gw, [dim(1:3) 3 dim(5)], 'type', 'float32');
+    model.hw = prepareOnDisk(model.hw, [dim(1:3) 6 dim(5)], 'type', 'float32');
     
     % --- Batch processing
     if opt.verbose, before = plotBatchBegin('M'); end;
@@ -395,8 +383,8 @@ function [dat, model] = batchM(dat, model, opt)
             % Add individual contributions
             % ----------------------------
             for k=1:opt.K
-                model.g(:,:,:,:,k) = model.g(:,:,:,:,k) + numeric(dat(n).gv) * single(dat(n).z(k));
-                model.h(:,:,:,:,k) = model.h(:,:,:,:,k) + numeric(dat(n).hv) * single(dat(n).z(k))^2;
+                model.gw(:,:,:,:,k) = model.gw(:,:,:,:,k) + numeric(dat(n).gv) * single(dat(n).z(k));
+                model.hw(:,:,:,:,k) = model.hw(:,:,:,:,k) + numeric(dat(n).hv) * single(dat(n).z(k))^2;
             end
             
             % Clear individual grad/hess
@@ -496,7 +484,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         dat.lllz = llLaplace(dat.h);
     end
     if isfield(todo, 'S')
-        dat.S = inv(dat.h);
+        dat.Sz = inv(dat.h);
     end
     if isfield(toclean, 'g')
         dat.g = rmarray(dat.g);
