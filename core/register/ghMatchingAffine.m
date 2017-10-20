@@ -1,5 +1,6 @@
 function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
-% FORMAT [g, (h)] = ghMatchingAffine(mu, f, c, gmu, A, basis, (phi), (jac), ...)
+% FORMAT [g, (h)] = ghMatchingAffine(model, mu, f, c, gmu, A, basis, 
+%                                    (phi), (jac), ...)
 % 
 % ** Required **
 % model - Structure with fields:

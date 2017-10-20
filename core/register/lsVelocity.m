@@ -50,8 +50,8 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
     p.addRequired('mu',     @checkarray);
     p.addRequired('f',      @checkarray);
     p.addParameter('v0',       [],     @checkarray);
-    p.addParameter('llr0',     nan,    @iscalar);
-    p.addParameter('sigma',    1,      @iscalar);
+    p.addParameter('llr0',     nan,    @isscalar);
+    p.addParameter('sigma',    1,      @isscalar);
     p.addParameter('A',        eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     p.addParameter('Mf',       eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     p.addParameter('Mmu',      eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
@@ -100,7 +100,7 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
     % --- Initialise line search
     armijo = 1;           % Armijo factor
     ok     = false;       % Found a better ll ?
-    ll0    = llm0 + llr0; % Log-likelihood (only parts that depends on z)
+    ll0    = llm0 + llr0; % Log-likelihood (only parts that depends on v)
     dimf   = [size(f) 1 1];
     latf   = dimf(1:3);
     

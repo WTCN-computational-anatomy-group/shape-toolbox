@@ -31,7 +31,7 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
 % bernoulli   - True/False realisation   (F ~ Ber(Mu(IPhi)))
 % categorical - Multiclass realisation   (F ~ Cat(Mu(IPhi)))
 %
-% Compute gradient/hessian of the **negative$$ log-likelihood of the 
+% Compute gradient/hessian of the **negative** log-likelihood of the 
 % matching term with respect to changes in the complete velocity.
 % Gradients actually take the form of vector fields ([nx ny nz ngrad nc]) 
 % and  Hessians take the form of tensor fields ([nx ny nz ngrad nc nc]), 
