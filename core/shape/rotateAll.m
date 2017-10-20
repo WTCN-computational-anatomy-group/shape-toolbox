@@ -38,7 +38,7 @@ function [model, dat] = rotateAll(model, dat, opt, R, iR)
     model.ww(:,:) = iR' * numeric(model.ww) * iR;
     model.z(:,:)  = R   * numeric(model.z);
     model.zz(:,:) = R   * numeric(model.zz) * R';
-    model.S(:,:)  = R   * numeric(model.S)  * R';
+    model.Sz(:,:) = R   * numeric(model.Sz) * R';
     
     % Rotate subjects
     dat = batchProcess('Rotate', dat, opt, R);

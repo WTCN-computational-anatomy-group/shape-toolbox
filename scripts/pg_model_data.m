@@ -65,8 +65,8 @@ function [opt, dat, model] = pg_model_data(opt, dat, model)
     
     % --- Model
     
-    modelvar = {'a', 'mu', 'gmu', 'w', 'dw', 'g', 'h', ...
-                'ww', 'zz', 'z', 'S', 'A'};
+    modelvar = {'a', 'mu', 'gmu', 'w', 'dw', 'gw', 'hw', ...
+                'ww', 'zz', 'z', 'Sz', 'Az'};
             
     for i=1:numel(modelvar)
         var = modelvar{i};
@@ -78,16 +78,13 @@ function [opt, dat, model] = pg_model_data(opt, dat, model)
             end
         end
     end
-    if ~isfield(model, 'n0')
-        model.n0 = opt.n0;
-    end
     if ~isfield(model, 'wpz')
         model.wpz = opt.wpz;
     end
     
     % --- Subjects
             
-    datvar = {'wmu', 'iphi', 'ipsi', 'v', 'pf', 'c', 'zz', 'z', 'S', ...
+    datvar = {'wmu', 'iphi', 'ipsi', 'v', 'pf', 'c', 'zz', 'z', 'Sz', ...
               'gv', 'hv', 'g', 'h'};
     
     for j=1:numel(datvar)
@@ -113,14 +110,8 @@ function [opt, dat, model] = pg_model_data(opt, dat, model)
     if ~isfield(dat, 'llm')
         [dat.llm] = deal(double([]));
     end
-    if ~isfield(dat, 'llz')
-        [dat.llz] = deal(double([]));
-    end
-    if ~isfield(dat, 'lllz')
-        [dat.lllz] = deal(double([]));
-    end
-    if ~isfield(dat, 'ok')
-        [dat.ok] = deal(false);
+    if ~isfield(dat, 'okz')
+        [dat.okz] = deal(false);
     end
     
     % Create all output directories
