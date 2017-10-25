@@ -85,7 +85,7 @@ function [opt, dat, model] = pg_model_data(opt, dat, model)
     % --- Subjects
             
     datvar = {'wmu', 'iphi', 'ipsi', 'v', 'pf', 'c', 'zz', 'z', 'Sz', ...
-              'gv', 'hv', 'g', 'h'};
+              'gv', 'hv', 'gz', 'hz'};
     
     for j=1:numel(datvar)
         var = datvar{j};

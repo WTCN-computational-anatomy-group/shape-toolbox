@@ -77,6 +77,12 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt, 'wpz')
         opt.wpz = [1 1];
     end
+    if ~isfield(opt, 'armijo')
+        opt.armijo = 1;
+    end
+    if ~isfield(opt, 'fwhm')
+        opt.fwhm = 0;
+    end
     
     % --- Check n0
     if 0 < opt.nz0 && opt.nz0 < opt.K

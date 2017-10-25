@@ -16,12 +16,19 @@
         falist{n} = facat;
     end
     dat = struct('f', falist);
+    
+    for n=1:N
+        f = numeric(dat(n).f);
+        msk = ~(f > 0);
+        f(msk) = inf;
+        dat(n).f(:,:,:,:) = f(:,:,:,:);
+    end
 
     opt              = struct;
     opt.directory    = '/Users/balbasty/Desktop/model/output2';
     opt.model        = struct('name', 'normal', 'sigma2', 1000);
     opt.K            = 10;
-    opt.prm          = 10*[0 0.001 0.02 0.0025 0.005];
+    opt.prm          = 100*[0 0.001 0.02 0.0025 0.005];
     opt.emit         = 1000;
     opt.gnit         = 1;
     opt.par          = inf;
@@ -35,7 +42,10 @@
     opt.nz0          = 0;
     opt.wpz0         = [1 1];
     opt.affine_basis = affine_basis(12, '2d');
+    opt.armijo       = 16;
+    opt.gnit         = 5;
+    opt.fwhm         = 6;
 
-    fprintf('[Launch pg_model]\n')
+    fprintf('[Launch pgra_model]\n')
     [model, dat] = pgra_model(opt, dat);
     

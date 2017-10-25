@@ -25,12 +25,6 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt, pgra)
     
     if opt.debug, fprintf('* lsSubspace\n'); end;
     
-    if nargin < 5
-        pgra = false;
-    else
-        pgra = strcmpi(pgra, 'pgra');
-    end
-    
     % --- Initial point
     w0 = model.w;
     w0.fname = fullfile(opt.directory, 'subspace_prev.nii');
@@ -69,15 +63,9 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt, pgra)
         model.ww = precisionZ(model.w, opt.vs, opt.prm);
         
         % - Update individual matching terms
-        if pgra
-            dat = pgraBatchProcess('Update', dat, model, opt1, ...
-                {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
-                'clean', {'ipsi', 'iphi'});
-        else
-            dat = batchProcess('Update', dat, model, opt1, ...
-                {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
-                'clean', {'ipsi', 'iphi'});
-        end
+        dat = batchProcess('Update', dat, model, opt1, ...
+            {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
+            'clean', {'ipsi', 'iphi'});
         
         % - Compute log-likelihood
         llm = 0;
@@ -114,15 +102,9 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt, pgra)
         printInfo('end');
         model.w(:)  = w0(:);
         model.ww(:) = ww0(:);
-        if pgra
-            dat = pgraBatchProcess('Update', dat, model, opt1, ...
-                {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
-                'clean', {'ipsi', 'iphi'});
-        else
-            dat = batchProcess('Update', dat, model, opt1, ...
-                {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
-                'clean', {'ipsi', 'iphi'});
-        end
+        dat = batchProcess('Update', dat, model, opt1, ...
+            {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
+            'clean', {'ipsi', 'iphi'});
         model.armijo = min(1.1 * armijo, 100);
     else
         model.ll  = ll;

@@ -118,7 +118,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         %    M-step (Principal subspace)
         % -----------------------------------------------------------------
 
-        [dat, model] = batchProcess('M', dat, model, opt);
+        [dat, model] = batchProcess('GradHessSubspace', dat, model, opt);
         
         % Factor of the prior : ln p(z|W) + ln p(W)
         % -------------------
@@ -161,7 +161,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         
         % Update q(z)
         % -----------
-        [dat, model] = batchProcess('E', dat, model, opt);
+        [dat, model] = batchProcess('FitLatent', dat, model, opt);
         
         % -----------
         % Lower bound
@@ -225,7 +225,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         % -----------------------------------------------------------------
         if opt.verbose, fprintf('%10s | %10s ', 'Template', ''); tic; end;
         if opt.tpm
-            model.a = updateMuML(opt.model, dat.pf, dat.c, ...
+            model.a = updateMuML(opt.model, dat, ...
                                  'par', opt.par, 'debug', opt.debug, ...
                                  'output', model.a);
             model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
@@ -234,7 +234,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
                 'loop', '', 'par', opt.par, 'debug', opt.debug, ...
                 'output', model.mu);
         else
-            model.mu = updateMuML(opt.model, dat.pf, dat.c, ...
+            model.mu = updateMuML(opt.model, dat, ...
                                   'par', opt.par, 'debug', opt.debug, ...
                                   'output', model.mu);
             model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
@@ -351,7 +351,7 @@ function [dat, model] = initAll(dat, model, opt)
     end
     
     % --- Zero init of Z
-    [dat, model] = batchProcess('Init', 'zero', dat, model, opt);
+    [dat, model] = batchProcess('InitLatent', 'zero', dat, model, opt);
     
     % --- Init of subject specific arrays
     dat = batchProcess('Update', dat, model, opt, ...
@@ -359,7 +359,7 @@ function [dat, model] = initAll(dat, model, opt)
 
     % --- Init template + Compute template spatial gradients + Build TPMs
     if opt.tpm
-        model.a = updateMuML(opt.model, dat.pf, dat.c, ...
+        model.a = updateMuML(opt.model, dat, ...
                              'par', opt.par, 'debug', opt.debug, ...
                              'output', model.a);
         model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
@@ -368,7 +368,7 @@ function [dat, model] = initAll(dat, model, opt)
             'loop', '', 'par', opt.par, 'debug', opt.debug, ...
             'output', model.mu);
     else
-        model.mu = updateMuML(opt.model, dat.pf, dat.c, ...
+        model.mu = updateMuML(opt.model, dat, ...
                               'par', opt.par, 'debug', opt.debug, ...
                               'output', model.mu);
         model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
@@ -387,12 +387,12 @@ function [dat, model] = initAll(dat, model, opt)
     % -----------------------
 
     % --- Random init of E[z]
-    [dat, model] = batchProcess('Init', 'rand', dat, model, opt);
+    [dat, model] = batchProcess('InitLatent', 'rand', dat, model, opt);
 
     % --- Orthogonalise sum{E[z]E[z]'}
     [U,S] = svd(model.zz);
     Rz    = 0.1*sqrt(opt.N/opt.K)*U/diag(sqrt(diag(S)+eps));
-    dat   = batchProcess('rotate', dat, opt, Rz');
+    dat   = batchProcess('RotateLatent', dat, opt, Rz');
     model.zz = Rz' * model.zz * Rz;
     model.Sz = Rz' * model.Sz * Rz;
     
