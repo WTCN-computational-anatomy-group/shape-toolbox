@@ -1,10 +1,16 @@
 function mu = updateMuLaplaceML(varargin)
-% FORMAT mu = updateMuLaplaceML(pf1, ..., pfN, c1, ..., cN,
-%                              ('loop', loop), ('par', par))
+% FORMAT mu = updateMuLaplaceML('f', pf1, ..., pfN, 
+%                               'c', c1, ..., cN,
+%                               ('b', b1, ..., bN),
+%                               ('fwhm', fwhm),
+%                               ('loop', loop), ('par', par))
 % ** Required **
 % pfi  - Image pushed in template space
 % ci   - Pushed voxel count
+% ** Optional **
+% bi   - Individual noise variance (b)
 % ** Keyword arguments **
+% fwhm  - Smoothing kernel used as pseudo prior [do not use]
 % loop - How to split processing: 'component', 'slice', 'none' or '' [auto]
 % par  - Distribute compute [auto]
 % ** Output **
@@ -13,25 +19,47 @@ function mu = updateMuLaplaceML(varargin)
 % Closed form M-step update of the template for the Laplace noise model.
 % (Maximum likelihood update: no prior on Mu)
 
-    N = 0;
-    while N < numel(varargin) && ~ischar(varargin{N+1})
-        N = N+1;
+
+    i = 1;
+    if ischar(varargin{1})
+        i = i + 1;
+        N = 0;
+        while i <= numel(varargin) && ~ischar(varargin{i})
+            i = i + 1;
+            N = N + 1;
+        end
     end
-    if mod(N,2)
-        error('There should be as many intensity as count images')
+    
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'f')
+        f = varargin(2:N+1);
+        varargin = varargin(N+2:end);
     end
-    f = varargin(1:(N/2));
-    c = varargin((N/2+1):N);
-    varargin = varargin(N+1:end);
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'c')
+        c = varargin(2:N+1);
+        varargin = varargin(N+2:end);
+    end
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'b')
+        b = varargin(2:N+1);
+        varargin = varargin(N+2:end);
+    end
+
+    if numel(c) ~= N
+        error('There should be as many count as intensity images')
+    end
+    if numel(b) > 0 && numel(b) ~= N
+        error('There should be as many b as intensity images')
+    end
 
     % --- Parse inputs
     p = inputParser;
     p.FunctionName = 'updateMuLaplaceML';
+    p.addParameter('fwhm',   0,     @isnumeric);
     p.addParameter('loop',   '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'component', 'subject', 'none', ''})));
     p.addParameter('par',    false, @isscalar);
     p.addParameter('debug',  false, @isscalar);
     p.addParameter('output', false);
     p.parse(varargin{:});
+    fwhm   = p.Results.fwhm;
     loop   = p.Results.loop;
     par    = p.Results.par;
     debug  = p.Results.debug;
@@ -40,11 +68,14 @@ function mu = updateMuLaplaceML(varargin)
 
     [par, loop] = autoParLoop(par, loop, isa(f{1}, 'file_array'), ...
                               size(f{1}, 3), size(f{1}, 4));
+    if fwhm > 0 && strcmpi(loop, 'slice')
+        loop = 'component';
+    end
     
     switch lower(loop)
         case 'none'
             if debug, fprintf('   - No loop\n'); end;
-            mu = loopNone(f, c, output);
+            mu = loopNone(f, c, output, fwhm);
         case 'component'
             if debug
                 if par > 0
@@ -53,7 +84,7 @@ function mu = updateMuLaplaceML(varargin)
                     fprintf('   - Serialise on components\n');
                 end
             end
-            mu = loopComponent(f, c, par, output);
+            mu = loopComponent(f, c, par, output, fwhm);
         case 'slice'
             if debug
                 if par > 0
@@ -69,7 +100,7 @@ function mu = updateMuLaplaceML(varargin)
 
 end
 
-function mu = loopComponent(f, c, par, output)
+function mu = loopComponent(f, c, par, output, fwhm)
 
     mu = prepareOnDisk(output, size(f{1}), 'type', 'float32');
     dim = [size(mu) 1 1];
@@ -83,6 +114,8 @@ function mu = loopComponent(f, c, par, output)
             tmpf(:,:,:,n) = single(f{n}(:,:,:,k));
             tmpc(:,:,:,n) = single(c{n}(:,:,:));
         end
+        tpmf = smooth_gaussian(tmpf, fwhm);
+        tpmc = smooth_gaussian(tmpc, fwhm);
         tmpf = wmedian(tmpf, tmpc);
         mu(:,:,:,k) = tmpf;
     end
@@ -132,7 +165,9 @@ function mu = loopNone(f, c, output)
         mu(:,:,:,:,n) = single(numeric(f{n}));
         tmpc(:,:,:,n) = single(numeric(c{n}));
     end
-    mu = wmedian(mu, tmpc);
+    mu   = smooth_gaussian(mu, fwhm);
+    tpmc = smooth_gaussian(tmpc, fwhm);
+    mu   = wmedian(mu, tmpc);
     
     if ~isempty(output)
         mu = saveOnDisk(output, mu, 'name', 'mu');

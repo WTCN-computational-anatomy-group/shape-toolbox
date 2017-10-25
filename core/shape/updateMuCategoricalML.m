@@ -1,10 +1,12 @@
 function mu = updateMuCategoricalML(varargin)
 % FORMAT mu = updateMuCategoricalML(pf1, ..., pfN, c1, ..., cN,
+%                                   ('fwhm', fwhm),
 %                                   ('loop', loop), ('par', par))
 % ** Required **
 % pfi  - Image pushed in template space
 % ci   - Pushed voxel count
 % ** Keyword arguments **
+% fwhm  - Smoothing kernel used as pseudo prior [do not use]
 % loop - How to split processing: 'slice', 'none' or '' [auto]
 % par  - Distribute compute [auto]
 % ** Output **
@@ -27,11 +29,13 @@ function mu = updateMuCategoricalML(varargin)
     % --- Parse inputs
     p = inputParser;
     p.FunctionName = 'updateMuCategoricalML';
+    p.addParameter('fwhm',   0,     @isnumeric);
     p.addParameter('loop',   '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'subject', 'none', ''})));
     p.addParameter('par',    false, @isscalar);
     p.addParameter('debug',  false, @isscalar);
     p.addParameter('output', false);
     p.parse(varargin{:});
+    fwhm   = p.Results.fwhm;
     loop   = p.Results.loop;
     par    = p.Results.par;
     debug  = p.Results.debug;
@@ -40,11 +44,14 @@ function mu = updateMuCategoricalML(varargin)
     if debug, fprintf('* updateMuCategoricalML\n'); end;
 
     [par, loop] = autoParLoop(par, loop, isa(f{1}, 'file_array'), size(f{1}, 3));
+    if fwhm > 0 && strcmpi(loop, 'slice')
+        loop = 'none';
+    end
     
     switch lower(loop)
         case 'none'
             if debug, fprintf('   - No loop\n'); end;
-            mu = loopNone(f, c, output);
+            mu = loopNone(f, c, output, fwhm);
         case 'slice'
             if debug
                 if par > 0
@@ -89,7 +96,7 @@ function mu = loopSlice(f, c, par, output)
     end
 end
 
-function mu = loopNone(f, c, output)
+function mu = loopNone(f, c, output, fwhm)
 
     dim = [size(f{1}) 1 1];
     lat = dim(1:3);
@@ -101,9 +108,11 @@ function mu = loopNone(f, c, output)
         mu   = mu + single(numeric(f{n}));
         tmpc = tmpc + single(numeric(c{n}));
     end
-    mu = bsxfun(@rdivide, mu, tmpc);
-    mu = bsxfun(@rdivide, mu, max(eps('single'),mu(:,:,:,nc)));
-    mu = log(mu);
+    mu   = smooth_gaussian(mu, fwhm);
+    tmpc = smooth_gaussian(tmpc, fwhm);
+    mu   = bsxfun(@rdivide, mu, tmpc);
+    mu   = bsxfun(@rdivide, mu, max(eps('single'),mu(:,:,:,nc)));
+    mu   = log(mu);
     
     if ~isempty(output)
         mu = saveOnDisk(output, mu, 'name', 'mu');
