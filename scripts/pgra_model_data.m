@@ -1,5 +1,5 @@
-function [opt, dat, model] = pg_model_data(opt, dat, model)
-% FORMAT [opt, dat, model] = pg_model_data(opt, dat, model)
+function [opt, dat, model] = pgra_model_data(opt, dat, model)
+% FORMAT [opt, dat, model] = pgra_model_data(opt, dat, model)
 %
 % Initialise all data handling structures
 
@@ -66,12 +66,15 @@ function [opt, dat, model] = pg_model_data(opt, dat, model)
     % --- Model
     
     modelvar = {'a', 'mu', 'gmu', 'w', 'dw', 'gw', 'hw', ...
-                'ww', 'zz', 'z', 'Sz', 'Az'};
+                'zz', 'z', 'Sz', 'Az', 'ww', ...
+                'qq', 'q', 'Sq', 'Aq'};
             
     for i=1:numel(modelvar)
         var = modelvar{i};
         if ~isfield(model, var)
-            if opt.ondisk.model.(var) && ~isempty(opt.fnames.model.(var))
+            if isfield(opt.ondisk.model, var) ...
+                    && opt.ondisk.model.(var) ...
+                    && ~isempty(opt.fnames.model.(var))
                 model.(var) = createFA(opt.fnames.model.(var), [0 0], 'float32');
             else
                 model.(var) = single([]);
@@ -84,8 +87,9 @@ function [opt, dat, model] = pg_model_data(opt, dat, model)
     
     % --- Subjects
             
-    datvar = {'wmu', 'iphi', 'ipsi', 'v', 'pf', 'c', 'zz', 'z', 'Sz', ...
-              'gv', 'hv', 'gz', 'hz'};
+    datvar = {'wmu', 'iphi', 'ipsi', 'v', 'r', 'pf', 'c', 'phi', 'jac', ...
+              'z', 'zz', 'Sz', 'q', 'qq', 'Sq', ...
+              'gv', 'hv', 'gz', 'hz', 'gq', 'hq', 'gr', 'hr'};
     
     for j=1:numel(datvar)
         var = datvar{j};
@@ -110,8 +114,17 @@ function [opt, dat, model] = pg_model_data(opt, dat, model)
     if ~isfield(dat, 'llm')
         [dat.llm] = deal(double([]));
     end
+    if ~isfield(dat, 'llr')
+        [dat.llr] = deal(double([]));
+    end
+    if ~isfield(dat, 'okq')
+        [dat.okq] = deal(false);
+    end
     if ~isfield(dat, 'okz')
         [dat.okz] = deal(false);
+    end
+    if ~isfield(dat, 'okr')
+        [dat.okr] = deal(false);
     end
     
     % Create all output directories

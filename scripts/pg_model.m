@@ -1,7 +1,7 @@
 function [model, dat] = pg_model(opt, dat, model, cont)
 % _________________________________________________________________________
 %
-% FORMAT [model, dat, opt] = pg_registration(opt, (dat), (model))
+% FORMAT [model, dat, opt] = pg_model(opt, (dat), (model))
 %
 % Optimises a "principal geodesic" model on a collection of images.
 %
@@ -29,7 +29,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
 %                [1e-4 1e-3 0.2 0.05 0.2]
 % wpz          - Weights on both parts (A and W'LW) of the prior on z [1 1]
 % wpz0         - Initial weights for more robustness [1 5]
-% n0           - Number of degrees of freedom of the Wishart prior [20]
+% nz0          - Number of degrees of freedom of the Wishart prior [20]
 % verbose      - Talk during line search [true]
 % debug        - Further debuging talk [false]
 % loop         - How to split array processing 'subject', 'slice' or 'none'
@@ -47,7 +47,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
 % ondisk.dat   - "      "       "       "       "       "
 % _________________________________________________________________________
 %
-% FORMAT [model, dat, opt] = pg_registration(opt, dat, model, 'continue')
+% FORMAT [model, dat, opt] = pg_model(opt, dat, model, 'continue')
 %
 % The returned structures (or the saved environment which also contains
 % them) can be used as input to start optimising from a previous state.
@@ -84,8 +84,6 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         [dat, model] = initAll(dat, model, opt);
     end
     
-%     model = plotAll(model, opt);
-    
     % ---------------------------------------------------------------------
     %    Variable factors
     % ---------------------------------------------------------------------
@@ -114,24 +112,24 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         % Update weights on precision Z
         model.wpz(1) = opt.wpz(1) * wpzscl1(emit);
         model.wpz(2) = opt.wpz(2) * wpzscl2(emit);
-        model.regz = model.wpz(1) * model.A + model.wpz(2) * model.ww;
+        model.regz   = model.wpz(1) * model.Az + model.wpz(2) * model.ww;
         
         % -----------------------------------------------------------------
         %    M-step (Principal subspace)
         % -----------------------------------------------------------------
 
-        [dat, model] = batchProcess('M', dat, model, opt);
+        [dat, model] = batchProcess('GradHessSubspace', dat, model, opt);
         
         % Factor of the prior : ln p(z|W) + ln p(W)
         % -------------------
-        reg = model.wpz(2) * (numeric(model.zz) + numeric(model.S)) ...
+        reg = model.wpz(2) * (numeric(model.zz) + numeric(model.Sz)) ...
               + eye(size(model.zz));
         
         % Gradient
         % --------
         for k=1:opt.K
             lw = spm_diffeo('vel2mom', single(model.w(:,:,:,:,k)), [opt.vs, opt.prm]);
-            model.g(:,:,:,:,k) = model.g(:,:,:,:,k) + reg(k,k) * lw;
+            model.gw(:,:,:,:,k) = model.gw(:,:,:,:,k) + reg(k,k) * lw;
         end
         
         % Search direction
@@ -139,20 +137,20 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         model.dw = prepareOnDisk(model.dw, size(model.w));
         for k=1:opt.K
             model.dw(:,:,:,:,k) = -spm_diffeo('fmg', ...
-                single(model.h(:,:,:,:,k)), single(model.g(:,:,:,:,k)), ...
+                single(model.hw(:,:,:,:,k)), single(model.gw(:,:,:,:,k)), ...
                 double([opt.vs reg(k,k) * opt.prm 2 2]));
         end
-        model.g = rmarray(model.g);
-        model.h   = rmarray(model.h);
+        model.gw = rmarray(model.gw);
+        model.hw = rmarray(model.hw);
         
         [~, model, dat] = lsSubspace(model.dw, model, dat, opt);
         
-        model.regz = model.wpz(1) * model.A + model.wpz(2) * model.ww;
+        model.regz = model.wpz(1) * model.Az + model.wpz(2) * model.ww;
         
         % -----------
         % Lower bound
         model.llw = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm);
-        model.lba = lbPrecisionZ(model.A, opt.N, model.n0);
+        model.lba = lbPrecisionZ(model.Az, opt.N, opt.nz0);
         model.lbz = lbLatent(dat, model, opt);
         model     = plotAll(model, opt);
         % -----------
@@ -163,12 +161,12 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         
         % Update q(z)
         % -----------
-        [dat, model] = batchProcess('E', dat, model, opt);
+        [dat, model] = batchProcess('FitLatent', dat, model, opt);
         
         % -----------
         % Lower bound
         model.llw = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm);
-        model.lba = lbPrecisionZ(model.A, opt.N, model.n0);
+        model.lba = lbPrecisionZ(model.Az, opt.N, opt.nz0);
         model.lbz = lbLatent(dat, model, opt);
         model     = plotAll(model, opt);
         % -----------
@@ -179,14 +177,13 @@ function [model, dat] = pg_model(opt, dat, model, cont)
 %         dat = batchProcess('Centre', dat, opt, model.z/opt.N);
 %         model.zz = saveOnDisk(model.zz, numeric(model.zz) - model.z * model.z' / opt.N);
 %         model.z(:)  = 0;
-%         A = precisionZWishart(numeric(model.n0, ...
-%             numeric(model.zz) + numeric(model.S), opt.N);
-%         model.A = saveOnDisk(model.A, A);
+%         model.Az = precisionZWishart(numeric(opt.nz0, ...
+%             numeric(model.zz) + numeric(model.Sz), opt.N);
 %         
 %         % -----------
 %         % Lower bound
 %         model.llw = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm);
-%         model.lba = lbPrecisionZ(model.A, opt.N, model.n0);
+%         model.lba = lbPrecisionZ(model.Az, opt.N, opt.nz0);
 %         model.lbz = lbLatent(dat, model, opt);
 %         model     = plotAll(model, opt);
 %         % -----------
@@ -194,33 +191,31 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         % Orthogonalise
         % -------------
         if opt.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end;
-        % > Needed for our Hessian approximation 
         [U, iU] = orthogonalisationMatrix(numeric(model.zz), numeric(model.ww));
         if opt.verbose, fprintf('| %6gs\n', toc); end;
         
         % Rescale
         % -------
         if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end;
-        ezz = U*(numeric(model.zz)+numeric(model.S))*U';
-        if model.n0 == 0
-            [Q, iQ] = scalePG(ezz, model.n0, opt.N);
+        ezz = U*(numeric(model.zz)+numeric(model.Sz))*U';
+        if opt.nz0 == 0
+            [Q, iQ] = scalePG(opt.N, opt.K);
         else
-            [Q, iQ] = gnScalePG(ezz, model.n0, opt.N, model.wpz(2));
+            [Q, iQ] = gnScalePG(ezz, opt.nz0, opt.N, model.wpz(2));
         end
         if opt.verbose, fprintf('| %6gs\n', toc); end;
-        Q = Q*U;
+        Q  = Q*U;
         iQ = iU*iQ;
         [model, dat] = rotateAll(model, dat, opt, Q, iQ);
-        A = precisionZWishart(model.n0, ...
-            numeric(model.zz) + numeric(model.S), opt.N);
-        model.A = saveOnDisk(model.A, A);
+        model.Az = precisionZWishart(opt.nz0, ...
+            numeric(model.zz) + numeric(model.Sz), opt.N);
         
-        model.regz = model.wpz(1) * model.A + model.wpz(2) * model.ww;
+        model.regz = model.wpz(1) * model.Az + model.wpz(2) * model.ww;
         
         % -----------
         % Lower bound
         model.llw = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm);
-        model.lba = lbPrecisionZ(model.A, opt.N, model.n0);
+        model.lba = lbPrecisionZ(model.Az, opt.N, opt.nz0);
         model.lbz = lbLatent(dat, model, opt);
         model     = plotAll(model, opt);
         % -----------
@@ -230,7 +225,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
         % -----------------------------------------------------------------
         if opt.verbose, fprintf('%10s | %10s ', 'Template', ''); tic; end;
         if opt.tpm
-            model.a = updateMuML(opt.model, dat.pf, dat.c, ...
+            model.a = updateMuML(opt.model, dat, ...
                                  'par', opt.par, 'debug', opt.debug, ...
                                  'output', model.a);
             model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
@@ -239,7 +234,7 @@ function [model, dat] = pg_model(opt, dat, model, cont)
                 'loop', '', 'par', opt.par, 'debug', opt.debug, ...
                 'output', model.mu);
         else
-            model.mu = updateMuML(opt.model, dat.pf, dat.c, ...
+            model.mu = updateMuML(opt.model, dat, ...
                                   'par', opt.par, 'debug', opt.debug, ...
                                   'output', model.mu);
             model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
@@ -283,7 +278,7 @@ function model = plotAll(model, opt)
         colorbar
         title('E*[W''LW]')
         subplot(3, 3, 5)
-        imagesc(model.A)
+        imagesc(model.Az)
         colorbar
         title('E*[A]')
         % Lower bound
@@ -353,12 +348,10 @@ function [dat, model] = initAll(dat, model, opt)
     end
     if ~checkarray(model.ww)
         model.ww = eye(opt.K);
-%         model.ww = precisionZ(model.w, opt.vs, opt.prm, ...
-%             'debug', opt.debug, 'output', model.ww) + eye(opt.K);
     end
     
     % --- Zero init of Z
-    [dat, model] = batchProcess('Init', 'zero', dat, model, opt);
+    [dat, model] = batchProcess('InitLatent', 'zero', dat, model, opt);
     
     % --- Init of subject specific arrays
     dat = batchProcess('Update', dat, model, opt, ...
@@ -366,7 +359,7 @@ function [dat, model] = initAll(dat, model, opt)
 
     % --- Init template + Compute template spatial gradients + Build TPMs
     if opt.tpm
-        model.a = updateMuML(opt.model, dat.pf, dat.c, ...
+        model.a = updateMuML(opt.model, dat, ...
                              'par', opt.par, 'debug', opt.debug, ...
                              'output', model.a);
         model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
@@ -375,7 +368,7 @@ function [dat, model] = initAll(dat, model, opt)
             'loop', '', 'par', opt.par, 'debug', opt.debug, ...
             'output', model.mu);
     else
-        model.mu = updateMuML(opt.model, dat.pf, dat.c, ...
+        model.mu = updateMuML(opt.model, dat, ...
                               'par', opt.par, 'debug', opt.debug, ...
                               'output', model.mu);
         model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
@@ -394,17 +387,17 @@ function [dat, model] = initAll(dat, model, opt)
     % -----------------------
 
     % --- Random init of E[z]
-    [dat, model] = batchProcess('Init', 'rand', dat, model, opt);
+    [dat, model] = batchProcess('InitLatent', 'rand', dat, model, opt);
 
     % --- Orthogonalise sum{E[z]E[z]'}
     [U,S] = svd(model.zz);
     Rz    = 0.1*sqrt(opt.N/opt.K)*U/diag(sqrt(diag(S)+eps));
-    dat   = batchProcess('rotate', dat, opt, Rz');
+    dat   = batchProcess('RotateLatent', dat, opt, Rz');
     model.zz = Rz' * model.zz * Rz;
-    model.S  = Rz' * model.S * Rz;
+    model.Sz = Rz' * model.Sz * Rz;
     
     % Init precision of z
     % -------------------
-    model.A = saveOnDisk(model.A, eye(opt.K));
+    model.Az = saveOnDisk(model.Az, eye(opt.K));
 
 end

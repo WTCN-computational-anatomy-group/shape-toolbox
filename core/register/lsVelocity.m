@@ -50,8 +50,8 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
     p.addRequired('mu',     @checkarray);
     p.addRequired('f',      @checkarray);
     p.addParameter('v0',       [],     @checkarray);
-    p.addParameter('llr0',     nan,    @iscalar);
-    p.addParameter('sigma',    1,      @iscalar);
+    p.addParameter('llr0',     nan,    @isscalar);
+    p.addParameter('sigma',    1,      @isscalar);
     p.addParameter('A',        eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     p.addParameter('Mf',       eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     p.addParameter('Mmu',      eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
@@ -100,9 +100,11 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
     % --- Initialise line search
     armijo = 1;           % Armijo factor
     ok     = false;       % Found a better ll ?
-    ll0    = llm0 + llr0; % Log-likelihood (only parts that depends on z)
+    ll0    = llm0 + llr0; % Log-likelihood (only parts that depends on v)
     dimf   = [size(f) 1 1];
     latf   = dimf(1:3);
+    dimmu  = [size(mu) 1 1];
+    latmu  = dimmu(1:3);
     
     if verbose
         printInfo('header');
@@ -119,7 +121,7 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
         v = single(v0 + sigma * dr / armijo);
         iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
-        [pf, c] = pushImage(ipsi, f, latf, 'par', par, 'loop', loop, 'debug', debug);
+        [pf, c] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
         llm = llMatching(model, mu, pf, c, 'par', par, 'loop', loop, 'debug', debug);
         llr = llPriorVelocity(r,  'fast', 'vs', vsmu, 'prm', prm, 'debug', debug);
         ll  = llm + llr;

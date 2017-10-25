@@ -10,7 +10,7 @@
     opt.gnit         = 20;
     opt.par          = false;
     opt.happrox      = true;
-    opt.affine_basis = affine_basis(12);
+    opt.affine_basis = affine_basis(12, '2d');
 
     opt = pgra_registration(opt);
     

@@ -79,9 +79,9 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
         if ~isempty(regq),  llq0 = llPriorAffine(q0, regq, 'fast', 'debug', debug);
         else                llq0 = 0; end;
     end
+    dim  = [size(mu) 1 1];
+    lat = dim(1:3);
     if isempty(iphi)
-        dim  = [size(mu) 1 1];
-        lat = dim(1:3);
         iphi = warps('identity', lat);
     end
     
@@ -110,7 +110,7 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
         q = q0 + dq / armijo;
         A = exponentiateAffine(q, B, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
-        [pf, c] = pushImage(ipsi, f, latf, 'par', par, 'loop', loop, 'debug', debug);
+        [pf, c] = pushImage(ipsi, f, lat, 'par', par, 'loop', loop, 'debug', debug);
         llm = llMatching(model, mu, pf, c, 'par', par, 'loop', loop, 'debug', debug);
         if checkarray(regq)
             llq = llPriorAffine(q, regq, 'fast', 'debug', debug);

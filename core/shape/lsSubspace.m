@@ -1,4 +1,4 @@
-function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
+function [ok, model, dat] = lsSubspace(dw, model, dat, opt, pgra)
 % FORMAT [ok, model, dat] = lsSubspace(dw, model, dat, opt)
 %
 % ** Required **
@@ -25,7 +25,6 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
     
     if opt.debug, fprintf('* lsSubspace\n'); end;
     
-    
     % --- Initial point
     w0 = model.w;
     w0.fname = fullfile(opt.directory, 'subspace_prev.nii');
@@ -36,9 +35,13 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
     if isfield(model, 'armijo'),    armijo = model.armijo;
     else                            armijo = 1; end;
     llm0  = model.llm;
-    llz0 = - 0.5 * trace(model.ww * (model.S + model.zz)) ...
-           + 0.5 * opt.N * proba('LogDet', model.ww);
-    llz0 = llz0 * model.wpz(2);
+    llz0 = - 0.5 * trace(model.wpz(2) * model.ww * (model.Sz + model.zz));
+    if opt.nz0 == 0
+        llz0 = llz0 + 0.5 * opt.N * proba('LogDet', ...
+            model.wpz(1) * model.Az + model.wpz(2) * model.ww);
+    else
+        llz0 = llz0 + model.wpz(2) * 0.5 * opt.N * proba('LogDet', model.ww);
+    end
     llw0 = - 0.5 * trace(model.ww);
     ll0  = llm0 + llz0 + llw0;
     ok   = false;
@@ -57,11 +60,11 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
         for k=1:opt.K
             model.w(:,:,:,:,k) = w0(:,:,:,:,k) + dw(:,:,:,:,k) / armijo;
         end
-        model.ww = precisionZ(model.w, opt.vs, opt.prm); % + eye(opt.K);
+        model.ww = precisionZ(model.w, opt.vs, opt.prm);
         
         % - Update individual matching terms
         dat = batchProcess('Update', dat, model, opt1, ...
-            {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm', 'llz'}, ...
+            {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
             'clean', {'ipsi', 'iphi'});
         
         % - Compute log-likelihood
@@ -69,9 +72,13 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
         for n=1:opt.N
             llm = llm + dat(n).llm;
         end
-        llz = - 0.5 * trace(model.ww * (model.S + model.zz)) ...
-              + 0.5 * opt.N * proba('LogDet', model.ww);
-        llz = llz * model.wpz(2);
+        llz = - 0.5 * trace(model.wpz(2) * model.ww * (model.Sz + model.zz));
+        if opt.nz0 == 0
+            llz = llz + 0.5 * opt.N * proba('LogDet', ...
+                model.wpz(1) * model.Az + model.wpz(2) * model.ww);
+        else
+            llz = llz + model.wpz(2) * 0.5 * opt.N * proba('LogDet', model.ww);
+        end
         llw = - 0.5 * trace(model.ww);
         
         ll = llm + llz + llw;
@@ -92,10 +99,11 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
 
     % --- Clean
     if ~ok
+        printInfo('end');
         model.w(:)  = w0(:);
         model.ww(:) = ww0(:);
         dat = batchProcess('Update', dat, model, opt1, ...
-            {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm', 'llz'}, ...
+            {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
             'clean', {'ipsi', 'iphi'});
         model.armijo = min(1.1 * armijo, 100);
     else
@@ -112,20 +120,20 @@ function printInfo(which, oll, llm, llz, llw)
     if ischar(which) 
         if strcmpi(which, 'header')
             fprintf([repmat('_', 1, 100) '\n']);
-            fprintf('%10s | %10s | %10s = %10s + %10s + %10s | %10s\n', 'LineSearch', 'Armijo', 'RLL', 'LL-Match', 'RLL-Z', 'RLL-W', 'LL-Diff');
+            fprintf('%10s | %10s | %10s = %10s + %10s + %10s  | %10s\n', 'LS PG', 'Armijo', 'RLL', 'LL-Match', 'RLL-Z', 'RLL-W', 'LL-Diff');
             fprintf([repmat('-', 1, 100) '\n']);
         elseif strcmpi(which, 'initial')
-            fprintf('%10s | %10s | %10g = %10g + %10g + %10g \n', 'LineSearch', 'Initial', oll, llm, llz, llw);
+            fprintf('%10s | %10s | %10g = %10g + %10g + %10g \n', 'LS PG', 'Initial', oll, llm, llz, llw);
         elseif strcmpi(which, 'failed')
-            fprintf('| Failed\n');
+            fprintf(' | Failed\n');
         elseif strcmpi(which, 'success')
-            fprintf('| Success\n');
+            fprintf(' | Success\n');
             fprintf([repmat('_', 1, 100) '\n']);
         elseif strcmpi(which, 'end')
-            fprintf('%10s | Complete failure\n', 'LineSearch');
+            fprintf('%10s | Complete failure\n', 'LS PG');
             fprintf([repmat('_', 1, 100) '\n']);
         end
     else
-        fprintf('%10s | %10g | %10g = %10g + %10g + %10g | %10g ', 'LineSearch', which, llm+llz+llw, llm, llz, llw, llm+llz+llw-oll);
+        fprintf('%10s | %10g | %10g = %10g + %10g + %10g  | %10g ', 'LS PG', which, llm+llz+llw, llm, llz, llw, llm+llz+llw-oll);
     end
 end

@@ -22,13 +22,13 @@ function ondisk = default_ondisk(type)
             ondisk.model.a    = true;
             ondisk.model.w    = true;
             ondisk.model.dw   = true;
-            ondisk.model.g    = true;
-            ondisk.model.h    = true;
+            ondisk.model.gw   = true;
+            ondisk.model.hw   = true;
             ondisk.model.ww   = false;
-            ondisk.model.A    = false;
+            ondisk.model.Az   = false;
             ondisk.model.z    = false;
             ondisk.model.zz   = false;
-            ondisk.model.S    = false;
+            ondisk.model.Sz   = false;
             % Subjects
             ondisk.dat.wmu  = true;
             ondisk.dat.iphi = true;
@@ -38,9 +38,10 @@ function ondisk = default_ondisk(type)
             ondisk.dat.c    = true;
             ondisk.dat.gv   = true;
             ondisk.dat.hv   = true;
+            ondisk.dat.r    = true;
             ondisk.dat.z    = false;
             ondisk.dat.zz   = false;
-            ondisk.dat.S    = false;
+            ondisk.dat.Sz   = false;
         case 'obswondisk'
             % Model
             ondisk.model.mu   = true;
@@ -48,13 +49,13 @@ function ondisk = default_ondisk(type)
             ondisk.model.a    = true;
             ondisk.model.w    = true;
             ondisk.model.dw   = true;
-            ondisk.model.g    = true;
-            ondisk.model.h    = true;
+            ondisk.model.gw   = true;
+            ondisk.model.hw   = true;
             ondisk.model.ww   = false;
-            ondisk.model.A    = false;
+            ondisk.model.Az   = false;
             ondisk.model.z    = false;
             ondisk.model.zz   = false;
-            ondisk.model.S    = false;
+            ondisk.model.Sz   = false;
             % Subjects
             ondisk.dat.wmu  = true;
             ondisk.dat.iphi = false;
@@ -64,9 +65,10 @@ function ondisk = default_ondisk(type)
             ondisk.dat.c    = true;
             ondisk.dat.gv   = false;
             ondisk.dat.hv   = false;
+            ondisk.dat.r    = false;
             ondisk.dat.z    = false;
             ondisk.dat.zz   = false;
-            ondisk.dat.S    = false;
+            ondisk.dat.Sz   = false;
         case 'wondisk'
             % Model
             ondisk.model.mu   = false;
@@ -74,13 +76,13 @@ function ondisk = default_ondisk(type)
             ondisk.model.a    = false;
             ondisk.model.w    = true;
             ondisk.model.dw   = true;
-            ondisk.model.g    = true;
-            ondisk.model.h    = true;
+            ondisk.model.gw   = true;
+            ondisk.model.hw   = true;
             ondisk.model.ww   = false;
-            ondisk.model.A    = false;
+            ondisk.model.Az   = false;
             ondisk.model.z    = false;
             ondisk.model.zz   = false;
-            ondisk.model.S    = false;
+            ondisk.model.Sz   = false;
             % Subjects
             ondisk.dat.wmu  = false;
             ondisk.dat.iphi = false;
@@ -90,9 +92,10 @@ function ondisk = default_ondisk(type)
             ondisk.dat.c    = false;
             ondisk.dat.gv   = false;
             ondisk.dat.hv   = false;
+            ondisk.dat.r    = false;
             ondisk.dat.z    = false;
             ondisk.dat.zz   = false;
-            ondisk.dat.S    = false;
+            ondisk.dat.Sz   = false;
         case 'allonram'
             % Model
             ondisk.model.mu   = false;
@@ -100,13 +103,13 @@ function ondisk = default_ondisk(type)
             ondisk.model.a    = false;
             ondisk.model.w    = false;
             ondisk.model.dw   = false;
-            ondisk.model.g    = false;
-            ondisk.model.h    = false;
+            ondisk.model.gw   = false;
+            ondisk.model.hw   = false;
             ondisk.model.ww   = false;
-            ondisk.model.A    = false;
+            ondisk.model.Az   = false;
             ondisk.model.z    = false;
             ondisk.model.zz   = false;
-            ondisk.model.S    = false;
+            ondisk.model.Sz   = false;
             % Subjects
             ondisk.dat.wmu  = false;
             ondisk.dat.iphi = false;
@@ -116,9 +119,10 @@ function ondisk = default_ondisk(type)
             ondisk.dat.c    = false;
             ondisk.dat.gv   = false;
             ondisk.dat.hv   = false;
+            ondisk.dat.r    = false;
             ondisk.dat.z    = false;
             ondisk.dat.zz   = false;
-            ondisk.dat.S    = false;
+            ondisk.dat.Sz   = false;
         case 'allondisk'
             % Model
             ondisk.model.mu   = true;
@@ -126,13 +130,13 @@ function ondisk = default_ondisk(type)
             ondisk.model.a    = true;
             ondisk.model.w    = true;
             ondisk.model.dw   = true;
-            ondisk.model.g    = true;
-            ondisk.model.h    = true;
+            ondisk.model.gw   = true;
+            ondisk.model.hw   = true;
             ondisk.model.ww   = true;
-            ondisk.model.A    = true;
+            ondisk.model.Az   = true;
             ondisk.model.z    = true;
             ondisk.model.zz   = true;
-            ondisk.model.S    = true;
+            ondisk.model.Sz   = true;
             % Subjects
             ondisk.dat.wmu  = true;
             ondisk.dat.iphi = true;
@@ -142,9 +146,10 @@ function ondisk = default_ondisk(type)
             ondisk.dat.c    = true;
             ondisk.dat.gv   = true;
             ondisk.dat.hv   = true;
+            ondisk.dat.r    = true;
             ondisk.dat.z    = true;
             ondisk.dat.zz   = true;
-            ondisk.dat.S    = true;
+            ondisk.dat.Sz   = true;
     end
     
 end

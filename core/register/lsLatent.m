@@ -100,6 +100,8 @@ function [ok, z, llm, llz, v, iphi, pf, c, ipsi] = lsLatent(model, dz, z0, v0, l
     ll0    = llm0 + llz0; % Log-likelihood (only parts that depends on z)
     dimf   = [size(f) 1 1];
     latf   = dimf(1:3);
+    dimmu  = [size(mu) 1 1];
+    latmu  = dimmu(1:3);
     
     if verbose
         printInfo('header');
@@ -116,7 +118,7 @@ function [ok, z, llm, llz, v, iphi, pf, c, ipsi] = lsLatent(model, dz, z0, v0, l
         v = single(numeric(v0) + dv / armijo);
         iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
-        [pf, c] = pushImage(ipsi, f, latf, 'par', par, 'loop', loop, 'debug', debug);
+        [pf, c] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
         llm = llMatching(model, mu, pf, c, 'par', par, 'loop', loop, 'debug', debug);
         llz = llPriorLatent(z, regz, 'fast', 'debug', debug);
         ll  = llm + llz;

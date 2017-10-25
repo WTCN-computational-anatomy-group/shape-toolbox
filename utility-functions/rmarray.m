@@ -3,9 +3,13 @@ function a = rmarray(a)
 % Clear or remove from disk a file, file_array or Matlab array.
 
     if isa(a, 'file_array')
-        delete(a.fname)
+        if exist(a.fname, 'file')
+            delete(a.fname)
+        end
     elseif ischar(a)
-        delete(a)
+        if exist(a, 'file')
+            delete(a)
+        end
     elseif isnumeric(a)
         a = [];
     end

@@ -1,4 +1,4 @@
-function opt = pg_model_default(opt)
+function opt = pgra_model_default(opt)
 % FORMAT opt = pg_model_default(opt)
 %
 % Set default options for the principal geodesic model
@@ -59,19 +59,41 @@ function opt = pg_model_default(opt)
             clear myCluster
         end
     end
+    if ~isfield(opt, 'happrox')
+        opt.happrox = true;
+    end
+    if ~isfield(opt ,'affine_basis')
+        opt.affine_basis = affine_basis(12);
+    end
+    if ~isfield(opt, 'nq0')
+        opt.nq0 = size(opt.affine_basis, 3);
+    end
     if ~isfield(opt, 'nz0')
         opt.nz0 = opt.K;
     end
     if ~isfield(opt, 'wpz0')
-        opt.wpz0 = [1 5];
+        opt.wpz0 = [1 1];
     end
     if ~isfield(opt, 'wpz')
         opt.wpz = [1 1];
     end
+    if ~isfield(opt, 'armijo')
+        opt.armijo = 1;
+    end
+    if ~isfield(opt, 'fwhm')
+        opt.fwhm = 0;
+    end
     
+    % --- Check n0
     if 0 < opt.nz0 && opt.nz0 < opt.K
-        warning('Wishart prior: nz0 must be greater or equal to K. Fixing it.')
+        warning(['Wishart prior: nz0 must be greater or equal to %d. ' ...
+                 'Fixing it.'], opt.K)
         opt.nz0 = opt.K;
+    end
+    if 0 < opt.nq0 && opt.nq0 < size(opt.affine_basis, 3)
+        warning(['Wishart prior: nq0 must be greater or equal to %d. ' ...
+                 'Fixing it.'], size(opt.affine_basis, 3))
+        opt.nq0 = size(opt.affine_basis, 3);
     end
     
     % ---------------------------------------------------------------------
@@ -141,10 +163,10 @@ function opt = pg_model_default(opt)
         'gw',  'subspace_grad.nii',      ...
         'hw',  'subspace_hess.nii',      ...
         'ww',  'precision_z_smooth.nii', ...
-        'Az',  'precision_z.nii',        ...
+        'A',   'precision_z.nii',        ...
         'z',   'latent_stat_z.nii',      ...
         'zz',  'latent_stat_zz.nii',     ...
-        'Sz',  'latent_stat_cov.nii'     ...
+        'S',   'latent_stat_cov.nii'     ...
     );
 
     varmodel = fieldnames(dftfnames_model);
@@ -167,9 +189,10 @@ function opt = pg_model_default(opt)
         'c',    'count.nii',                 ...
         'gv',   'gradient_vel.nii',          ...
         'hv',   'hessian_vel.nii',           ...
+        'r',    'residual_field.nii',        ...
         'z',    'latent_coordinates.nii',    ...
         'zz',   'latent_stat_zz.nii',        ...
-        'Sz',   'latent_cov.nii'             ...
+        'S',    'latent_cov.nii'             ...
     );
     
     varmodel = fieldnames(dftfnames_subjects);
