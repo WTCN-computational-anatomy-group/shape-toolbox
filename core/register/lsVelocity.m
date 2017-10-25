@@ -103,6 +103,8 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
     ll0    = llm0 + llr0; % Log-likelihood (only parts that depends on v)
     dimf   = [size(f) 1 1];
     latf   = dimf(1:3);
+    dimmu  = [size(mu) 1 1];
+    latmu  = dimmu(1:3);
     
     if verbose
         printInfo('header');
@@ -119,7 +121,7 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
         v = single(v0 + sigma * dr / armijo);
         iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
-        [pf, c] = pushImage(ipsi, f, latf, 'par', par, 'loop', loop, 'debug', debug);
+        [pf, c] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
         llm = llMatching(model, mu, pf, c, 'par', par, 'loop', loop, 'debug', debug);
         llr = llPriorVelocity(r,  'fast', 'vs', vsmu, 'prm', prm, 'debug', debug);
         ll  = llm + llr;
