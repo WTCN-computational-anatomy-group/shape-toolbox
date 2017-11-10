@@ -105,13 +105,14 @@ function mu = loopNone(f, c, output, fwhm)
     mu   = zeros([lat nc], 'single');
     tmpc = zeros(lat, 'single');
     for n=1:numel(f)
-        mu   = mu + single(numeric(f{n}));
+        mu   = mu   + single(numeric(f{n}));
         tmpc = tmpc + single(numeric(c{n}));
     end
     mu   = smooth_gaussian(mu, fwhm);
     tmpc = smooth_gaussian(tmpc, fwhm);
     mu   = bsxfun(@rdivide, mu, tmpc);
-    mu   = bsxfun(@rdivide, mu, max(eps('single'),mu(:,:,:,nc)));
+    mu   = max(mu, eps('single'));
+    mu   = bsxfun(@rdivide, mu, mu(:,:,:,nc));
     mu   = log(mu);
     
     if ~isempty(output)

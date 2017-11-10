@@ -6,20 +6,23 @@ function lb = lbAffine(dat, model, opt)
 %
 % Part of the lower-bound encompassing latent coordinates terms
 % > E[ln p(z)] - E[ln q(z)]
-
-    M = size(model.Aq, 1);
-
-    lb = - 0.5*M*opt.N ...
-         - 0.5*opt.N*proba('ELogDetWishart', model.Aq/(opt.nq0+opt.N), opt.nq0+opt.N) ...
-         - 0.5*trace((model.qq+model.Sq)*model.Aq);
     
-    tmp = 0;
+    M = size(model.Aq, 1);
+    lb = 0;
+    if M == 0
+        return
+    end
+
+    rind = opt.affine_rind;
     for n=1:opt.N
         if any(any(dat(n).Sq ~= 0))
-            tmp = tmp + dat(n).q' * (dat(n).Sq \ dat(n).q) ...
-                  + proba('LogDet', dat(n).Sq);
+            lb = lb + proba('LogDet', dat(n).Sq(rind,rind));
         end
     end
-    tmp = 0.5*tmp;
-    lb = lb+tmp;
+    
+    lb = lb + opt.N * M - trace(model.qq(rind,rind) * model.Aq);
+    lb = lb + opt.N * proba('ELogDetWishart', model.Aq/(opt.nq0+opt.N), opt.nq0+opt.N);
+    lb = lb + opt.N * size(model.Aq,1) - trace(model.Sq(rind,rind) * model.Aq);
+    
+    lb = 0.5 * lb;
 end

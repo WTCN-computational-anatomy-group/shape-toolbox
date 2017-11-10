@@ -111,12 +111,6 @@ function [opt, dat, model] = pgra_model_data(opt, dat, model)
         end
     end
     
-    if ~isfield(dat, 'llm')
-        [dat.llm] = deal(double([]));
-    end
-    if ~isfield(dat, 'llr')
-        [dat.llr] = deal(double([]));
-    end
     if ~isfield(dat, 'okq')
         [dat.okq] = deal(false);
     end
@@ -125,6 +119,27 @@ function [opt, dat, model] = pgra_model_data(opt, dat, model)
     end
     if ~isfield(dat, 'okr')
         [dat.okr] = deal(false);
+    end
+    if ~isfield(dat, 'llm')
+        [dat.llm] = deal(double([]));
+    end
+    if ~isfield(dat, 'llr')
+        [dat.llr] = deal(double([]));
+    end
+    if ~isfield(dat, 'err')
+        [dat.err] = deal(double(0));
+    end
+    if ~isfield(dat, 'klr')
+        [dat.klr] = deal(double([]));
+    end
+    if ~isfield(dat, 'klr1')
+        [dat.klr1] = deal(double([]));
+    end
+    if ~isfield(dat, 'klr2')
+        [dat.klr2] = deal(double([]));
+    end
+    if ~isfield(dat, 'trr')
+        [dat.trr] = deal(double([]));
     end
     
     % Create all output directories

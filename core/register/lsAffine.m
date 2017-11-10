@@ -13,8 +13,9 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
 % f    - Image (in native space)
 % ** Keyword arguments **
 % llq0 - Previous log-likelihood (prior term) [compute]
-% B    - Affine basis [affine_basis(nq)]
+% B    - Affine basis [affine_basis('affine')]
 % regq - Precision matrix of the affine parameters [none]
+% rind - Indices of regularised affine parameters []
 % iphi - Diffeomorphic part [identity]
 % Mf   - Image voxel-to-world mappinf [eye(4)]
 % Mmu  - Template voxel-ti-world mapping [eye(4)]
@@ -45,6 +46,7 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
     p.addRequired('f',      @checkarray);
     p.addParameter('llq0',     nan,    @iscalar);
     p.addParameter('B',        [],     @checkarray);
+    p.addParameter('rind',     [],     @isnumeric);
     p.addParameter('regq',     []);
     p.addParameter('iphi',     [],     @checkarray);
     p.addParameter('Mf',       eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
@@ -58,6 +60,7 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
     p.parse(model, dq, q0, llm0, mu, f, varargin{:});
     llq0   = p.Results.llq0;
     B      = p.Results.B;
+    rind   = p.Results.rind;
     regq   = p.Results.regq;
     iphi   = p.Results.iphi;
     Mf     = p.Results.Mf;
@@ -73,10 +76,13 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
     
     % --- Set some default parameter value
     if isempty(B)
-        B = affine_basis(length(dq));
+        error('Missing affine basis')
+    end
+    if ~isempty(regq) && isempty(rind)
+        rind = (1:size(regq,1)) + numel(q0) - size(regq, 1);
     end
     if isnan(llq0)
-        if ~isempty(regq),  llq0 = llPriorAffine(q0, regq, 'fast', 'debug', debug);
+        if ~isempty(regq),  llq0 = llPriorAffine(q0(rind), regq, 'fast', 'debug', debug);
         else                llq0 = 0; end;
     end
     dim  = [size(mu) 1 1];
@@ -113,7 +119,7 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
         [pf, c] = pushImage(ipsi, f, lat, 'par', par, 'loop', loop, 'debug', debug);
         llm = llMatching(model, mu, pf, c, 'par', par, 'loop', loop, 'debug', debug);
         if checkarray(regq)
-            llq = llPriorAffine(q, regq, 'fast', 'debug', debug);
+            llq = llPriorAffine(q(rind), regq, 'fast', 'debug', debug);
         else
             llq = 0;
         end
@@ -127,7 +133,7 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
         else
             if verbose, printInfo('success'); end;
             if checkarray(regq)
-                llq = llPriorAffine(q, regq, 'debug', debug);
+                llq = llPriorAffine(q(rind), regq, 'debug', debug);
             end
             ok  = true;
             return

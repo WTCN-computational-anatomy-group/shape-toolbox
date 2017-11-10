@@ -29,7 +29,7 @@ function g = ghPriorVel(v, varargin)
     
     if debug, fprintf('* ghPriorVel\n'); end;
     
-    g = spm_diffeo('vel2mom', single(numeric(v)), [vs prm]);
+    g = spm_diffeo('vel2mom', single(numeric(v)), double([vs prm]));
     
     if ~isempty(output)
         g = writeOnDisk(output, g, 'name', 'g');

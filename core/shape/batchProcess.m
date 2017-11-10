@@ -45,10 +45,6 @@ function varargout = batchProcess(id, varargin)
 %   Gradient and Hessian of the matching part w.r.t. subspace
 %   Update>> model.gw, model.hw
 %
-% FORMAT [dat, model] = batchProcess('GradHessSigma', dat, model, opt)
-%   Gradient and Hessian of the matching part w.r.t. residual variance
-%   Update>> model.gs, model.hs
-%
 % FORMAT dat = batchProcess('Update', dat, model, opt, {...}, 'clean', {...})
 %   Generic tool to update specified subject variables. Names of variables
 %   to update are provided in the first list, and names of variables to
@@ -86,8 +82,6 @@ function varargout = batchProcess(id, varargin)
             [varargout{1:nargout}] = batchFitResidual(varargin{:});
         case 'gradhesssubspace'
             [varargout{1:nargout}] = batchGradHessSubspace(varargin{:});
-        case 'gradhesssigma'
-            [varargout{1:nargout}] = batchGradHessSigma(varargin{:});
         case 'update'
             [varargout{1:nargout}] = batchUpdate(varargin{:});
         case 'onestepfitaffine'
@@ -370,10 +364,13 @@ function dat = oneStepFitAffine(dat, model, opt)
             'debug', opt.debug, 'approx', opt.happrox);
         
         if checkarray(model.regq)
-            [gq, hq] = ghPriorAffine(dat.q, model.regq, 'debug', opt.debug);
-            dat.gq = dat.gq + gq;
-            dat.hq = dat.hq + hq;
+            rind = opt.affine_rind;
+            [gq, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
+            dat.gq(rind)      = dat.gq(rind)      + gq;
+            dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
             clear gq hq
+        else
+            rind = [];
         end
         
         dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness)
@@ -386,7 +383,8 @@ function dat = oneStepFitAffine(dat, model, opt)
         % -----------
         [okq, q, llm, ~, A, pf, c, ipsi] = lsAffine(...
             noisemodel, dq, dat.q, dat.llm, model.mu, dat.f, ...
-            'B', opt.affine_basis, 'regq', model.regq, 'iphi', iphi, ...
+            'B', opt.affine_basis, 'regq', model.regq, 'rind', rind, ...
+            'iphi', iphi, ...
             'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
             'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
 
@@ -419,9 +417,9 @@ function dat = oneStepFitAffine(dat, model, opt)
             'debug', opt.debug, 'approx', opt.happrox);
 
         if checkarray(model.regq)
-            [gq, hq] = ghPriorAffine(dat.q, model.regq, 'debug', opt.debug);
-            dat.gq = dat.gq + gq;
-            dat.hq = dat.hq + hq;
+            [gq, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
+            dat.gq(rind)      = dat.gq(rind)      + gq;
+            dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
             clear gq hq
         end
 
@@ -657,6 +655,11 @@ function dat = oneStepFitResidual(dat, model, opt)
         noisemodel = opt.model;
     end
     
+    if isfield(dat, 'A'),         A = dat.A;
+    else                          A = eye(4); end
+    if isfield(model, 'lambda'),  lambda = model.lambda;
+    else                          lambda = 1; end
+    
     % Gauss-Newton iterations
     % -----------------------
     % It is useful to actually find a mode of the posterior (and not only
@@ -670,27 +673,24 @@ function dat = oneStepFitResidual(dat, model, opt)
         
         [dat.gr, dat.hr] = ghMatchingVel(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, ...
-            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
+            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
+            'output', {dat.gr, dat.hr});
         
         dat.gr = dat.gr + ghPriorVel(dat.r, ...
-            sqrt(sum(model.Mmu(1:3,1:3).^2)), opt.prm);
+            sqrt(sum(model.Mmu(1:3,1:3).^2)), lambda * opt.prm);
 
         % Compute search direction
         % ------------------------
         dr = -spm_diffeo('fmg', single(dat.hr), single(dat.gr), ...
-            [sqrt(sum(model.Mmu(1:3,1:3).^2)) opt.prm 2 2]);
+            double([sqrt(sum(model.Mmu(1:3,1:3).^2)) lambda * opt.prm 2 2]));
 
         % Line search
-        % -----------
-        if isfield(dat, 'A'),         A = dat.A;
-        else                          A = eye(4); end
-        if isfield(model, 'sigma'),   sigma = model.sigma;
-        else                          sigma = 1;            end
+        % ----------- end
         [okr, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(...
             noisemodel, dr, dat.r, dat.llm, ...
             model.mu, dat.f, 'v0', dat.v, 'A', A, ....
             'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
-            'itgr', opt.itgr, 'prm', opt.prm, 'sigma', sigma, ...
+            'itgr', opt.itgr, 'prm', lambda * opt.prm, ...
             'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
 
         % Store better values
@@ -710,12 +710,64 @@ function dat = oneStepFitResidual(dat, model, opt)
         end
         
     end
-        
+    
+    % Compute Laplace covariance
+    % --------------------------
+
+    if okr
+        [~, dat.hr] = ghMatchingVel(noisemodel, ...
+            model.mu, dat.pf, dat.c, model.gmu, ...
+            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
+            'output', {dat.gr, dat.hr});
+    end
+    
+    % Statistics for precision update
+    % -------------------------------
+    
+    % err: trace(E[RR]L) -> for lambda upadte
+    % klr1: prior part of the KL divergence
+    % klr2: posterior part of the KL divergence
+    
+    lam = model.lambda;
+    hr = single(numeric(dat.hr));
+    r  = single(numeric(dat.r));
+    vs = sqrt(sum(model.Mmu(1:3,1:3).^2));
+    
+    % 1) Compute all elements
+    
+    % - trace
+    tr = spm_diffeo('trapprox', single(hr/lam), double([vs opt.prm]));
+    tr = tr(1);
+    % - reg prior
+    llr = llPriorVelocity(r, 'fast', 'vs', vs,  'prm', opt.prm);
+    % - det prior
+    [~, ld1] = spm_shoot_greens('kernel', double(opt.lat), double([vs opt.prm]));
+    ld1 = ld1(1);
+    % - det posterior
+    K = spm_diffeo('kernel', double(opt.lat), double([vs opt.prm]));
+    hr(:,:,:,1) = hr(:,:,:,1) + lam*K(1,1,1,1,1);
+    hr(:,:,:,2) = hr(:,:,:,2) + lam*K(1,1,1,2,2);
+    if size(hr, 3) == 1
+        hr(:,:,:,3)   = 1;
+        hr(:,:,:,5:6) = 0;
+    else
+        hr(:,:,:,3) = hr(:,:,:,3) + lam*K(1,1,1,3,3);
+    end
+    ld2 = sumall(log(abs(pointwise3(hr, 'd'))));
+    
+    % 2) Sum each statistic
+    dat.err  = 0.5*(tr/lam + llr);
+    dat.trr  = tr;   % (keep track so that we do not need recomputing it)
+    dat.llr  = llr;  % (keep track so that we do not need recomputing it)
+    dat.klr1 = 0.5*(tr - prod(opt.lat)*3*log(lam) + lam*llr);
+    dat.klr2 = 0.5*(ld2 - ld1 - prod(opt.lat)*3);
+    dat.klr  = dat.klr1 + dat.klr2;
+    
     % Cleaning
     % --------
     % I should probably clear variables and remove files that are not
     % useful anymore. This will cause less disk and broadband usage.
-    toclean = {'gr', 'hr', 'iphi', 'ipsi'};
+    toclean = {'gr', 'iphi', 'ipsi'};
     for i=1:numel(toclean)
         field = toclean{i};
         dat.(field) = rmarray(dat.(field));
@@ -735,6 +787,7 @@ function [dat, model] = batchFitResidual(dat, model, opt)
     % ---------------------
     model.llm  = 0;
     model.llr  = 0;
+    model.err  = 0;
     okr        = 0;
     
     % --- Batch processing
@@ -756,6 +809,7 @@ function [dat, model] = batchFitResidual(dat, model, opt)
             % ----------------------------
             model.llm  = model.llm + dat(n).llm;
             model.llr  = model.llr + dat(n).llr;
+            model.err  = model.err + dat(n).err;
             okr        = okr + dat(n).okr;
             
         end
@@ -834,56 +888,6 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
 
 end
 
-% -----------------
-% Residual variance
-% -----------------
-
-function [dat, model] = batchGradHessSigma(dat, model, opt)
-
-    % --- Detect parallelisation scheme
-    if strcmpi(opt.loop, 'subject') && opt.par > 0
-        batch = opt.batch;
-    else
-        batch = 1;
-    end
-
-    % Init gradient/hessian
-    % ---------------------
-    model.gs = 0;
-    model.hs = 0;
-    
-    % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('GH Sigma'); end;
-    for i=1:ceil(opt.N/batch)
-        n1 = (i-1)*batch + 1;
-        ne = min(opt.N, i*batch);
-
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
-    
-        % Compute subjects grad/hess w.r.t. initial velocity
-        % --------------------------------------------------
-        dat(n1:ne) = distribute('oneStepGradHessVelocity', dat(n1:ne), model, opt');
-        
-        for n=n1:ne
-            
-            % Add individual contributions
-            % ----------------------------
-            model.gs = model.gs + dat(n).gv(:)' * dat(n).r(:);
-            hr = pointwise3(numeric(dat(n).hv), numeric(dat(n).r));
-            model.hs = model.hs + dat(n).r(:)' * hr(:);
-            clear hr
-            
-            % Clear individual grad/hess
-            % --------------------------
-            dat(n).gv = rmarray(dat(n).gv);
-            dat(n).hv = rmarray(dat(n).hv);
-        end
-        
-    end
-    if opt.verbose, plotBatchEnd; end;
-
-end
-
 % -------------------------------------------------------------------------
 %    Update
 % -------------------------------------------------------------------------
@@ -907,15 +911,11 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
     if isfield(todo, 'v')
         if isfield(dat, 'z') && isfield(dat, 'r')
             dat.v = reconstructVelocity('latent', dat.z, 'subspace', model.w, ...
-                'residual', dat.r, 'sigma', model.sigma, ...
+                'residual', dat.r, ...
                 'debug', opt.debug, 'output', dat.v, ...
                 'loop', loop, 'par', par);
         elseif isfield(dat, 'z')
             dat.v = reconstructVelocity('latent', dat.z, 'subspace', model.w, ...
-                'debug', opt.debug, 'output', dat.v, ...
-                'loop', loop, 'par', par);
-        elseif isfield(dat, 'r') && isfield(model, 'sigma')
-            dat.v = reconstructVelocity('residual', dat.r, 'sigma', model.sigma, ...
                 'debug', opt.debug, 'output', dat.v, ...
                 'loop', loop, 'par', par);
         elseif isfield(dat, 'r')
@@ -974,19 +974,40 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         dat.iphi = rmarray(dat.iphi);
     end
     
-    % --- Push
+    % --- Push/Warp
     if isfield(todo, 'pf') || isfield(todo, 'c')
         [dat.pf, dat.c] = pushImage(dat.ipsi, dat.f, opt.lat, ...
             'loop', loop, 'par', par, ...
             'output', {dat.pf, dat.c}, 'debug', opt.debug);
     end
+    if isfield(todo, 'wmu')
+        if opt.tpm
+            a = warp(dat.ipsi, model.a, opt.itrp, opt.bnd, ...
+                'par', par, 'debug', opt.debug);
+            dat.wmu = reconstructProbaTemplate(a, ...
+                'loop', loop, 'par', par, 'debug', opt.debug, ...
+                'output', model.mu);
+        else
+            dat.wmu = warp(dat.ipsi, model.mu, opt.itrp, opt.bnd, ...
+                'output', dat.wmu, 'debug', opt.debug);
+        end
+    end
     if isfield(toclean, 'ipsi')
         dat.ipsi = rmarray(dat.ipsi);
     end
-    if isfield(todo, 'llm')
+    if isfield(todo, 'llm') || isfield(todo, 'llmp')
+        % Pushed image
         dat.llm = llMatching(noisemodel, model.mu, dat.pf, dat.c, ...
             'loop', loop, 'par', par, ...
             'debug', opt.debug);
+    elseif isfield(todo, 'llmw')
+        % Warped template
+        dat.llm = llMatching(noisemodel, dat.wmu, dat.f, ...
+            'loop', loop, 'par', par, ...
+            'debug', opt.debug);
+    end
+    if isfield(toclean, 'wmu')
+        dat.wmu = rmarray(dat.wmu);
     end
     
     % --- G/H affine
@@ -1092,7 +1113,64 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
     end
     
     % --- G/H residual
-    % ?
+    if isfield(todo, 'hr')
+        [~, dat.hr] = ghMatchingVel(noisemodel, ...
+            model.mu, dat.pf, dat.c, model.gmu, ...
+            'loop', loop, 'par', par, 'debug', opt.debug, ...
+            'output', {dat.gr, dat.hr});
+    end
+    if isfield(todo, 'klr')
+        lam  = model.lambda;
+        lam0 = model.lambda_prev;
+        hr   = single(numeric(dat.hr));
+        r    = single(numeric(dat.r));
+        vs   = sqrt(sum(model.Mmu(1:3,1:3).^2));
+
+        % 1) Compute all elements
+
+        % - trace
+        tr = spm_diffeo('trapprox', single(hr/lam0), double([vs opt.prm]));
+        tr = tr(1);
+        % - reg prior
+        llr = llPriorVelocity(r, 'fast', 'vs', vs,  'prm', opt.prm);
+        clear r
+        % - det prior
+        [~, ld1] = spm_shoot_greens('kernel', double(opt.lat), double([vs opt.prm]));
+        ld1 = ld1(1);
+        % - det posterior
+        K = spm_diffeo('kernel', double(opt.lat), double([vs opt.prm]));
+        hr(:,:,:,1) = hr(:,:,:,1) + lam*K(1,1,1,1,1);
+        hr(:,:,:,2) = hr(:,:,:,2) + lam*K(1,1,1,2,2);
+        if size(hr, 3) == 1
+            hr(:,:,:,3)   = 1;
+            hr(:,:,:,5:6) = 0;
+        else
+            hr(:,:,:,3) = hr(:,:,:,3) + lam*K(1,1,1,3,3);
+        end
+        ld2 = sumall(log(abs(pointwise3(hr, 'd'))));
+        clear hr
+
+        % 2) Sum each statistic
+        dat.trr  = tr;   % (keep track so that we do not need recomputing it)
+        dat.llr  = llr;  % (keep track so that we do not need recomputing it)
+        dat.klr1 = 0.5*(lam/lam0*tr - prod(opt.lat)*3*log(lam) + lam*llr);
+        dat.klr2 = 0.5*(ld2 - ld1 - prod(opt.lat)*3);
+        dat.klr  = dat.klr1 + dat.klr2;
+    end
+    if isfield(todo, 'llr')
+        dat.llr = llPriorVelocity(dat.r, ...
+            'vs', sqrt(sum(model.Mmu(1:3,1:3).^2)), ...
+            'prm', opt.prm);
+    end
+    if isfield(todo, 'klru')
+        lam  = model.lambda;
+        lam0 = model.lambda_prev;
+        dat.klr1 = 0.5*(lam/lam0*dat.trr - prod(opt.lat)*3*log(lam) + lam*dat.llr);
+        dat.klr  = dat.klr1 + dat.klr2;
+    end
+    if isfield(toclean, 'hr')
+        dat.hr = rmarray(dat.hr);
+    end
     
     % --- Clean pushed
     if isfield(toclean, 'pf')
@@ -1155,7 +1233,7 @@ function dat = distribute(func, dat, model, opt, varargin)
     % --- Convert function name to function handle
     if ischar(func)
         funcname = func;
-        func = @(varargin) pgraBatchProcess(funcname, varargin{:});
+        func = @(varargin) batchProcess(funcname, varargin{:});
         funcstr = ['@(varargin) batchProcess(''' funcname ''', varargin{:})']; 
     else
         funcstr = func2str(func);
