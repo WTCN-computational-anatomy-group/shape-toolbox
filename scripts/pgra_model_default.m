@@ -65,11 +65,20 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt ,'affine_basis')
         opt.affine_basis = affine_basis(12);
     end
+    if ~isfield(opt ,'affine_rind')
+        opt.affine_rind = [];
+    end
     if ~isfield(opt, 'nq0')
-        opt.nq0 = size(opt.affine_basis, 3);
+        opt.nq0 = numel(opt.affine_rind);
     end
     if ~isfield(opt, 'nz0')
         opt.nz0 = opt.K;
+    end
+    if ~isfield(opt, 'nlam0')
+        opt.nlam0 = 10;
+    end
+    if ~isfield(opt, 'lambda0')
+        opt.lambda0 = 10;
     end
     if ~isfield(opt, 'wpz0')
         opt.wpz0 = [1 1];

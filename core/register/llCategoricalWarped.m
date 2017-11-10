@@ -22,7 +22,7 @@ function ll = llCategoricalWarped(mu, f, varargin)
     p.addRequired('mu',   @checkarray);
     p.addRequired('f',    @checkarray);
     p.addOptional('type',    'proba', @(X) ischar(X) && any(strcmpi(X, {'log', 'proba', 'null'})) );
-    p.addParameter('loop',   '',      @(X) ischar(X) && any(strcmpi(X, {'slice', 'none'})));
+    p.addParameter('loop',   '',      @(X) ischar(X) && any(strcmpi(X, {'slice', 'none', ''})));
     p.addParameter('par',    false,   @isscalar);
     p.addParameter('debug',  false,   @isscalar);
     p.parse(mu, f, varargin{:});

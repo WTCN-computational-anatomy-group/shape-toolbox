@@ -4,6 +4,10 @@ function a = sumall(a, n)
 % Very efficient in terms of speed and memory for a number of non 
 % singelton dimensions <= 10. 
 % Try to be not too ineficient for higher dimensions
+    if isempty(a)
+        a = 0;
+        return
+    end
     if nargin < 2
         n = sum(size(a) > 1);
     end

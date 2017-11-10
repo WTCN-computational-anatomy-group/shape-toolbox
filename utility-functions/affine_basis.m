@@ -1,4 +1,4 @@
-function B = affine_basis(type, flat)
+function [B, rind] = affine_basis(type, flat)
 % FORMAT B = affine_basis(type, ('2d'))
 % type - * 'translation'
 %        * 'rotation'
@@ -7,6 +7,7 @@ function B = affine_basis(type, flat)
 %        * 'affine'     or 12 [default]
 % 
 % B    - 4x4xQ array.
+% rind - Indices of basis that shoudl be reularised (all but tr/rot)
 %
 % Returns a Lie algebra basis system encoding for one of the above
 % transformation types.
@@ -66,14 +67,21 @@ function B = affine_basis(type, flat)
     switch type
         case 'translation'
             B = Bt;
+            rind = [];
         case 'rotation'
             B = Br;
+            rind = [];
         case {'rigid', '6'}
             B = [Bt Br];
+            rind = [];
         case {'similitude', '7'}
             B = [Bt Br Bsim];
+            if flat,  rind = [4 5];
+            else      rind = [7 8 9];  end
         case {'affine', '12'}
             B = [Bt Br Bscl Bshr];
+            if flat,  rind = [4 5 6];
+            else      rind = [7 8 9 10 11 12];  end
     end
     B = reshape(B, 4, 4, []);
     

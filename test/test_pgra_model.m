@@ -1,5 +1,5 @@
 
-    N = 250;
+    N = 50;
     input_dir = '/Users/balbasty/Desktop/model/input';
     files     = spm_select('List', input_dir, '\.img$');
     if ~isfinite(N)
@@ -25,8 +25,9 @@
     opt.batch        = 10;
     opt.nz0          = 0;
     opt.wpz0         = [1 1];
-    opt.fwhm         = 6;
-    opt.affine_basis = affine_basis(12, '2d');
+%     opt.fwhm         = 6;
+    opt.affine_basis = affine_basis('rigid', '2d');
+    opt.rind         = [];
 
     [model, dat] = pgra_model(opt);
     

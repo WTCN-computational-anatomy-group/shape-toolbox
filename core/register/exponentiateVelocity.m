@@ -146,11 +146,11 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm)
     end
 
     % Inversion kernel
-    F = spm_shoot_greens('kernel', lattice_dim, [vs prm]);
+    F = spm_shoot_greens('kernel', double(lattice_dim), double([vs prm]));
     % Identity transform
     id = single(transfo('idmap', lattice_dim));
     % Initial momentum (m_0 = L v_0)
-    m = spm_diffeo('vel2mom', v, [vs prm]);
+    m = spm_diffeo('vel2mom', single(v), double([vs prm]));
 
     % First iteration
     iphi = id - v/N;
@@ -160,7 +160,7 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm)
     for t=2:N
         % Jacobian of the step
         % dJ_t = Jac( I - dv_t )
-        dJ = spm_diffeo('jacobian', diphi);
+        dJ = spm_diffeo('jacobian', single(diphi));
         m1 = zeros(size(m), 'single');
         % Pointwise matrix multiplication
         % tmp = dJ_t' * m_t
@@ -181,6 +181,6 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm)
     end
     
     if nargout > 1
-        ijac = spm_diffeo('jacobian', iphi);
+        ijac = spm_diffeo('jacobian', single(iphi));
     end
 end

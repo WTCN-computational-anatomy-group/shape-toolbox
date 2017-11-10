@@ -38,15 +38,15 @@ function ll = llPriorVelocity(v, varargin)
     v(~isfinite(v)) = 0;
     
     % --- Compute log-likelihood
-    m = spm_diffeo('vel2mom', v, [p.Results.vs p.Results.prm]);
+    m = spm_diffeo('vel2mom', v, double([p.Results.vs p.Results.prm]));
     ll = v(:)' * m(:);
     
     % --- Add constants w.r.t. R
     if ~fast
         ll = ll + count * log(2 * pi);
         
-        [~, ld] = spm_shoot_greens('kernel', lat, [p.Results.vs p.Results.prm]);
-        ll = ll - 0.5*ld(1);
+        [~, ld] = spm_shoot_greens('kernel', double(lat), double([p.Results.vs p.Results.prm]));
+        ll = ll - ld(1);
 %         if obj.Debug
 %             warning(['LL: discard 0.5 * det(L). ' ...
 %                      'Don''t know how to compute it (with the kernel?).']);

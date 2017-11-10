@@ -16,6 +16,11 @@ function A = precisionZWishart(n0, ezz, N, md)
     if nargin < 4
         md = 'mean';
     end
+    
+    if isempty(ezz)
+        A = ezz;
+        return
+    end
 
     A = n0*eye(size(ezz)) + ezz;
     n = n0 + N;

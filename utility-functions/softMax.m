@@ -58,6 +58,6 @@ function [mu, ll] = softMax(a, f, fast, c)
     
     % --- Softmax normalization
     if ~fast(1)
-        mu = bsxfun(@rdivides, mu, s);
+        mu = bsxfun(@rdivide, mu, s);
     end
 end
