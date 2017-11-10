@@ -161,7 +161,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
     % The next component is automatically activated when the lower bound
     % converges
     lbthreshold = 1e-4;
-    activated = struct('affine', true, 'pg', true, 'residual', true);
+    activated = struct('affine', true, 'pg', false, 'residual', false);
     
     % ---------------------------------------------------------------------
     %    EM iterations

@@ -19,7 +19,7 @@
     opt.prm          = [0 0.001 0.02 0.0025 0.005];
     opt.emit         = 1000;
     opt.gnit         = 1;
-    opt.par          = 0;
+    opt.par          = inf;
     opt.loop         = 'subject';
     opt.debug        = false;
     opt.batch        = 10;
