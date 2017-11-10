@@ -670,7 +670,7 @@ function [dat, model] = initAll(dat, model, opt)
                     opt.nlam0, opt.lambda0, opt.lat);
     model.lbz  = lbLatent(dat, model, opt);
     model.lbaz = lbPrecisionMatrix(model.Az, opt.N, opt.nz0);
-    [~, ld] = spm_shoot_greens('kernel', double(opt.lat), double([sqrt(sum(model.Mmu(1:3,1:3).^2)) opt.prm]));
+    ld = proba('LogDetDiffeo', opt.lat, sqrt(sum(model.Mmu(1:3,1:3).^2)), opt.prm);
     model.llw  = 0.5 * opt.K * (ld - prod(opt.lat)*3*log(2*pi));
     model.lbaq = lbPrecisionMatrix(model.Aq, opt.N, opt.nq0);
     model.lbq  = lbAffine(dat, model, opt);
