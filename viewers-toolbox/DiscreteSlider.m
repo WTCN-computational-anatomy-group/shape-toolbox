@@ -186,7 +186,7 @@ classdef DiscreteSlider < handle & AdvancedResize
                 value = obj.Max;
             end
             obj.uislider.Value = value;
-            obj.uivalue.String = char(value);
+            obj.uivalue.String = num2str(value);
             obj.ValueChanged = ~obj.ValueChanged;
         end
         function valuechanged(obj)
@@ -197,7 +197,7 @@ classdef DiscreteSlider < handle & AdvancedResize
             elseif value > obj.Max
                 value = obj.Max;
             end
-            obj.uivalue.String = char(value);
+            obj.uivalue.String = num2str(value);
             obj.uislider.Value = value;
             obj.ValueChanged = ~obj.ValueChanged;
         end
