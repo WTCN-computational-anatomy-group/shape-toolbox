@@ -55,6 +55,7 @@ function [g, h] = ghMatchingLatent(model, mu, f, c, gmu, w, varargin)
 
     % --- If loop on slices
     if strcmpi(loop, 'slice')
+        dim_lattice = [size(mu), 1];
         if debug
             if par
                 fprintf('  - Parallelise on slices\n')
