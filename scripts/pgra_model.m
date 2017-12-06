@@ -503,10 +503,14 @@ function model = plotAll(model, opt, loop)
         
         % Template & PG
         subplot(px, py, 1)
-        imagesc(model.mu(:,:,ceil(size(model.mu,3)/2),1));
+        tpl = catToColor(model.mu(:,:,ceil(size(model.mu,3)/2),:));
+        dim = [size(tpl) 1 1];
+        image(reshape(tpl, [dim(1:2) dim(4)]));
         title('template')
         subplot(px, py, 2)
-        imagesc(model.w(:,:,ceil(size(model.mu,3)/2),2,1));
+        pg = defToColor(model.w(:,:,ceil(size(model.mu,3)/2),:,1));
+        dim = [size(pg) 1 1];
+        image(reshape(pg, [dim(1:2) dim(4)]));
         title('PG1 y')
         % Precision
         subplot(px, py, 4)
