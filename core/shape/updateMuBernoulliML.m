@@ -69,7 +69,7 @@ end
 
 function mu = loopSlice(f, c, par, output)
 
-    mu = prepareOnDisk(output, size(f{1}), 'float32');
+    mu = prepareOnDisk(output, size(f{1}), 'type', 'float32');
     dim = [size(mu) 1];
     lat = dim(1:3);
     
