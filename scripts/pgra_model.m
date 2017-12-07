@@ -500,25 +500,32 @@ function model = plotAll(model, opt, loop)
         
         % Plot
         % ----
+        vs = sqrt(sum(model.Mmu(1:3,1:3).^2));
         
         % Template & PG
         subplot(px, py, 1)
         tpl = catToColor(model.mu(:,:,ceil(size(model.mu,3)/2),:));
         dim = [size(tpl) 1 1];
         image(reshape(tpl, [dim(1:2) dim(4)]));
+        daspect(1./vs);
+        axis off
         title('template')
         subplot(px, py, 2)
         pg = defToColor(model.w(:,:,ceil(size(model.mu,3)/2),:,1));
         dim = [size(pg) 1 1];
         image(reshape(pg, [dim(1:2) dim(4)]));
+        daspect(1./vs);
+        axis off
         title('PG1 y')
         % Precision
         subplot(px, py, 4)
         imagesc(model.ww)
+        daspect([1 1 1])
         colorbar
         title('E*[W''LW]')
         subplot(px, py, 5)
         imagesc(model.Az)
+        daspect([1 1 1])
         colorbar
         title('E*[A]')
         % Lower bound

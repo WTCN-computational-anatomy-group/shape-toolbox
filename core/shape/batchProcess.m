@@ -697,7 +697,7 @@ function dat = oneStepFitResidual(dat, model, opt)
         % -------------------
         dat.okr = dat.okr || okr;
         if okr
-            dat.r       = r;
+            dat.r(:)    = r(:);
             dat.llm     = llm;
             dat.llr     = llr;
             dat.v(:)    = v(:);
