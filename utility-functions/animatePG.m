@@ -54,9 +54,9 @@ function frames = animatePG(model, opt, pg, fname)
 end
 
 function mu = colorimage(mu, z)
-    dim = size(mu);
+    dim = [size(mu) 1 1];
     if nargin < 2
         z = ceil(dim(3)/2);
     end
-    mu = reshape(mu(:,:,z,1:3), [dim(1) dim(2) 3]);
+    mu = catToColor(reshape(mu(:,:,z,:), [dim(1) dim(2) dim(4)]));
 end
