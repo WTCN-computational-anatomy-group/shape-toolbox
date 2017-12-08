@@ -1,10 +1,10 @@
 function kl = klNormal(mu, A, mu0, A0, mode)
-% FORMAT kl = klNormal(mu, A, mu0, A0, mode)
+% FORMAT kl = klNormal(mu, A, mu0, A0, (mode))
 % mu   - Mean parameter of the posterior
 % A    - Covariance/precision parameter of the posterior
 % mu0  - Mean parameter of the prior
 % A0   - Covariance/precision parameter of the prior
-% mode - 'covariance' or 'precision'
+% mode - 'covariance' or 'precision' [covariance]
 %
 % Compute the KL-divergence from a prior to a posterior Normal 
 % distribution:

@@ -107,17 +107,45 @@ function mu = loopComponent(f, c, par, output, fwhm)
     lat = dim(1:3);
     nc  = dim(4);
     
-    parfor (k=1:nc, par)
-        tmpf = zeros([lat numel(f)], 'single');
-        tmpc = zeros([lat numel(f)], 'single');
-        for n=1:numel(f)
-            tmpf(:,:,:,n) = single(f{n}(:,:,:,k));
-            tmpc(:,:,:,n) = single(c{n}(:,:,:));
+    if ~par
+        for k=1:nc
+            tmpf = zeros([lat numel(f)], 'single');
+            tmpc = zeros([lat numel(f)], 'single');
+            for n=1:numel(f)
+                tmpf(:,:,:,n) = single(f{n}(:,:,:,k));
+                tmpc(:,:,:,n) = single(numeric(c{n}));
+            end
+            tpmf = smooth_gaussian(tmpf, fwhm);
+            tpmc = smooth_gaussian(tmpc, fwhm);
+            tmpf = wmedian(tmpf, tmpc);
+            mu(:,:,:,k) = tmpf;
         end
-        tpmf = smooth_gaussian(tmpf, fwhm);
-        tpmc = smooth_gaussian(tmpc, fwhm);
-        tmpf = wmedian(tmpf, tmpc);
-        mu(:,:,:,k) = tmpf;
+    elseif isa(f{1}, 'file_array')
+        parfor (k=1:nc, par)
+            tmpf = zeros([lat numel(f)], 'single');
+            tmpc = zeros([lat numel(f)], 'single');
+            for n=1:numel(f)
+                tmpf(:,:,:,n) = single(slicevol(f{n}, k, 4));
+                tmpc(:,:,:,n) = single(numeric(c{n}));
+            end
+            tpmf = smooth_gaussian(tmpf, fwhm);
+            tpmc = smooth_gaussian(tmpc, fwhm);
+            tmpf = wmedian(tmpf, tmpc);
+            mu(:,:,:,k) = tmpf;
+        end
+    else
+        parfor (k=1:nc, par)
+            tmpf = zeros([lat numel(f)], 'single');
+            tmpc = zeros([lat numel(f)], 'single');
+            for n=1:numel(f)
+                tmpf(:,:,:,n) = single(f{n}(:,:,:,k));
+                tmpc(:,:,:,n) = single(numeric(c{n}));
+            end
+            tpmf = smooth_gaussian(tmpf, fwhm);
+            tpmc = smooth_gaussian(tmpc, fwhm);
+            tmpf = wmedian(tmpf, tmpc);
+            mu(:,:,:,k) = tmpf;
+        end
     end
     
     if ~isempty(output)
@@ -139,13 +167,33 @@ function mu = loopSlice(f, c, par, output)
     end
     
     % --- Compute mu
-    parfor (z=1:dim(3), par)
-        tmpf = zeros([lat(1:2) 1 nc numel(f)], 'single');
-        for n=1:numel(f)
-            tmpf(:,:,1,:,n) = single(f{n}(:,:,z,:));
+    if ~par
+        for z=1:dim(3)
+            tmpf = zeros([lat(1:2) 1 nc numel(f)], 'single');
+            for n=1:numel(f)
+                tmpf(:,:,1,:,n) = single(f{n}(:,:,z,:));
+            end
+            tmpf = wmedian(tmpf, tmpc(:,:,z));
+            mu(:,:,z,:) = tmpf;
         end
-        tmpf = wmedian(tmpf, tmpc(:,:,z));
-        mu(:,:,z,:) = tmpf;
+    elseif isa(f{1}, 'file_array')
+        parfor (z=1:dim(3), par)
+            tmpf = zeros([lat(1:2) 1 nc numel(f)], 'single');
+            for n=1:numel(f)
+                tmpf(:,:,1,:,n) = single(slicevol(f{n}, z, 3));
+            end
+            tmpf = wmedian(tmpf, tmpc(:,:,z));
+            mu(:,:,z,:) = tmpf;
+        end
+    else
+        parfor (z=1:dim(3), par)
+            tmpf = zeros([lat(1:2) 1 nc numel(f)], 'single');
+            for n=1:numel(f)
+                tmpf(:,:,1,:,n) = single(f{n}(:,:,z,:));
+            end
+            tmpf = wmedian(tmpf, tmpc(:,:,z));
+            mu(:,:,z,:) = tmpf;
+        end
     end
     
     if ~isempty(output)

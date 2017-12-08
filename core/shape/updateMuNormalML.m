@@ -111,23 +111,63 @@ function mu = loopComponent(f, c, s, par, output, fwhm)
     if ~isempty(s)
         [tmp.s] = deal(s{:});
     end
-    parfor (k=1:nc, par)
-        tmpf = zeros(lat, 'single');
-        tmpc = zeros(lat, 'single');
-        for n=1:numel(tmp)
-            if ~isempty(s)
-                s1 = tmp(n).s(k);
-                c1 = single(numeric(tmp(n).c)/s1);
-            else
-                c1 = single(numeric(tmp(n).c));
+    if ~par
+        for k=1:nc, par
+            tmpf = zeros(lat, 'single');
+            tmpc = zeros(lat, 'single');
+            for n=1:numel(tmp)
+                if ~isempty(s)
+                    s1 = tmp(n).s(k);
+                    c1 = single(numeric(tmp(n).c)/s1);
+                else
+                    c1 = single(numeric(tmp(n).c));
+                end
+                tmpc = tmpc + c1;
+                tmpf = tmpf + c1 .* single(tmp(n).f(:,:,:,k));
             end
-            tmpc = tmpc + c1;
-            tmpf = tmpf + c1 .* single(tmp(n).f(:,:,:,k));
+            tmpf = smooth_gaussian(tmpf, fwhm);
+            tmpc = smooth_gaussian(tmpc, fwhm);
+            tmpf = tmpf ./ tmpc;
+            mu(:,:,:,k) = tmpf;
         end
-        tmpf = smooth_gaussian(tmpf, fwhm);
-        tmpc = smooth_gaussian(tmpc, fwhm);
-        tmpf = tmpf ./ tmpc;
-        mu(:,:,:,k) = tmpf;
+    elseif isa(tmp(1).f, 'file_array')
+        parfor (k=1:nc, par)
+            tmpf = zeros(lat, 'single');
+            tmpc = zeros(lat, 'single');
+            for n=1:numel(tmp)
+                if ~isempty(s)
+                    s1 = tmp(n).s(k);
+                    c1 = single(numeric(tmp(n).c)/s1);
+                else
+                    c1 = single(numeric(tmp(n).c));
+                end
+                tmpc = tmpc + c1;
+                tmpf = tmpf + c1 .* single(slicevol(tmp(n).f, k, 4));
+            end
+            tmpf = smooth_gaussian(tmpf, fwhm);
+            tmpc = smooth_gaussian(tmpc, fwhm);
+            tmpf = tmpf ./ tmpc;
+            mu(:,:,:,k) = tmpf;
+        end
+    else
+        parfor (k=1:nc, par)
+            tmpf = zeros(lat, 'single');
+            tmpc = zeros(lat, 'single');
+            for n=1:numel(tmp)
+                if ~isempty(s)
+                    s1 = tmp(n).s(k);
+                    c1 = single(numeric(tmp(n).c)/s1);
+                else
+                    c1 = single(numeric(tmp(n).c));
+                end
+                tmpc = tmpc + c1;
+                tmpf = tmpf + c1 .* single(tmp(n).f(:,:,:,k));
+            end
+            tmpf = smooth_gaussian(tmpf, fwhm);
+            tmpc = smooth_gaussian(tmpc, fwhm);
+            tmpf = tmpf ./ tmpc;
+            mu(:,:,:,k) = tmpf;
+        end
     end
     
     if ~isempty(output)
@@ -147,27 +187,75 @@ function mu = loopSlice(f, c, s, par, output)
     if ~isempty(s)
         [tmp.s] = deal(s{:});
     end
-    parfor (z=1:dim(3), par)
-        tmpf = zeros([lat(1:2) 1 nc], 'single');
-        if isempty(s)
-            tmpc = zeros([lat(1:2) 1],'single');
-        else
-            tmpc = zeros([lat(1:2) 1 nc],'single');
-        end
-        for n=1:numel(tmp)
+    if ~par
+        for z=1:dim(3)
+            tmpf = zeros([lat(1:2) 1 nc], 'single');
             if isempty(s)
-                c1 = single(numeric(tmp(n).c(:,:,z)));
-                f1 = single(tmp(n).f(:,:,z,:));
+                tmpc = zeros([lat(1:2) 1],'single');
             else
-                s1 = reshape(tmp(n).s, [1 1 1 size(f1, 4)]);
-                c1 = bsxfun(@rdivide, ...
-                            single(numeric(tmp(n).c(:,:,z))), s1);
-                f1 = bsxfun(@times, single(tmp(n).f(:,:,z,:)), s1);
+                tmpc = zeros([lat(1:2) 1 nc],'single');
             end
-            tmpc = tmpc + c1;
-            tmpf = tmpf + f1;
+            for n=1:numel(tmp)
+                if isempty(s)
+                    c1 = single(numeric(tmp(n).c(:,:,z)));
+                    f1 = single(tmp(n).f(:,:,z,:));
+                else
+                    s1 = reshape(tmp(n).s, [1 1 1 size(f1, 4)]);
+                    c1 = bsxfun(@rdivide, ...
+                                single(numeric(tmp(n).c(:,:,z))), s1);
+                    f1 = bsxfun(@times, single(tmp(n).f(:,:,z,:)), s1);
+                end
+                tmpc = tmpc + c1;
+                tmpf = tmpf + f1;
+            end
+            mu(:,:,z,:) = bsxfun(@rdivide, tmpf, tmpc);
         end
-        mu(:,:,z,:) = bsxfun(@rdivide, tmpf, tmpc);
+    elseif isa(tmp(1).f, 'file_array')
+        parfor (z=1:dim(3), par)
+            tmpf = zeros([lat(1:2) 1 nc], 'single');
+            if isempty(s)
+                tmpc = zeros([lat(1:2) 1],'single');
+            else
+                tmpc = zeros([lat(1:2) 1 nc],'single');
+            end
+            for n=1:numel(tmp)
+                if isempty(s)
+                    c1 = single(numeric(slicevol(tmp(n).c, z, 3)));
+                    f1 = single(slicevol(tmp(n).f, z, 3));
+                else
+                    s1 = reshape(tmp(n).s, [1 1 1 size(f1, 4)]);
+                    c1 = bsxfun(@rdivide, ...
+                                single(numeric(slicevol(tmp(n).c, z, 3))), s1);
+                    f1 = bsxfun(@times, single(slicevol(tmp(n).f, z, 3)), s1);
+                end
+                tmpc = tmpc + c1;
+                tmpf = tmpf + f1;
+            end
+            mu(:,:,z,:) = bsxfun(@rdivide, tmpf, tmpc);
+        end
+    else
+        parfor (z=1:dim(3), par)
+            tmpf = zeros([lat(1:2) 1 nc], 'single');
+            if isempty(s)
+                tmpc = zeros([lat(1:2) 1],'single');
+            else
+                tmpc = zeros([lat(1:2) 1 nc],'single');
+            end
+            for n=1:numel(tmp)
+                if isempty(s)
+                    c1 = single(numeric(tmp(n).c(:,:,z)));
+                    f1 = single(tmp(n).f(:,:,z,:));
+                else
+                    s1 = reshape(tmp(n).s, [1 1 1 size(f1, 4)]);
+                    c1 = bsxfun(@rdivide, ...
+                                single(numeric(tmp(n).c(:,:,z))), s1);
+                    f1 = bsxfun(@times, single(tmp(n).f(:,:,z,:)), s1);
+                end
+                tmpc = tmpc + c1;
+                tmpf = tmpf + f1;
+            end
+            mu(:,:,z,:) = bsxfun(@rdivide, tmpf, tmpc);
+        end
     end
     
     if ~isempty(output)

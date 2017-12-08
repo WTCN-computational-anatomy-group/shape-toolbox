@@ -59,8 +59,26 @@ function ll = llNormalWarped(mu, f, varargin)
                 fprintf('   - Serialise on components\n'); 
             end
         end
-        parfor (k=1:nc, par)
-            ll = ll + onMemory(mu(:,:,:,k), f(:,:,:,k), s(k));
+        if ~par
+            for k=1:nc
+                ll = ll + onMemory(mu(:,:,:,k), f(:,:,:,k), s(k));
+            end
+        elseif isa(mu, 'file_array') && isa(f, 'file_array')
+            parfor (k=1:nc, par)
+                ll = ll + onMemory(slicevol(mu, k, 4), slicevol(f, k, 4), s(k));
+            end
+        elseif isa(mu, 'file_array')
+            parfor (k=1:nc, par)
+                ll = ll + onMemory(slicevol(mu, k, 4), f(:,:,:,k), s(k));
+            end
+        elseif isa(f, 'file_array')
+            parfor (k=1:nc, par)
+                ll = ll + onMemory(mu(:,:,:,k), slicevol(f, k, 4), s(k));
+            end
+        else
+            parfor (k=1:nc, par)
+                ll = ll + onMemory(mu(:,:,:,k), f(:,:,:,k), s(k));
+            end
         end
         
     % --- Loop on slices
@@ -72,8 +90,26 @@ function ll = llNormalWarped(mu, f, varargin)
                 fprintf('   - Serialise on slices\n'); 
             end
         end
-        parfor (z=1:dlat(3), par)
-            ll = ll + onMemory(mu(:,:,z,:), f(:,:,z,:), s);
+        if ~par
+            for z=1:dlat(3)
+                ll = ll + onMemory(mu(:,:,z,:), f(:,:,z,:), s);
+            end
+        elseif isa(mu, 'file_array') && isa(f, 'file_array')
+            parfor (z=1:dlat(3), par)
+                ll = ll + onMemory(slicevol(mu, z, 3), slicevol(f, z, 3), s);
+            end
+        elseif isa(mu, 'file_array')
+            parfor (z=1:dlat(3), par)
+                ll = ll + onMemory(slicevol(mu, z, 3), f(:,:,z,:), s);
+            end
+        elseif isa(f, 'file_array')
+            parfor (z=1:dlat(3), par)
+                ll = ll + onMemory(mu(:,:,z,:), slicevol(f, z, 3), s);
+            end
+        else
+            parfor (z=1:dlat(3), par)
+                ll = ll + onMemory(mu(:,:,z,:), f(:,:,z,:), s);
+            end
         end
         
     end

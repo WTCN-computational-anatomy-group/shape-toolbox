@@ -69,7 +69,7 @@ end
 
 function mu = loopSlice(f, c, par, output)
 
-    mu = prepareOnDisk(output, size(f{1}), 'float32');
+    mu = prepareOnDisk(output, size(f{1}), 'type', 'float32');
     dim = [size(mu) 1];
     lat = dim(1:3);
     
@@ -80,16 +80,42 @@ function mu = loopSlice(f, c, par, output)
     end
     
     % -- Compute mu
-    parfor (z=1:dim(3), par)
-        tmpf = zeros(lat(1:2), 'single');
-        for n=1:numel(f)
-            tmpf = tmpf + single(f{n}(:,:,z,:));
+    if ~par
+        for z=1:dim(3)
+            tmpf = zeros(lat(1:2), 'single');
+            for n=1:numel(f)
+                tmpf = tmpf + single(f{n}(:,:,z,:));
+            end
+            tmpf = tmpf ./ tmpc(:,:,z);
+            tmpf = max(1-eps('single'), min(eps('single'), tmpf));
+            tmpf(~isfinite(tmpf)) = 0.5;
+            tmpf = log(tmpf) - log(1 - tmpf);
+            mu(:,:,z,:) = tmpf;
         end
-        tmpf = tmpf ./ tmpc(:,:,z);
-        tmpf = max(1-eps('single'), min(eps('single'), tmpf));
-        tmpf(~isfinite(tmpf)) = 0.5;
-        tmpf = log(tmpf) - log(1 - tmpf);
-        mu(:,:,z,:) = tmpf;
+    elseif isa(f{1}, 'file_array')
+        parfor (z=1:dim(3), par)
+            tmpf = zeros(lat(1:2), 'single');
+            for n=1:numel(f)
+                tmpf = tmpf + single(slice(f{n}, z, 3));
+            end
+            tmpf = tmpf ./ tmpc(:,:,z);
+            tmpf = max(1-eps('single'), min(eps('single'), tmpf));
+            tmpf(~isfinite(tmpf)) = 0.5;
+            tmpf = log(tmpf) - log(1 - tmpf);
+            mu(:,:,z,:) = tmpf;
+        end
+    else
+        parfor (z=1:dim(3), par)
+            tmpf = zeros(lat(1:2), 'single');
+            for n=1:numel(f)
+                tmpf = tmpf + single(f{n}(:,:,z,:));
+            end
+            tmpf = tmpf ./ tmpc(:,:,z);
+            tmpf = max(1-eps('single'), min(eps('single'), tmpf));
+            tmpf(~isfinite(tmpf)) = 0.5;
+            tmpf = log(tmpf) - log(1 - tmpf);
+            mu(:,:,z,:) = tmpf;
+        end
     end
     
     if ~isempty(output)

@@ -42,7 +42,9 @@ function [w, ww] = initSubspace(lat, K, varargin)
     % --- Initialise
     switch lower(type)
         case 'zero'
-            w(:,:,:,:,:) = 0;
+            for k=1:size(K, 5)
+                w(:,:,:,:,k) = 0;
+            end
             if nargout > 2
                 ww(:,:) = eye(K);
             end
