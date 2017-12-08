@@ -28,7 +28,9 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt, pgra)
     % --- Initial point
     w0 = model.w;
     w0.fname = fullfile(opt.directory, 'subspace_prev.nii');
-    w0(:) = model.w(:);
+    for k=1:size(model.w, 5)
+        w0(:,:,:,:,k) = model.w(:,:,:,:,k);
+    end
     ww0 = model.ww;
     
     % --- Initialise line search
@@ -100,7 +102,9 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt, pgra)
     % --- Clean
     if ~ok
         printInfo('end');
-        model.w(:)  = w0(:);
+        for k=1:opt.K
+            model.w(:,:,:,:,k)  = w0(:,:,:,:,k);
+        end
         model.ww(:) = ww0(:);
         dat = batchProcess('Update', dat, model, opt1, ...
             {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...

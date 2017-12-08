@@ -141,6 +141,10 @@ function [opt, dat, model] = pgra_model_data(opt, dat, model)
     if ~isfield(dat, 'trr')
         [dat.trr] = deal(double([]));
     end
+    if ~isfield(dat, 'bb')
+        [dat.bb] = deal(struct);
+    end
+    
     
     % Create all output directories
     % -----------------------------

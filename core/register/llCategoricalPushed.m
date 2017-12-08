@@ -1,21 +1,36 @@
 function ll = llCategoricalPushed(mu, f, c, varargin)
-% FORMAT ll = llCategoricalPushed(mu, f, c, (type), ('loop', loop), ('par', par))
+%__________________________________________________________________________
 %
-% ** Required **
+% Log-likelihood of the Categorical matching term
+%
+% -------------------------------------------------------------------------
+%
+% FORMAT ll = llCategoricalPushed(mu, f, c, (type), ...)
+%
+% REQUIRED
+% --------
 % mu   - Template
 % f    - Observed image pushed in the template space.
 % c    - Pushed voxel count.
-% ** Optional **
+% 
+% OPTIONAL
+% --------
 % type - Type of the provided template:
 %        * 'proba': Probability space [default]
 %        * 'log'  : Log-probability space
 %        * 'null' : Null-projection of the log-probability space
-% ** Keyword arguments **
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% bb   - Bounding box (if different between template and pushed image)
 % loop - Specify how to split data processing
-%        ('slice' or 'none' [default])
+%        ('component', 'slice' or 'none' [default])
 % par  - If true, parallelise processing [default: false]
-% ** Output **
-% ll   - Log-likelihood of the Normal matching term
+% 
+% OUTPUT
+% ------
+% ll   - Log-likelihood of the Categorical matching term
+%__________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
@@ -24,11 +39,13 @@ function ll = llCategoricalPushed(mu, f, c, varargin)
     p.addRequired('f',    @checkarray);
     p.addRequired('c',    @checkarray);
     p.addOptional('type',    'proba', @(X) ischar(X) && any(strcmpi(X, {'log', 'proba', 'null'})) );
+    p.addParameter('bb',     struct, @isstruct);
     p.addParameter('loop',   '',      @ischar);
     p.addParameter('par',    false,   @isscalar);
     p.addParameter('debug',  false,   @isscalar);
     p.parse(mu, f, c, varargin{:});
     type  = p.Results.type;
+    bb    = p.Results.bb;
     par   = p.Results.par;
     loop  = p.Results.loop;
     
@@ -44,8 +61,19 @@ function ll = llCategoricalPushed(mu, f, c, varargin)
         [par, loop] = autoParLoop(par, loop, isa(mu, 'file_array'), size(mu, 3), size(mu, 4));
     end
     
+    % --- Default bounding box
+    if ~isfield(bb, 'x')
+        bb.x = 1:size(mu, 1);
+    end
+    if ~isfield(bb, 'y')
+        bb.y = 1:size(mu, 2);
+    end
+    if ~isfield(bb, 'z')
+        bb.z = 1:size(mu, 3);
+    end
+    
     % --- Read dimensions
-    dim  = [size(mu) 1 1];
+    dim  = [numel(bb.x)  numel(bb.y) numel(bb.z) size(mu, 4)];
     dlat = dim(1:3);
     nc   = dim(4);
     if strcmpi(type, 'null')
@@ -80,13 +108,34 @@ function ll = llCategoricalPushed(mu, f, c, varargin)
             end
         end
         if strcmpi(type, 'proba')
-            parfor (k=1:nc, par)
-                ll = ll + onMemoryProba(mu(:,:,:,k), f(:,:,:,k), c);
+            if ~par
+                for k=1:nc
+                    ll = ll + onMemoryProba(mu(:,:,:,k), f(:,:,:,k), c);
+                end
+            elseif isa(mu, 'file_array') && isa(f, 'file_array')
+                parfor (k=1:nc, par)
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, bb.z, k}), slicevol(f, k, 4), c);
+                end
+            elseif isa(mu, 'file_array')
+                mu = mu(bb.x,bb.y,bb.z,:);
+                parfor (k=1:nc, par)
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, bb.z, k}), f(:,:,:,k), c);
+                end
+            elseif isa(f, 'file_array')
+                mu = mu(bb.x,bb.y,bb.z,:);
+                parfor (k=1:nc, par)
+                    ll = ll + onMemoryProba(mu(:,:,:,k), slicevol(f, k, 4), c);
+                end
+            else
+                mu = mu(bb.x,bb.y,bb.z,:);
+                parfor (k=1:nc, par)
+                    ll = ll + onMemoryProba(mu(:,:,:,k), f(:,:,:,k), c);
+                end
             end
         else
             error('Loop on components not supported with type %s', type);
         end
-    
+        
     % --- Loop on slices
     elseif strcmpi(loop, 'slice')
         if p.Results.debug
@@ -96,23 +145,95 @@ function ll = llCategoricalPushed(mu, f, c, varargin)
                 fprintf('   - Serialise on slices\n'); 
             end
         end
-        if strcmpi(type, 'proba')
-            parfor (z=1:dlat(3), par)
-                ll = ll + onMemoryProba(mu(:,:,z,:), f(:,:,z,:), c(:,:,z));
+        if ~par
+            if strcmpi(type, 'proba')
+                for z=1:dlat(3)
+                    ll = ll + onMemoryProba(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z,:));
+                end
+            elseif strcmpi(type, 'log')
+                for z=1:dlat(3)
+                    ll = ll + onMemoryLog(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z,:));
+                end
+            elseif strcmpi(type, 'null')
+                dlatz = [dlat(1:2) 1];
+                for z=1:dlat(3)
+                    muz = mu(bb.x,bb.y,z,:);
+                    muz = reshape(reshape(muz, [], nc) * R', [dlatz nc]);
+                    ll = ll + onMemoryLog(muz, f(:,:,z,:), c(:,:,z));
+                end
+            else
+                error('Unknown template type %s', type);
             end
-        elseif strcmpi(type, 'log')
-            parfor (z=1:dlat(3), par)
-                ll = ll + onMemoryLog(mu(:,:,z,:), f(:,:,z,:), c(:,:,z));
+        elseif isa(mu, 'file_array') && isa(f, 'file_array')
+            if strcmpi(type, 'proba')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, z}), slicevol(f, z, 3), slicevol(c, z, 3), b);
+                end
+            elseif strcmpi(type, 'log')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, z}), slicevol(f, z, 3), slicevol(c, z, 3));
+                end
+            elseif strcmpi(type, 'null')
+                dlatz = [dlat(1:2) 1];
+                parfor (z=1:dlat(3), par)
+                    muz = slicevol(mu, {bb.x, bb.y, z});
+                    muz = reshape(reshape(muz, [], nc) * R', [dlatz nc]);
+                    ll = ll + onMemoryLog(muz, slicevol(f, z, 3), slicevol(c, z, 3));
+                end
             end
-        elseif strcmpi(type, 'null')
-            dlatz = [dlat(1:2) 1];
-            parfor (z=1:dlat(3), par)
-                muz = single(numeric(mu(:,:,z,:)));
-                muz = reshape(reshape(muz, [], nc) * R', [dlatz nc]);
-                ll = ll + onMemoryLog(muz, f(:,:,z,:), c(:,:,z));
+        elseif isa(mu, 'file_array')
+            if strcmpi(type, 'proba')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, z}), f(:,:,z,:), c(:,:,z,:));
+                end
+            elseif strcmpi(type, 'log')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, z}), f(:,:,z,:), c(:,:,z,:));
+                end
+            elseif strcmpi(type, 'null')
+                dlatz = [dlat(1:2) 1];
+                parfor (z=1:dlat(3), par)
+                    muz = slicevol(mu, {bb.x, bb.y, z});
+                    muz = reshape(reshape(muz, [], nc) * R', [dlatz nc]);
+                    ll = ll + onMemoryLog(muz, f(:,:,z,:), c(:,:,z,:));
+                end
+            end
+        elseif isa(f, 'file_array')
+            mu = mu(bb.x, bb.y, bb.z,:);
+            if strcmpi(type, 'proba')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3));
+                end
+            elseif strcmpi(type, 'log')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3));
+                end
+            elseif strcmpi(type, 'null')
+                dlatz = [dlat(1:2) 1];
+                parfor (z=1:dlat(3), par)
+                    muz = mu(:,:,z,:);
+                    muz = reshape(reshape(muz, [], nc) * R', [dlatz nc]);
+                    ll = ll + onMemoryLog(muz, slicevol(f, z, 3), slicevol(c, z, 3));
+                end
             end
         else
-            error('Unknown template type %s', type);
+            mu = mu(bb.x, bb.y, bb.z,:);
+            if strcmpi(type, 'proba')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(mu(:,:,z,:), f(:,:,z,:), c(:,:,z,:));
+                end
+            elseif strcmpi(type, 'log')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(mu(:,:,z,:), f(:,:,z,:), c(:,:,z,:));
+                end
+            elseif strcmpi(type, 'null')
+                dlatz = [dlat(1:2) 1];
+                parfor (z=1:dlat(3), par)
+                    muz = mu(:,:,z,:);
+                    muz = reshape(reshape(muz, [], nc) * R', [dlatz nc]);
+                    ll = ll + onMemoryLog(muz, f(:,:,z,:), c(:,:,z,:));
+                end
+            end
         end
         
     end

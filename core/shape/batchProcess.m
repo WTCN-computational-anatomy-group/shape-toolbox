@@ -767,7 +767,7 @@ function dat = oneStepFitResidual(dat, model, opt)
     % --------
     % I should probably clear variables and remove files that are not
     % useful anymore. This will cause less disk and broadband usage.
-    toclean = {'gr', 'iphi', 'ipsi'};
+    toclean = {'gr', 'hr', 'iphi', 'ipsi'};
     for i=1:numel(toclean)
         field = toclean{i};
         dat.(field) = rmarray(dat.(field));

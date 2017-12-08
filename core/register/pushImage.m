@@ -1,5 +1,5 @@
-function [pf, c] = pushImage(ipsi, f, varargin)
-% FORMAT ([pf, (c)]) = pushImage(ipsi, f, (lat), ('loop', loop), ('par', par))
+function [pf, c, bb] = pushImage(ipsi, f, varargin)
+% FORMAT ([pf, (c), (bb)]) = pushImage(ipsi, f, (lat), ('loop', loop), ('par', par))
 %
 % ** Required **
 % ipsi - Inverse transform (warps mu to f).
@@ -12,6 +12,8 @@ function [pf, c] = pushImage(ipsi, f, varargin)
 % ** Output **
 % pf   - Pushed image in template space
 % c    - Pushed voxel count
+% bb   - Bounding box: correspondance between lat indices and the saved
+%        volume
 %
 % Push the image to template space
 
@@ -64,7 +66,23 @@ function [pf, c] = pushImage(ipsi, f, varargin)
     if strcmpi(loop, 'none')
         if debug, fprintf('   - No loop\n'); end;
         f = single(numeric(f));
-        [pf(:,:,:,:), c(:,:,:)] = spm_diffeo('pushc', f, ipsi, lat);
+        [pf1, c1] = spm_diffeo('pushc', f, ipsi, lat);
+        if nargout > 2
+            bb = boundingBox(c1);
+        else
+            bb.x = 1:size(c1, 1);
+            bb.y = 1:size(c1, 2);
+            bb.z = 1:size(c1, 3);
+        end
+        pf = prepareOnDisk(output{1}, [numel(bb.x) numel(bb.y) numel(bb.z) nc]);
+        if nargout > 1
+            c  = prepareOnDisk(output{2}, [numel(bb.x) numel(bb.y) numel(bb.z)]);
+        end
+        pf(:,:,:,:) = pf1(bb.x,bb.y,bb.z,:);
+        clear pf1
+        c(:,:,:)    = c1(bb.x,bb.y,bb.z);
+        clear c1
+        
         
     else % strcmpi(loop, 'component')
         if debug
@@ -74,13 +92,24 @@ function [pf, c] = pushImage(ipsi, f, varargin)
         [pf1, c1] = spm_diffeo('pushc', single(f(:,:,:,1)), ipsi, lat);
         pf1(~isfinite(pf1)) = nan;
         c1(~isfinite(c1))   = nan;
-        pf(:,:,:,1) = pf1;
-        c(:,:,:)    = c1;
+        if nargout > 2
+            bb = boundingBox(c1);
+        else
+            bb.x = 1:size(c1, 1);
+            bb.y = 1:size(c1, 2);
+            bb.z = 1:size(c1, 3);
+        end
+        pf = prepareOnDisk(output{1}, [numel(bb.x) numel(bb.y) numel(bb.z) nc]);
+        if nargout > 1
+            c  = prepareOnDisk(output{2}, [numel(bb.x) numel(bb.y) numel(bb.z)]);
+        end
+        pf(:,:,:,1) = pf1(bb.x,bb.y,bb.z);
+        c(:,:,:)    = c1(bb.x,bb.y,bb.z);
         clear c1
         parfor (k=2:nc, par)
             pf1 = spm_diffeo('pushc', single(f(:,:,:,k)), ipsi, lat);
             pf1(~isfinite(pf1)) = nan;
-            pf(:,:,:,k) = pf1;
+            pf(:,:,:,k) = pf1(bb.x,bb.y,bb.z);
         end
         clear pf1
     end

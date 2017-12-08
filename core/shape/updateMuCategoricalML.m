@@ -81,14 +81,36 @@ function mu = loopSlice(f, c, par, output)
     end
     
     % --- Compute mu
-    parfor (z=1:dim(3), par)
-        tmpf = zeros([lat(1:2) 1 nc], 'single');
-        for n=1:numel(f)
-            tmpf = tmpf + single(f{n}(:,:,z,:));
+    if ~par
+        for z=1:dim(3)
+            tmpf = zeros([lat(1:2) 1 nc], 'single');
+            for n=1:numel(f)
+                tmpf = tmpf + single(f{n}(:,:,z,:));
+            end
+            tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
+            tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
+            mu(:,:,z,:) = log(tmpf(:,:,:,:));
         end
-        tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
-        tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
-        mu(:,:,z,:) = log(tmpf(:,:,:,:));
+    elseif isa(f{1}, 'file_array')
+        parfor (z=1:dim(3), par)
+            tmpf = zeros([lat(1:2) 1 nc], 'single');
+            for n=1:numel(f)
+                tmpf = tmpf + single(slicevol(f{n}, z, 3));
+            end
+            tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
+            tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
+            mu(:,:,z,:) = log(tmpf(:,:,:,:));
+        end
+    else
+        parfor (z=1:dim(3), par)
+            tmpf = zeros([lat(1:2) 1 nc], 'single');
+            for n=1:numel(f)
+                tmpf = tmpf + single(f{n}(:,:,z,:));
+            end
+            tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
+            tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
+            mu(:,:,z,:) = log(tmpf(:,:,:,:));
+        end
     end
     
     if ~isempty(output)
