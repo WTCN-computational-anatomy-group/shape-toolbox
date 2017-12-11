@@ -115,8 +115,8 @@ function mu = loopComponent(f, c, par, output, fwhm)
                 tmpf(:,:,:,n) = single(f{n}(:,:,:,k));
                 tmpc(:,:,:,n) = single(numeric(c{n}));
             end
-            tpmf = smooth_gaussian(tmpf, fwhm);
-            tpmc = smooth_gaussian(tmpc, fwhm);
+            tmpf = smooth_gaussian(tmpf, fwhm);
+            tmpc = smooth_gaussian(tmpc, fwhm);
             tmpf = wmedian(tmpf, tmpc);
             mu(:,:,:,k) = tmpf;
         end
@@ -128,8 +128,8 @@ function mu = loopComponent(f, c, par, output, fwhm)
                 tmpf(:,:,:,n) = single(slicevol(f{n}, k, 4));
                 tmpc(:,:,:,n) = single(numeric(c{n}));
             end
-            tpmf = smooth_gaussian(tmpf, fwhm);
-            tpmc = smooth_gaussian(tmpc, fwhm);
+            tmpf = smooth_gaussian(tmpf, fwhm);
+            tmpc = smooth_gaussian(tmpc, fwhm);
             tmpf = wmedian(tmpf, tmpc);
             mu(:,:,:,k) = tmpf;
         end
@@ -141,8 +141,8 @@ function mu = loopComponent(f, c, par, output, fwhm)
                 tmpf(:,:,:,n) = single(f{n}(:,:,:,k));
                 tmpc(:,:,:,n) = single(numeric(c{n}));
             end
-            tpmf = smooth_gaussian(tmpf, fwhm);
-            tpmc = smooth_gaussian(tmpc, fwhm);
+            tmpf = smooth_gaussian(tmpf, fwhm);
+            tmpc = smooth_gaussian(tmpc, fwhm);
             tmpf = wmedian(tmpf, tmpc);
             mu(:,:,:,k) = tmpf;
         end

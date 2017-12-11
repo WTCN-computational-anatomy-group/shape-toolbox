@@ -112,7 +112,7 @@ function mu = loopComponent(f, c, s, par, output, fwhm)
         [tmp.s] = deal(s{:});
     end
     if ~par
-        for k=1:nc, par
+        for k=1:nc
             tmpf = zeros(lat, 'single');
             tmpc = zeros(lat, 'single');
             for n=1:numel(tmp)
