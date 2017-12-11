@@ -87,11 +87,11 @@ function ll = llCategoricalPushed(mu, f, c, varargin)
     if strcmpi(loop, 'none')
         if p.Results.debug, fprintf('   - No loop\n'); end;
         if strcmpi(type, 'proba')
-            ll = ll + onMemoryProba(mu, f, c);
+            ll = ll + onMemoryProba(mu(bb.x,bb.y,bb.z,:), f, c);
         elseif strcmpi(type, 'log')
-            ll = ll + onMemoryLog(mu, f, c);
+            ll = ll + onMemoryLog(mu(bb.x,bb.y,bb.z,:), f, c);
         elseif strcmpi(type, 'null')
-            mu = single(numeric(mu));
+            mu = single(mu(bb.x,bb.y,bb.z,:));
             mu = reshape(reshape(mu, [], nc) * R', [dlat nc]);
             ll = ll + onMemoryLog(mu, f, c);
         else
@@ -110,7 +110,7 @@ function ll = llCategoricalPushed(mu, f, c, varargin)
         if strcmpi(type, 'proba')
             if ~par
                 for k=1:nc
-                    ll = ll + onMemoryProba(mu(:,:,:,k), f(:,:,:,k), c);
+                    ll = ll + onMemoryProba(mu(bb.x,bb.y,bb.z,k), f(:,:,:,k), c);
                 end
             elseif isa(mu, 'file_array') && isa(f, 'file_array')
                 parfor (k=1:nc, par)
@@ -148,16 +148,16 @@ function ll = llCategoricalPushed(mu, f, c, varargin)
         if ~par
             if strcmpi(type, 'proba')
                 for z=1:dlat(3)
-                    ll = ll + onMemoryProba(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z,:));
+                    ll = ll + onMemoryProba(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z,:));
                 end
             elseif strcmpi(type, 'log')
                 for z=1:dlat(3)
-                    ll = ll + onMemoryLog(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z,:));
+                    ll = ll + onMemoryLog(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z,:));
                 end
             elseif strcmpi(type, 'null')
                 dlatz = [dlat(1:2) 1];
                 for z=1:dlat(3)
-                    muz = mu(bb.x,bb.y,z,:);
+                    muz = mu(bb.x,bb.y,bb.z(1)+z-1,:);
                     muz = reshape(reshape(muz, [], nc) * R', [dlatz nc]);
                     ll = ll + onMemoryLog(muz, f(:,:,z,:), c(:,:,z));
                 end
@@ -167,16 +167,16 @@ function ll = llCategoricalPushed(mu, f, c, varargin)
         elseif isa(mu, 'file_array') && isa(f, 'file_array')
             if strcmpi(type, 'proba')
                 parfor (z=1:dlat(3), par)
-                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, z}), slicevol(f, z, 3), slicevol(c, z, 3), b);
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), b);
                 end
             elseif strcmpi(type, 'log')
                 parfor (z=1:dlat(3), par)
-                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, z}), slicevol(f, z, 3), slicevol(c, z, 3));
+                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3));
                 end
             elseif strcmpi(type, 'null')
                 dlatz = [dlat(1:2) 1];
                 parfor (z=1:dlat(3), par)
-                    muz = slicevol(mu, {bb.x, bb.y, z});
+                    muz = slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1});
                     muz = reshape(reshape(muz, [], nc) * R', [dlatz nc]);
                     ll = ll + onMemoryLog(muz, slicevol(f, z, 3), slicevol(c, z, 3));
                 end
@@ -184,16 +184,16 @@ function ll = llCategoricalPushed(mu, f, c, varargin)
         elseif isa(mu, 'file_array')
             if strcmpi(type, 'proba')
                 parfor (z=1:dlat(3), par)
-                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, z}), f(:,:,z,:), c(:,:,z,:));
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z,:));
                 end
             elseif strcmpi(type, 'log')
                 parfor (z=1:dlat(3), par)
-                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, z}), f(:,:,z,:), c(:,:,z,:));
+                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z,:));
                 end
             elseif strcmpi(type, 'null')
                 dlatz = [dlat(1:2) 1];
                 parfor (z=1:dlat(3), par)
-                    muz = slicevol(mu, {bb.x, bb.y, z});
+                    muz = slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1});
                     muz = reshape(reshape(muz, [], nc) * R', [dlatz nc]);
                     ll = ll + onMemoryLog(muz, f(:,:,z,:), c(:,:,z,:));
                 end

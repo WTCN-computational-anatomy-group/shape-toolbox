@@ -343,19 +343,19 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
             if nargout > 1
                 if ~par
                     for z=1:dlat(3)
-                        [g1, h1] = onMemory(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z), s);
+                        [g1, h1] = onMemory(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z), s);
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
                     parfor (z=1:dlat(3), par)
-                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,z}), slicevol(f, z, 3), slicevol(c, z, 3), s);
+                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), s);
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array')
                     parfor (z=1:dlat(3), par)
-                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,z}), f(:,:,z,:), c(:,:,z), s);
+                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z), s);
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
@@ -377,17 +377,17 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
              else
                 if ~par
                     for z=1:dlat(3)
-                        g1 = onMemory(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z), s);
+                        g1 = onMemory(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z), s);
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
                     parfor (z=1:dlat(3), par)
-                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,z}), slicevol(f, z, 3), slicevol(c, z, 3), s);
+                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), s);
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array')
                     parfor (z=1:dlat(3), par)
-                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,z}), f(:,:,z,:), c(:,:,z), s);
+                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z), s);
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(f, 'file_array')
@@ -410,26 +410,26 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
                 h = numeric(h);
                 if ~par
                     for z=1:dlat(3)
-                        [g1, h1] = onMemory(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z), s, gmu(bb.x,bb.y,z,:,:));
+                        [g1, h1] = onMemory(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z), s, gmu(bb.x,bb.y,bb.z(1)+z-1,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array') && isa(f, 'file_array')
                     parfor (z=1:dlat(3), par)
-                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,z}), slicevol(f, z, 3), slicevol(c, z, 3), s, slicevol(gmu, {bb.x,bb.y,z}));
+                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), s, slicevol(gmu, {bb.x,bb.y,bb.z(1)+z-1}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array')
                     parfor (z=1:dlat(3), par)
-                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,z}), f(:,:,z,:), c(:,:,z), s, slicevol(gmu, {bb.x,bb.y,z}));
+                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z), s, slicevol(gmu, {bb.x,bb.y,bb.z(1)+z-1}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
                     gmu = gmu(bb.x,bb.y,bb.z,:,:);
                     parfor (z=1:dlat(3), par)
-                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,z}), slicevol(f, z, 3), slicevol(c, z, 3), s, gmu(:,:,z,:,:));
+                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), s, gmu(:,:,z,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
@@ -437,21 +437,21 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
                     mu  = mu(bb.x,bb.y,bb.z,:);
                     gmu = gmu(bb.x,bb.y,bb.z,:,:);
                     parfor (z=1:dlat(3), par)
-                        [g1, h1] = onMemory(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3), s, slicevol(gmu, {bb.x,bb.y,z}));
+                        [g1, h1] = onMemory(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3), s, slicevol(gmu, {bb.x,bb.y,bb.z(1)+z-1}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array')
                     gmu = gmu(bb.x,bb.y,bb.z,:,:);
                     parfor (z=1:dlat(3), par)
-                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,z}), f(:,:,z,:), c(:,:,z), s, gmu(:,:,z,:,:));
+                        [g1, h1] = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z), s, gmu(:,:,z,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(gmu, 'file_array')
                     mu  = mu(bb.x,bb.y,bb.z,:);
                     parfor (z=1:dlat(3), par)
-                        [g1, h1] = onMemory(mu(:,:,z,:), f(:,:,z,:), c(:,:,z), s, slicevol(gmu, {bb.x,bb.y,z}));
+                        [g1, h1] = onMemory(mu(:,:,z,:), f(:,:,z,:), c(:,:,z), s, slicevol(gmu, {bb.x,bb.y,bb.z(1)+z-1}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
@@ -476,41 +476,41 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
                 g = numeric(g);
                 if ~par
                     for z=1:dlat(3)
-                        g1 = onMemory(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z), s, gmu(bb.x,bb.y,z,:,:));
+                        g1 = onMemory(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z), s, gmu(bb.x,bb.y,bb.z(1)+z-1,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array') && isa(f, 'file_array')
                     parfor (z=1:dlat(3), par)
-                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,z}), slicevol(f, z, 3), slicevol(c, z, 3), s, slicevol(gmu, {bb.x,bb.y,z}));
+                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), s, slicevol(gmu, {bb.x,bb.y,bb.z(1)+z-1}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array')
                     parfor (z=1:dlat(3), par)
-                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,z}), f(:,:,z,:), c(:,:,z), s, slicevol(gmu, {bb.x,bb.y,z}));
+                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z), s, slicevol(gmu, {bb.x,bb.y,bb.z(1)+z-1}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
                     gmu = gmu(bb.x,bb.y,bb.z,:,:);
                     parfor (z=1:dlat(3), par)
-                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,z}), slicevol(f, z, 3), slicevol(c, z, 3), s, gmu(:,:,z,:,:));
+                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), s, gmu(:,:,z,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(gmu, 'file_array') && isa(f, 'file_array')
                     mu  = mu(bb.x,bb.y,bb.z,:);
                     parfor (z=1:dlat(3), par)
-                        g1 = onMemory(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3), s, slicevol(gmu, {bb.x,bb.y,z}));
+                        g1 = onMemory(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3), s, slicevol(gmu, {bb.x,bb.y,bb.z(1)+z-1}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array')
                     gmu = gmu(bb.x,bb.y,bb.z,:,:);
                     parfor (z=1:dlat(3), par)
-                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,z}), f(:,:,z,:), c(:,:,z), s, gmu(:,:,z,:,:));
+                        g1 = onMemory(slicevol(mu, {bb.x,bb.y,bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z), s, gmu(:,:,z,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(gmu, 'file_array')
                     mu  = mu(bb.x,bb.y,bb.z,:);
                     parfor (z=1:dlat(3), par)
-                        g1 = onMemory(mu(:,:,z,:), f(:,:,z,:), c(:,:,z), s, slicevol(gmu, {bb.x,bb.y,z}));
+                        g1 = onMemory(mu(:,:,z,:), f(:,:,z,:), c(:,:,z), s, slicevol(gmu, {bb.x,bb.y,bb.z(1)+z-1}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(f, 'file_array')
@@ -541,11 +541,22 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
     end
     
     % --- Write on disk
-    if ~isempty(output{1})
-        g = saveOnDisk(output{1}, g, 'name', 'g');
-    end
-    if nargout > 1 && ~isempty(output{2})
-        h = saveOnDisk(output{2}, h, 'name', 'h');
+    if hessian
+        if ~isempty(output{1})
+            h = saveOnDisk(output{1}, h, 'name', 'h');
+        end
+        [g, h] = deal(h, g);
+    elseif nargin > 1
+        if ~isempty(output{1})
+            g = saveOnDisk(output{1}, g, 'name', 'g');
+        end
+        if ~isempty(output{2})
+            h = saveOnDisk(output{2}, h, 'name', 'h');
+        end
+    else
+        if ~isempty(output{1})
+            g = saveOnDisk(output{1}, g, 'name', 'g');
+        end
     end
     
 end

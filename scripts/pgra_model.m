@@ -161,7 +161,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
     % The next component is automatically activated when the lower bound
     % converges
     lbthreshold = 1e-4;
-    activated = struct('affine', true, 'pg', false, 'residual', false);
+    activated = struct('affine', true, 'pg', true, 'residual', false);
     
     % ---------------------------------------------------------------------
     %    EM iterations
@@ -360,7 +360,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
         if opt.tpm
             model.a = updateMuML(opt.model, dat, 'fwhm', opt.fwhm, ...
                                  'par', opt.par, 'debug', opt.debug, ...
-                                 'output', model.a);
+                                 'output', model.a, 'lat', opt.lat);
             model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
                 'debug', opt.debug, 'output', model.gmu);
             model.mu = reconstructProbaTemplate(model.a, ...
@@ -369,7 +369,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
         else
             model.mu = updateMuML(opt.model, dat, 'fwhm', opt.fwhm, ...
                                   'par', opt.par, 'debug', opt.debug, ...
-                                  'output', model.mu);
+                                  'output', model.mu, 'lat', opt.lat);
             model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
                 'debug', opt.debug, 'output', model.gmu);
         end
@@ -630,7 +630,7 @@ function [dat, model] = initAll(dat, model, opt)
     if opt.tpm
         model.a = updateMuML(opt.model, dat, 'fwhm', opt.fwhm, ...
                              'par', opt.par, 'debug', opt.debug, ...
-                             'output', model.a);
+                             'output', model.a, 'lat', opt.lat);
         model.gmu = templateGrad(model.a, opt.itrp, opt.bnd, ...
             'debug', opt.debug, 'output', model.gmu);
         model.mu = reconstructProbaTemplate(model.a, ...
@@ -639,7 +639,7 @@ function [dat, model] = initAll(dat, model, opt)
     else
         model.mu = updateMuML(opt.model, dat, 'fwhm', opt.fwhm, ...
                               'par', opt.par, 'debug', opt.debug, ...
-                              'output', model.mu);
+                              'output', model.mu, 'lat', opt.lat);
         model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
             'debug', opt.debug, 'output', model.gmu);
     end
@@ -663,7 +663,8 @@ function [dat, model] = initAll(dat, model, opt)
     
     % Compute initial Lower Bound
     % ---------------------------
-    dat = batchProcess('Update', dat, model, opt, {'wmu', 'llmw'});
+    dat = batchProcess('Update', dat, model, opt, {'llm'});
+%     dat = batchProcess('Update', dat, model, opt, {'wmu', 'llmw'});
     model.llm = 0;
     for n=1:opt.N
         model.llm = model.llm + dat(n).llm;

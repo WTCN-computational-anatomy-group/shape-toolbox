@@ -1,41 +1,85 @@
 function mu = updateMuML(model, dat, varargin)
-% FORMAT mu = updateMuCategoricalML(model, dat, ('fwhm', fwhm),
-%                                   ('loop', loop), ('par', par))
-% ** Required **
-% model - Structure with field 'name' describing the generative model.
-% pfi   - Image pushed in template space
-% ci    - Pushed voxel count
-% ** Keyword arguments **
-% fwhm  - Smoothing kernel used as pseudo prior [do not use]
-% loop  - How to split processing: 'slice', 'none' or '' [auto]
-% par   - Distribute compute [auto]
-% ** Output **
-% mu    - Updated template
+%__________________________________________________________________________
 %
 % Closed form M-step update of the template.
 % (Maximum likelihood update: no prior on Mu)
+%
+% -------------------------------------------------------------------------
+%
+% FORMAT mu = updateMuML(model, dat, ...)
+%
+% REQUIRED
+% --------
+% model - Data model. Field 'name' must be one of
+%         'normal', 'laplace', 'bionomial', 'categorical'
+% dat   - Data structure
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% lat  - Template lattice [temporarily REQUIRED]
+% fwhm  - Smoothing kernel used as pseudo prior [do not use]
+% loop  - How to split processing: 'slice', 'none' or '' [auto]
+% par   - Distribute compute [auto]
+%
+% OUTPUT
+% ------
+% mu    - Updated template
+%
+%__________________________________________________________________________
 
     switch lower(model.name)
         case {'normal', 'gaussian', 'l2'}
-            if isfield(dat, 'sigma2')
+            if isfield(dat, 'sigma2') && isfield(dat, 'bb')
                 mu = updateMuNormalML('f', dat.pf, 'c', dat.c, ...
-                                      's', dat.sigma2, varargin{:});
+                                      's', dat.sigma2, 'bb', dat.bb, ...  
+                                      varargin{:});
+            elseif isfield(dat, 'sigma2')
+                mu = updateMuNormalML('f', dat.pf, 'c', dat.c, ...
+                                      's', dat.sigma2, ... 
+                                      varargin{:});
+            elseif isfield(dat, 'bb')
+                mu = updateMuNormalML('f', dat.pf, 'c', dat.c, ...
+                                      'bb', dat.bb, ... 
+                                      varargin{:});
             else
-                mu = updateMuNormalML('f', dat.pf, 'c', dat.c, ...
+                mu = updateMuNormalML('f', dat.pf, 'c', dat.c, ... 
                                       varargin{:});
             end
         case {'laplace', 'l1'}
-            if isfield(dat, 'b')
+            if isfield(dat, 'b') && isfield(dat, 'bb')
                 mu = updateMuLaplaceML('f', dat.pf, 'c', dat.c, ...
-                                       'b', dat.b, varargin{:});
+                                       'b', dat.b, 'bb', dat.bb, ... 
+                                       varargin{:});
+            elseif isfield(dat, 'b')
+                mu = updateMuLaplaceML('f', dat.pf, 'c', dat.c, ...
+                                       'b', dat.b, ... 
+                                       varargin{:});
+            elseif isfield(dat, 'bb')
+                mu = updateMuLaplaceML('f', dat.pf, 'c', dat.c, ...
+                                       'bb', dat.bb, ... 
+                                       varargin{:});
             else
-                mu = updateMuLaplaceML('f', dat.pf, 'c', dat.c, ... 
+                mu = updateMuLaplaceML('f', dat.pf, 'c', dat.c, ...  
                                        varargin{:});
             end
         case {'bernoulli', 'binomial'}
-            mu = updateMuBernoulliML(dat.pf, dat.c, varargin{:});
+            if isfield(dat, 'bb')
+                mu = updateMuBernoulliML('f', dat.pf, 'c', dat.c, ...
+                                         'bb', dat.bb, ...
+                                         varargin{:});
+            else
+                mu = updateMuBernoulliML('f', dat.pf, 'c', dat.c, ... 
+                                         varargin{:});
+            end
         case {'categorical', 'multinomial'}
-            mu = updateMuCategoricalML(dat.pf, dat.c, varargin{:});
+            if isfield(dat, 'bb')
+                mu = updateMuCategoricalML('f', dat.pf, 'c', dat.c, ...
+                                           'bb', dat.bb, ...
+                                            varargin{:});
+            else
+                mu = updateMuCategoricalML('f', dat.pf, 'c', dat.c, ... 
+                                           varargin{:});
+            end
     end
 
 end
