@@ -1,4 +1,24 @@
 function [lat, Mmu, vs] = autoTemplateDim(dat, vs)
+%__________________________________________________________________________
+% Compute template dimensions from input dmiensions and voxel-to-world
+% mappings.
+%--------------------------------------------------------------------------
+% FORMAT [lat, Mmu, vs] = autoTemplateDim(dat, (vs))
+%
+% REQUIRED
+% --------
+% dat - Structure array with fields f (image) and Mf (voxel-to-world)
+%
+% OPTIONAL
+% --------
+% vs  - Template voxel size [mean voxel size of inputs]
+%
+% OUTPUT
+% ------
+% lat - Template dimension that englobes all input images
+% Mmu - Template voxel-to-world
+% vs  - Template voxel size
+%__________________________________________________________________________
 
     if nargin < 2
         vs = [];

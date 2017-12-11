@@ -10,14 +10,14 @@ function bb = boundingBox(f)
 
     f = f ~= 0;
     f1 = any(any(f, 3), 2);
-    xmin = find(x, 1, 'first');
-    xmax = find(x, 1, 'last');
+    xmin = find(f1, 1, 'first');
+    xmax = find(f1, 1, 'last');
     f1 = any(any(f, 3), 1);
-    ymin = find(x, 1, 'first');
-    ymax = find(x, 1, 'last');
+    ymin = find(f1, 1, 'first');
+    ymax = find(f1, 1, 'last');
     f1 = any(any(f, 2), 1);
-    zmin = find(x, 1, 'first');
-    zmax = find(x, 1, 'last');
+    zmin = find(f1, 1, 'first');
+    zmax = find(f1, 1, 'last');
     clear f1 f
     bb.x = xmin:xmax;
     bb.y = ymin:ymax;

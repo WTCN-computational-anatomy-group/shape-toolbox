@@ -1,7 +1,15 @@
-function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm0, mu, f, varargin)
-% FORMAT [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm0, mu, f, varargin)
+function [ok, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(model, dr, r0, llm0, mu, f, varargin)
+%__________________________________________________________________________
+% 
+% Performs a line search along a direction to find better residual initial
+% velocity. The line search direction is usually found by Gauss-Newton.
 %
-% ** Required **
+%--------------------------------------------------------------------------
+%
+% FORMAT [ok, ...] = lsVelocity(model, dr, r0, llm0, mu, f, ...)
+%
+% REQUIRED
+% --------
 % model - Structure with fields:
 %           * 'name'    : 'normal', 'laplace', 'bernoulli' or 'categorical'
 %           * ('sigma2'): Normal variance  [1]
@@ -12,7 +20,9 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
 % W    - Principal subspace
 % mu   - Template (in native space)
 % f    - Image (in native space)
-% ** Keyword arguments **
+%
+% KEYWORD ARGUMENTS
+% -----------------
 % v0   - Previous initial velocity [r0]
 % llz0 - Previous log-likelihood (prior term) [compute]
 % sigma- Variance captured by the residual field [1]
@@ -24,7 +34,9 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
 % prm  - Differential operator parameters [0.0001 0.001 0.2 0.05 0.2]
 % loop - How to split processing [auto]
 % par  - If true, parallelise processing [false]
-% ** Output **
+%
+% OUTPUT
+% ------
 % ok   - True if a better parameter value was found
 % v    - New initial velocity
 % llm  - New log-likelihood (matching term)
@@ -34,11 +46,11 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
 % c    - New pushed voxel count
 % ipsi - New complete affine+diffeomorphic mapping
 %
-% Performs a line search along a direction to find better residual initial
-% velocity. The line search direction is usually found by Gauss-Newton.
+%--------------------------------------------------------------------------
 % 
 % To perform the usual diffeomorphic registration (without principal 
 % geodesic), set sigma == 1 and v0 = r0. Then, we always have r = v.
+%__________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
@@ -121,8 +133,8 @@ function [ok, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(model, dr, r0, llm
         v = single(v0 + sigma * dr / armijo);
         iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
-        [pf, c] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
-        llm = llMatching(model, mu, pf, c, 'par', par, 'loop', loop, 'debug', debug);
+        [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
+        llm = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
         llr = llPriorVelocity(r,  'fast', 'vs', vsmu, 'prm', prm, 'debug', debug);
         ll  = llm + llr;
         

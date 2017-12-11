@@ -1,7 +1,15 @@
 function varargout = ghMatchingVel(model, mu, f, c, varargin)
+%__________________________________________________________________________
+%
+% Compute gradient/hessian of the **negative** log-likelihood of the 
+% matching term with respect to changes in the complete velocity.
+%
+% -------------------------------------------------------------------------
+%
 % FORMAT [g,h] = ghMatchingVel(model, mu, f, c, (gmu), ...)
 %
-% ** Required **
+% REQUIRED
+% --------
 % model - Structure with fields:
 %           * 'name'    : 'normal', 'laplace', 'bernoulli' or 'categorical'
 %           * ('sigma2'): Normal variance  [1]
@@ -9,16 +17,22 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
 % mu    - Template image ([nx ny nz nc])
 % f     - Observed image pushed into template space ([nx ny nz nc])
 % c     - Pushed voxel count ([nx ny nz nc])
-% ** Optional **
+%
+% OPTIONAL
+% --------
 % gmu   - Template spatial gradients.
 %         If not provided, do not use: it's deal with outside (useful
 %         when computing grad/hess w.r.t. Z)
-% ** Keyword arguments **
+%
+% KEYWORD ARGUMENTS
+% -----------------
 % bb    - Bounding box (if different between template and pushed image)
 % loop  - Specify how to split data processing
 %         ('slice', 'component' or 'none' [default])
 % par   - If true, parallelise processing. [default: false]
-% ** Output **
+%
+% OUTPUT
+% ------
 % g     - First derivatives w.r.t. full velocity ([nx ny nz nc])
 % h     - Second derivatives w.r.t. full velocity
 %         (diagonal approximation: [nx ny nz nc], except for the multinomial 
@@ -26,19 +40,20 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
 %         [nx ny nz nc nc])
 % htype - Type of hessian approximation: 'diagonal' or 'symtensor'
 %
+%--------------------------------------------------------------------------
+%
 % Models:
 % normal      - Gaussian noise model     (F ~ Mu(IPhi) + N(0,s))
 % laplace     - Laplace noise model      (F ~ Mu(IPhi) + L(0,b))
 % bernoulli   - True/False realisation   (F ~ Ber(Mu(IPhi)))
 % categorical - Multiclass realisation   (F ~ Cat(Mu(IPhi)))
 %
-% Compute gradient/hessian of the **negative** log-likelihood of the 
-% matching term with respect to changes in the complete velocity.
 % Gradients actually take the form of vector fields ([nx ny nz ngrad nc]) 
 % and  Hessians take the form of tensor fields ([nx ny nz ngrad nc nc]), 
 % but the  "vector" dimension (which consists of a pointwise multiplication 
 % with  the template spatial gradients) can be performed outside for  
 % computational reasons.
+%__________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
@@ -49,6 +64,7 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
     p.addRequired('c',   @checkarray);
     p.addOptional('gmu', []);
     p.addParameter('bb',     struct, @isstruct);
+    p.addParameter('hessian', false, @islogical);
     p.addParameter('loop',   '',     @ischar);
     p.addParameter('par',    false,  @isscalar);
     p.addParameter('output', []);
@@ -69,6 +85,7 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
             [varargout{1:nargout}] = ...
                 ghNormal(mu, f, c, model.sigma2, gmu, ...
                         'bb',     p.Results.bb, ...
+                        'hessian', p.Results.hessian, ...
                         'loop',   p.Results.loop, ...
                         'par',    p.Results.par, ...
                         'output', p.Results.output, ...
@@ -81,6 +98,7 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
             [varargout{1:nargout}] = ...
                 ghLaplace(mu, f, c, model.b, gmu, ...
                         'bb',     p.Results.bb, ...
+                        'hessian', p.Results.hessian, ...
                         'loop',   p.Results.loop, ...
                         'par',    p.Results.par, ...
                         'output', p.Results.output, ...
@@ -90,6 +108,7 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
             [varargout{1:nargout}] = ...
                 ghBernoulli(mu, f, c, gmu, ...
                         'bb',     p.Results.bb, ...
+                        'hessian', p.Results.hessian, ...
                         'loop',   p.Results.loop, ...
                         'par',    p.Results.par, ...
                         'output', p.Results.output, ...
@@ -99,6 +118,7 @@ function varargout = ghMatchingVel(model, mu, f, c, varargin)
             [varargout{1:nargout}] = ...
                 ghCategorical(mu, f, c, gmu, ...
                         'bb',     p.Results.bb, ...
+                        'hessian', p.Results.hessian, ...
                         'loop',   p.Results.loop, ...
                         'par',    p.Results.par, ...
                         'output', p.Results.output, ...

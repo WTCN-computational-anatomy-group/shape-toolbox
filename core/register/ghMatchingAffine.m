@@ -1,8 +1,16 @@
 function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
-% FORMAT [g, (h)] = ghMatchingAffine(model, mu, f, c, gmu, A, basis, 
+%__________________________________________________________________________
+%
+% Compute gradient/hessian of the **negative** log-likelihood with respect 
+% to affine parameters.
+%
+% -------------------------------------------------------------------------
+%
+% FORMAT [(g), (h)] = ghMatchingAffine(model, mu, f, c, gmu, A, basis, 
 %                                    (phi), (jac), ...)
 % 
-% ** Required **
+% REQUIRED
+% --------
 % model - Structure with fields:
 %           * 'name'    : 'normal', 'laplace', 'bernoulli' or 'categorical'
 %           * ('sigma2'): Normal variance  [1]
@@ -13,19 +21,26 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
 % gmu   - Template spatial gradients.
 % A     - Affine transform
 % B     - Basis system of the affine Lie algebra
-% ** Optional **
+%
+% OPTIONAL
+% --------
 % phi   - Direct (image-to-template) diffeomorphism [default: none]
 % jac   - Jacobian of phi [default: recompute]
-% ** Keyword arguments **
-% Mmu   - Template voxel-to-world affine transform [default: eye(4)]
-% approx- Approximate hessian [default: true]
-% loop  - How to split: 'none', 'component', 'slice' [default: auto]
-% par   - Parallelise: false/true/number of workers [default: false]
-% ** Output **
+% 
+% KEYWORD ARGUMENTS
+% -----------------
+% bb      - Bounding box (if different between template and pushed image)
+% hessian - Only compute hessian (not gradient)
+% Mmu     - Template voxel-to-world affine transform [default: eye(4)]
+% approx  - Approximate hessian [default: true]
+% loop    - How to split: 'none', 'component', 'slice' [default: auto]
+% par     - Parallelise: false/true/number of workers [default: false]
+%
+% OUTPUT
+% ------
 % g     - First derivatives w.r.t. affine parameters ([nq])
 % h     - Second derivatives w.r.t. affine parameters ([nq nq])
-%
-% Compute gradient/hessian with respect to affine parameters.
+%__________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
@@ -41,6 +56,8 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
     p.addOptional('jac',       []);
     p.addParameter('Mmu',      eye(4),  @(X) issame(size(X), [4 4]));
     p.addParameter('approx',   true,    @islogical);
+    p.addParameter('bb',       struct,  @isstruct);
+    p.addParameter('hessian',  false,   @islogical);
     p.addParameter('loop',     '',      @ischar);
     p.addParameter('par',      false,   @isscalar);
     p.addParameter('output',   []);
@@ -49,30 +66,62 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
     phi = p.Results.phi;
     jac = p.Results.jac;
     Mmu = p.Results.Mmu;
+    bb  = p.Results.bb;
+    hessian  = p.Results.hessian;
     
     if p.Results.debug, fprintf('* ghMatchingAffine\n'); end;
     
+    % --- Default bounding box
+    dim = [size(mu) 1];
+    if ~isfield(bb, 'x')
+        bb.x = 1:dim(1);
+    end
+    if ~isfield(bb, 'y')
+        bb.y = 1:dim(2);
+    end
+    if ~isfield(bb, 'z')
+        bb.z = 1:dim(3);
+    end
+
     % --- Gradient/Hessian w.r.t. initial velocity
-    [gv, hv] = ghMatchingVel(model, mu, f, c, gmu, ...
-        'loop',     p.Results.loop, ...
-        'par',      p.Results.par, ...
-        'debug',    p.Results.debug);
+    if hessian
+        hv = ghMatchingVel(model, mu, f, c, gmu, ...
+            'bb',       p.Results.bb, ...
+            'hessian',  true, ...
+            'loop',     p.Results.loop, ...
+            'par',      p.Results.par, ...
+            'debug',    p.Results.debug);
+    elseif nargin > 1
+        [gv, hv] = ghMatchingVel(model, mu, f, c, gmu, ...
+            'bb',       p.Results.bb, ...
+            'loop',     p.Results.loop, ...
+            'par',      p.Results.par, ...
+            'debug',    p.Results.debug);
+    else
+        gv = ghMatchingVel(model, mu, f, c, gmu, ...
+            'bb',       p.Results.bb, ...
+            'loop',     p.Results.loop, ...
+            'par',      p.Results.par, ...
+            'debug',    p.Results.debug);
+    end
     
     % --- Check diffeomorphic part
     jac = single(numeric(jac));
     phi = single(numeric(phi));
     if isempty(phi)
-        lat = [size(mu) 1];
-        lat = lat(1:3);
-        id = warps('identity', lat);
+        id = warps('identity', dim(1:3));
     elseif isempty(jac)
         jac = spm_diffeo('def2jac', phi);
     end
+    jac = jac(bb.x,bb.y,bb.z,:,:);
     
     % --- Allocate gradient and hessian
-    do_hessian = nargout > 1;
+    do_gradient = ~hessian;
+    do_hessian  = nargout > 1 || hessian;
     nq = size(B, 3);
-    g = zeros([nq 1]);
+    if do_gradient
+        g = zeros([nq 1]);
+    end
     if do_hessian
         h = zeros(nq);
     end
@@ -82,19 +131,25 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
         dXi = Mmu \ A \ B(:,:,i) * A * Mmu;
         if ~isempty(phi)
             dXi = warps('transform', dXi, phi);
+            dXi = dXi(bb.x,bb.y,bb.z,:);
             dXi = pointwise3(jac, dXi, 'i');
         else
             dXi = warps('transform', dXi, id);
+            dXi = dXi(bb.x,bb.y,bb.z,:);
         end
-        g(i) = sumall(pointwise3(gv, dXi));
+        if do_gradient
+            g(i) = sumall(pointwise3(gv, dXi));
+        end
         if do_hessian
             for j=1:i
                 dXj = Mmu \ A \ B(:,:,j) * A * Mmu;
                 if ~isempty(phi)
                     dXj = warps('compose', dXj, phi);
+                    dXj = dXj(bb.x,bb.y,bb.z,:);
                     dXj = pointwise3(jac, dXj, 'i');
                 else
                     dXj = warps('compose', dXj, id);
+                    dXj = dXj(bb.x,bb.y,bb.z,:);
                 end
                 h(i,j) = h(i,j) + sumall(pointwise3(dXi, pointwise3(hv, dXj)));
             end
@@ -117,15 +172,22 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
                     dXij =  Mmu \ A \ Bij * A * Mmu;
                     if ~isempty(phi)
                         dXij = warps('compose', dXij, phi);
+                        dXij = dXij(bb.x,bb.y,bb.z,:);
                         dXij = pointwise3(jac, dXij, 'i');
                     else
                         dXij = warps('compose', dXij, id);
+                        dXij = dXij(bb.x,bb.y,bb.z,:);
                     end
                     h(i,j) = h(i,j) + sumall(pointwise3(gv, dXij));
                 end
             end
         end
         h = (h + h')/2;   % Insure symmetric Hessian
+    end
+
+    if hessian
+        g = [];
+        [g, h] = deal(h, g);
     end
     
 end

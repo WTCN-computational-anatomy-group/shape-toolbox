@@ -1,4 +1,4 @@
-function ll = llBernoulliPushed(mu, f, c, varargin)
+ function ll = llBernoulliPushed(mu, f, c, varargin)
 %__________________________________________________________________________
 %
 % Log-likelihood of the Bernoulli matching term
@@ -75,9 +75,9 @@ function ll = llBernoulliPushed(mu, f, c, varargin)
     if strcmpi(loop, 'none')
         if p.Results.debug, fprintf('   - No loop\n'); end;
         if strcmpi(type, 'proba')
-            ll = ll + onMemoryProba(mu, f, c);
+            ll = ll + onMemoryProba(mu(bb.x,bb.y,bb.z,:), f, c);
         elseif strcmpi(type, 'log')
-            ll = ll + onMemoryLog(mu, f, c);
+            ll = ll + onMemoryLog(mu(bb.x,bb.y,bb.z,:), f, c);
         end
         
     % --- Loop on slices
@@ -92,31 +92,31 @@ function ll = llBernoulliPushed(mu, f, c, varargin)
         if ~par
             if strcmpi(type, 'proba')
                 for z=1:dlat(3)
-                    ll = ll + onMemoryProba(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z,:));
+                    ll = ll + onMemoryProba(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z,:));
                 end
             elseif strcmpi(type, 'log')
                 for z=1:dlat(3)
-                    ll = ll + onMemoryLog(mu(bb.x,bb.y,z,:), f(:,:,z,:), c(:,:,z,:));
+                    ll = ll + onMemoryLog(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z,:));
                 end
             end
         elseif isa(mu, 'file_array') && isa(f, 'file_array')
             if strcmpi(type, 'proba')
                 parfor (z=1:dlat(3), par)
-                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, z}), slicevol(f, z, 3), slicevol(c, z, 3), b);
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), b);
                 end
             elseif strcmpi(type, 'log')
                 parfor (z=1:dlat(3), par)
-                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, z}), slicevol(f, z, 3), slicevol(c, z, 3), b);
+                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), b);
                 end
             end
         elseif isa(mu, 'file_array')
             if strcmpi(type, 'proba')
                 parfor (z=1:dlat(3), par)
-                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, z}), f(:,:,z,:), c(:,:,z,:));
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z,:));
                 end
             elseif strcmpi(type, 'log')
                 parfor (z=1:dlat(3), par)
-                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, z}), f(:,:,z,:), c(:,:,z,:));
+                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z,:));
                 end
             end
         elseif isa(f, 'file_array')

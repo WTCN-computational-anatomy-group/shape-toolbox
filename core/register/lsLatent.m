@@ -1,5 +1,5 @@
-function [ok, z, llm, llz, v, iphi, pf, c, ipsi] = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
-% FORMAT [ok, z, llm, llz, v, iphi, pf, c, ipsi] = lsLatent(model, dz, z0, v0, llm0, W, mu, f, ...)
+function [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
+% FORMAT [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v0, llm0, W, mu, f, ...)
 %
 % ** Required **
 % model - Structure with fields:
@@ -32,6 +32,7 @@ function [ok, z, llm, llz, v, iphi, pf, c, ipsi] = lsLatent(model, dz, z0, v0, l
 % iphi - New diffeomorphic transform
 % pf   - New pushed image
 % c    - New pushed voxel count
+% bb   - New Bounding box
 % ipsi - New complete affine+diffeomorphic mapping
 %
 % Performs a line search along a direction to find better latent
@@ -118,8 +119,8 @@ function [ok, z, llm, llz, v, iphi, pf, c, ipsi] = lsLatent(model, dz, z0, v0, l
         v = single(numeric(v0) + dv / armijo);
         iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
-        [pf, c] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
-        llm = llMatching(model, mu, pf, c, 'par', par, 'loop', loop, 'debug', debug);
+        [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
+        llm = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
         llz = llPriorLatent(z, regz, 'fast', 'debug', debug);
         ll  = llm + llz;
         

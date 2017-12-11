@@ -359,7 +359,7 @@ function dat = oneStepFitAffine(dat, model, opt)
         [dat.gq, dat.hq] = ghMatchingAffine(noisemodel, ...
             model.mu, dat.pf, dat.c, ...
             model.gmu, dat.A, opt.affine_basis, ...
-            phi, jac, ...
+            phi, jac, 'bb', dat.bb, ...
             'Mmu', model.Mmu, 'loop', opt.loop, 'par', opt.par, ...
             'debug', opt.debug, 'approx', opt.happrox);
         
@@ -381,7 +381,8 @@ function dat = oneStepFitAffine(dat, model, opt)
 
         % Line search
         % -----------
-        [okq, q, llm, ~, A, pf, c, ipsi] = lsAffine(...
+%         dat = oneUpdate(dat, model, opt, struct('llmp', true));
+        [okq, q, llm, ~, A, pf, c, bb, ipsi] = lsAffine(...
             noisemodel, dq, dat.q, dat.llm, model.mu, dat.f, ...
             'B', opt.affine_basis, 'regq', model.regq, 'rind', rind, ...
             'iphi', iphi, ...
@@ -396,12 +397,19 @@ function dat = oneStepFitAffine(dat, model, opt)
             dat.qq      = q * q';
             dat.llm     = llm;
             dat.A       = A;
+            dat.pf      = prepareOnDisk(dat.pf, size(pf));
             dat.pf(:)   = pf(:);
+            dat.c       = prepareOnDisk(dat.c, size(c));
             dat.c(:)    = c(:);
+            dat.bb      = bb;
             dat.ipsi(:) = ipsi(:);
         else
             break
         end
+
+%         dat = oneUpdate(dat, model, opt, ...
+%                         struct('wmu', true, 'llmw', true), ...
+%                         struct('wmu', true));
         
     end
         
@@ -409,18 +417,18 @@ function dat = oneStepFitAffine(dat, model, opt)
     % --------------------------
 
     if okq
-        [~, dat.hq] = ghMatchingAffine(noisemodel, ...
+        dat.hq = ghMatchingAffine(noisemodel, ...
             model.mu, dat.pf, dat.c, ...
             model.gmu, dat.A, opt.affine_basis, ...
             dat.phi, dat.jac, ...
+            'bb', dat.bb', 'hessian', true, ...
             'Mmu', model.Mmu, 'loop', opt.loop, 'par', opt.par, ...
             'debug', opt.debug, 'approx', opt.happrox);
 
         if checkarray(model.regq)
-            [gq, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
-            dat.gq(rind)      = dat.gq(rind)      + gq;
+            [~, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
             dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
-            clear gq hq
+            clear hq
         end
 
         dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness
@@ -519,6 +527,7 @@ function dat = oneStepFitLatent(dat, model, opt)
 
         [dat.gz, dat.hz] = ghMatchingLatent(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
+            'bb', dat.bb, ...
             'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
             'output', {dat.gz, dat.hz});
 
@@ -537,7 +546,8 @@ function dat = oneStepFitLatent(dat, model, opt)
         % -----------
         if isfield(dat, 'A'),         A = dat.A;
         else                          A = eye(4); end
-        [okz, z, llm, ~, v, iphi, pf, c, ipsi] = lsLatent(...
+%         dat = oneUpdate(dat, model, opt, struct('llmp', true));
+        [okz, z, llm, ~, v, iphi, pf, c, bb, ipsi] = lsLatent(...
             noisemodel, dz, dat.z, dat.v, dat.llm, ...
             model.w, model.mu, dat.f, ...
             'regz', model.regz, ...
@@ -553,21 +563,28 @@ function dat = oneStepFitLatent(dat, model, opt)
             dat.llm     = llm;
             dat.v(:)    = v(:);
             dat.iphi(:) = iphi(:);
+            dat.pf      = prepareOnDisk(dat.pf, size(pf));
             dat.pf(:)   = pf(:);
+            dat.c       = prepareOnDisk(dat.c, size(c));
             dat.c(:)    = c(:);
+            dat.bb      = bb;
             dat.ipsi(:) = ipsi(:);
         else
             break
         end
         
+%         dat = oneUpdate(dat, model, opt, ...
+%                         struct('wmu', true, 'llmw', true), ...
+%                         struct('wmu', true));
     end
     
     % Compute Laplace covariance
     % --------------------------
 
     if okz
-        [~, dat.hz] = ghMatchingLatent(noisemodel, ...
-            model.mu, dat.pf, dat.c, model.gmu, model.w);
+        dat.hz = ghMatchingLatent(noisemodel, ...
+            model.mu, dat.pf, dat.c, model.gmu, model.w,...
+            'bb', dat.bb, 'hessian', true);
 
         [~, hz] = ghPriorLatent(dat.z, model.regz);
         dat.hz = dat.hz + hz;
@@ -670,13 +687,21 @@ function dat = oneStepFitResidual(dat, model, opt)
 
         % Compute gradient/hessian
         % ------------------------
+        lat = [size(model.mu) 1];
+        dat.gr = prepareOnDisk(dat.gr, [lat(1:3) 3]); 
+        dat.gr(:) = 0;
+        dat.hr = prepareOnDisk(dat.gr, [lat(1:3) 6]); 
+        dat.hr(:) = 0;
+        bx = dat.bb.x;
+        by = dat.bb.y;
+        bz = dat.bb.z;
         
-        [dat.gr, dat.hr] = ghMatchingVel(noisemodel, ...
-            model.mu, dat.pf, dat.c, model.gmu, ...
-            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
-            'output', {dat.gr, dat.hr});
+        [dat.gr(bx,by,bz,:), dat.hr(bx,by,bz,:)] = ghMatchingVel(...
+            noisemodel, ...
+            model.mu, dat.pf, dat.c, model.gmu, 'bb', dat.bb, ...
+            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
         
-        dat.gr = dat.gr + ghPriorVel(dat.r, ...
+        dat.gr(:,:,:,:) = dat.gr(:,:,:,:) + ghPriorVel(dat.r, ...
             sqrt(sum(model.Mmu(1:3,1:3).^2)), lambda * opt.prm);
 
         % Compute search direction
@@ -685,8 +710,9 @@ function dat = oneStepFitResidual(dat, model, opt)
             double([sqrt(sum(model.Mmu(1:3,1:3).^2)) lambda * opt.prm 2 2]));
 
         % Line search
-        % ----------- end
-        [okr, r, llm, llr, iphi, pf, c, ipsi, v] = lsVelocity(...
+        % -----------
+%         dat = oneUpdate(dat, model, opt, struct( 'llmp', true));
+        [okr, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(...
             noisemodel, dr, dat.r, dat.llm, ...
             model.mu, dat.f, 'v0', dat.v, 'A', A, ....
             'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
@@ -702,23 +728,32 @@ function dat = oneStepFitResidual(dat, model, opt)
             dat.llr     = llr;
             dat.v(:)    = v(:);
             dat.iphi(:) = iphi(:);
+            dat.pf      = prepareOnDisk(dat.pf, size(pf));
             dat.pf(:)   = pf(:);
+            dat.c       = prepareOnDisk(dat.c, size(c));
             dat.c(:)    = c(:);
+            dat.bb      = bb;
             dat.ipsi(:) = ipsi(:);
         else
             break
         end
         
+%         dat = oneUpdate(dat, model, opt, ...
+%                         struct('wmu', true, 'llmw', true), ...
+%                         struct('wmu', true));
     end
     
     % Compute Laplace covariance
     % --------------------------
 
     if okr
-        [~, dat.hr] = ghMatchingVel(noisemodel, ...
+        bx = dat.bb.x;
+        by = dat.bb.y;
+        bz = dat.bb.z;
+        dat.hr(bx,by,bz,:) = ghMatchingVel(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, ...
-            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
-            'output', {dat.gr, dat.hr});
+            'bb', dat.bb, 'hessian', true, ...
+            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
     end
     
     % Statistics for precision update
@@ -834,7 +869,7 @@ function dat = oneStepGradHessVelocity(dat, model, opt)
     
     [dat.gv, dat.hv] = ghMatchingVel(noisemodel, ...
         model.mu, dat.pf, dat.c, model.gmu, ...
-        'output', {dat.gv, dat.hv});
+        'bb', dat.bb, 'output', {dat.gv, dat.hv});
 end
 
 % --------
@@ -855,6 +890,10 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
     dim     = [size(model.w) 1 1 1];
     model.gw = prepareOnDisk(model.gw, [dim(1:3) 3 dim(5)], 'type', 'float32');
     model.hw = prepareOnDisk(model.hw, [dim(1:3) 6 dim(5)], 'type', 'float32');
+    for k=1:dim(5)
+        model.gw(:,:,:,:,k) = 0;
+        model.hw(:,:,:,:,k) = 0;
+    end
     
     % --- Batch processing
     if opt.verbose, before = plotBatchBegin('GH PG'); end;
@@ -866,15 +905,18 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        dat(n1:ne) = distribute('oneStepGradHessVelocity', dat(n1:ne), model, opt');
+        dat(n1:ne) = distribute('oneStepGradHessVelocity', dat(n1:ne), model, opt);
         
         for n=n1:ne
             
             % Add individual contributions
             % ----------------------------
             for k=1:opt.K
-                model.gw(:,:,:,:,k) = model.gw(:,:,:,:,k) + numeric(dat(n).gv) * single(dat(n).z(k));
-                model.hw(:,:,:,:,k) = model.hw(:,:,:,:,k) + numeric(dat(n).hv) * single(dat(n).z(k))^2;
+                bx = dat(n).bb.x;
+                by = dat(n).bb.y;
+                bz = dat(n).bb.z;
+                model.gw(bx,by,bz,:,k) = model.gw(bx,by,bz,:,k) + numeric(dat(n).gv) * single(dat(n).z(k));
+                model.hw(bx,by,bz,:,k) = model.hw(bx,by,bz,:,k) + numeric(dat(n).hv) * single(dat(n).z(k))^2;
             end
             
             % Clear individual grad/hess
@@ -893,6 +935,14 @@ end
 % -------------------------------------------------------------------------
 
 function dat = oneUpdate(dat, model, opt, todo, toclean)
+
+    if nargin < 5
+        toclean = struct;
+        if nargin < 4
+            todo = struct;
+        end
+    end
+
     if strcmpi(opt.loop, 'subject')
         loop = '';
         par  = 0;
@@ -976,7 +1026,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
     
     % --- Push/Warp
     if isfield(todo, 'pf') || isfield(todo, 'c')
-        [dat.pf, dat.c] = pushImage(dat.ipsi, dat.f, opt.lat, ...
+        [dat.pf, dat.c, dat.bb] = pushImage(dat.ipsi, dat.f, opt.lat, ...
             'loop', loop, 'par', par, ...
             'output', {dat.pf, dat.c}, 'debug', opt.debug);
     end
@@ -998,7 +1048,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
     if isfield(todo, 'llm') || isfield(todo, 'llmp')
         % Pushed image
         dat.llm = llMatching(noisemodel, model.mu, dat.pf, dat.c, ...
-            'loop', loop, 'par', par, ...
+            'bb', dat.bb, 'loop', loop, 'par', par, ...
             'debug', opt.debug);
     elseif isfield(todo, 'llmw')
         % Warped template
@@ -1015,17 +1065,17 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         [dat.gq, dat.hq] = ghMatchingAffine(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, dat.A, ...
             opt.affine_basis, dat.phi, dat.jac, ...
-            'loop', loop, 'par', par);
+            'bb', dat.bb, 'loop', loop, 'par', par);
 
         [gq, hq] = ghPriorAffine(dat.q, model.regq);
         dat.gq = dat.gq + gq;
         dat.hq = dat.hq + hq;
         clear gq hq
     elseif isfield(todo, 'hq')
-        [~, dat.hq] = ghMatchingAffine(noisemodel, ...
+        dat.hq = ghMatchingAffine(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, dat.A, ...
             opt.affine_basis, dat.phi, dat.jac, ...
-            'loop', loop, 'par', par);
+            'bb', dat.bb', 'hessian', true, 'loop', loop, 'par', par);
 
         [~, hq] = ghPriorAffine(dat.q, model.regq);
         dat.hq = dat.hq + hq;
@@ -1034,7 +1084,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         dat.gq = ghMatchingAffine(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, dat.A, ...
             opt.affine_basis, dat.phi, dat.jac, ...
-            'loop', loop, 'par', par);
+            'bb', dat.bb, 'loop', loop, 'par', par);
 
         gq = ghPriorAffine(dat.q, model.regq);
         dat.gq = dat.gq + gq;
@@ -1068,16 +1118,16 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
     if isfield(todo, 'gz') && isfield(todo, 'hz')
         [dat.gz, dat.hz] = ghMatchingLatent(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
-            'loop', loop, 'par', par);
+            'bb', dat.bb, 'loop', loop, 'par', par);
 
         [gz, hz] = ghPriorLatent(dat.z, model.regz);
         dat.gz = dat.gz + gz;
         dat.hz = dat.hz + hz;
         clear gz hz
     elseif isfield(todo, 'hz')
-        [~, dat.hz] = ghMatchingLatent(noisemodel, ...
+        dat.hz = ghMatchingLatent(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
-            'loop', loop, 'par', par);
+            'bb', dat.bb, 'hessian', true, 'loop', loop, 'par', par);
 
         [~, hz] = ghPriorLatent(dat.z, model.regz);
         dat.hz = dat.hz + hz;
@@ -1085,7 +1135,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
     elseif isfield(todo, 'gz')
         dat.gz = ghMatchingLatent(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
-            'loop', loop, 'par', par);
+            'bb', dat.bb, 'loop', loop, 'par', par);
 
         gz = ghPriorLatent(dat.z, model.regz);
         dat.gz = dat.gz + gz;
@@ -1114,10 +1164,15 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
     
     % --- G/H residual
     if isfield(todo, 'hr')
-        [~, dat.hr] = ghMatchingVel(noisemodel, ...
+        dat.hr = prepareOnDisk(dat.hr, [opt.lat(1:3) 6]);
+        dat.hr(:) = 0;
+        bx = dat.bb.x;
+        by = dat.bb.y;
+        bz = dat.bb.z;
+        dat.hr(bx,by,bz,:) = ghMatchingVel(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, ...
-            'loop', loop, 'par', par, 'debug', opt.debug, ...
-            'output', {dat.gr, dat.hr});
+            'bb', dat.bb, 'hessian', true, ...
+            'loop', loop, 'par', par, 'debug', opt.debug);
     end
     if isfield(todo, 'klr')
         lam  = model.lambda;
@@ -1348,12 +1403,24 @@ function dat = distribute(func, dat, model, opt, varargin)
     % --- Distribute locally  
     else
         if ~isempty(varargin)
-            parfor (n=1:numel(dat), double(opt.par))
-                dat(n) = func(dat(n), model, opt, varargin{:});
+            if opt.par
+                parfor (n=1:numel(dat), double(opt.par))
+                    dat(n) = func(dat(n), model, opt, varargin{:});
+                end
+            else
+                for n=1:numel(dat)
+                    dat(n) = func(dat(n), model, opt, varargin{:});
+                end
             end
         else
-            parfor (n=1:numel(dat), double(opt.par))
-                dat(n) = func(dat(n), model, opt);
+            if opt.par
+                parfor (n=1:numel(dat), double(opt.par))
+                    dat(n) = func(dat(n), model, opt);
+                end
+            else
+                for n=1:numel(dat)
+                    dat(n) = func(dat(n), model, opt);
+                end
             end
         end
     end

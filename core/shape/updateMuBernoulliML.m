@@ -1,46 +1,89 @@
 function mu = updateMuBernoulliML(varargin)
-% FORMAT mu = updateMuBernoulliML(pf1, ..., pfN, c1, ..., cN,
-%                                 ('fwhm', fwhm),
-%                                 ('loop', loop), ('par', par))
-% ** Required **
-% pfi  - Image pushed in template space
-% ci   - Pushed voxel count
-% ** Keyword arguments **
-% fwhm  - Smoothing kernel used as pseudo prior [do not use]
-% loop - How to split processing: 'slice', 'none' or '' [auto]
-% par  - Distribute compute [auto]
-% ** Output **
-% mu   - Updated template
+%__________________________________________________________________________
 %
-% Closed form M-step update of the template for the Bernoulli model.
+% Closed form M-step update of the template for the Bernoulli noise model.
 % (Maximum likelihood update: no prior on Mu)
+%
+% -------------------------------------------------------------------------
+%
+% FORMAT mu = updateMuNormalML('f', ..., 'c', ..., ('bb', ...), ...)
+%
+% REQUIRED KEYWORD (LIST)
+% -----------------------
+% f   - Images pushed in template space
+% c   - Pushed voxel counts
+%
+% OPTIONAL KEYWORD (LIST)
+% -----------------------
+% bb   - Bounding boxes (if different from template)
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% lat  - Template lattice [temporarily REQUIRED]
+% fwhm - Smoothing kernel used as pseudo prior [do not use]
+% loop - How to split processing: 'component', 'slice', 'none' or '' [auto]
+% par  - Distribute compute [auto]
+%
+% OUTPUT
+% ------
+% mu   - Updated template
+%__________________________________________________________________________
 
-    N = 0;
-    while N < numel(varargin) && ~ischar(varargin{N+1})
-        N = N+1;
+
+    i = 1;
+    if ischar(varargin{1})
+        i = i + 1;
+        N = 0;
+        while i <= numel(varargin) && ~ischar(varargin{i})
+            i = i + 1;
+            N = N + 1;
+        end
     end
-    if mod(N,2)
-        error('There should be as many intensity as count images')
+    
+    f = {};
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'f')
+        f = varargin(2:N+1);
+        varargin = varargin(N+2:end);
     end
-    f = varargin(1:(N/2));
-    c = varargin((N/2+1):N);
-    varargin = varargin(N+1:end);
+    c = {};
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'c')
+        c = varargin(2:N+1);
+        varargin = varargin(N+2:end);
+    end
+    bb = {};
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'bb')
+        bb = varargin(2:N+1);
+        varargin = varargin(N+2:end);
+    end
+
+    if numel(c) ~= N
+        error('There should be as many count as intensity images')
+    end
+    if numel(bb) > 0 && numel(bb) ~= N
+        error('There should be as many bounding boxes as intensity images')
+    end
 
     % --- Parse inputs
     p = inputParser;
     p.FunctionName = 'updateMuBernoulliML';
+    p.addParameter('lat',    [],    @isnumeric);
     p.addParameter('fwhm',   0,     @isnumeric);
     p.addParameter('loop',   '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'subject', 'none', ''})));
     p.addParameter('par',    false, @isscalar);
     p.addParameter('debug',  false, @isscalar);
     p.addParameter('output', false);
     p.parse(varargin{:});
+    lat    = p.Results.lat;
     fwhm   = p.Results.fwhm;
     loop   = p.Results.loop;
     par    = p.Results.par;
     debug  = p.Results.debug;
     
     if debug, fprintf('* updateMuBernoulliML\n'); end;
+
+    if isempty(lat)
+        error('For now, the lattice size MUST be provided')
+    end
 
     [par, loop] = autoParLoop(par, loop, isa(f{1}, 'file_array'), ...
                               size(f{1}, 3), size(f{1}, 4));
@@ -51,7 +94,7 @@ function mu = updateMuBernoulliML(varargin)
     switch lower(loop)
         case 'none'
             if debug, fprintf('   - No loop\n'); end;
-            mu = loopNone(f, c, output, fwhm);
+            mu = loopNone(f, c, bb, lat, output, fwhm);
         case 'slice'
             if debug
                 if par > 0
@@ -60,23 +103,29 @@ function mu = updateMuBernoulliML(varargin)
                     fprintf('   - Serialise on slices\n');
                 end
             end
-            mu = loopSlice(f, c, par, output);
+            mu = loopSlice(f, c, bb, lat, par, output);
         otherwise
             error('Unknown loop type ''%s''', loop)
     end
 
 end
 
-function mu = loopSlice(f, c, par, output)
+function mu = loopSlice(f, c, bb, lat, par, output)
 
-    mu = prepareOnDisk(output, size(f{1}), 'type', 'float32');
-    dim = [size(mu) 1];
-    lat = dim(1:3);
+    mu = prepareOnDisk(output, lat, 'type', 'float32');
     
+    if isempty(bb)
+         bb1 = struct('x', 1:dim(1), 'y', 1:dim(2), 'z', 1:dim(3));
+        [bb{1:numel(f)}] = deal(bb1);
+    end
+
     % --- Compute count
     tmpc = zeros(lat, 'single');
     for n=1:numel(f)
-        tmpc = tmpc + single(numeric(c{n}));
+        bx = bb{n}.x;
+        by = bb{n}.y;
+        bz = bb{n}.z;
+        tmpc(bx,by,bz) = tmpc(bx,by,bz) + single(numeric(c{n}));
     end
     
     % -- Compute mu
@@ -84,7 +133,13 @@ function mu = loopSlice(f, c, par, output)
         for z=1:dim(3)
             tmpf = zeros(lat(1:2), 'single');
             for n=1:numel(f)
-                tmpf = tmpf + single(f{n}(:,:,z,:));
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                fz = z-bz(1)+1;
+                if fz >= 1 && fz <= size(f{n}, 3)
+                    tmpf(bx,by) = tmpf(bx,by) + single(f{n}(:,:,fz));
+                end
             end
             tmpf = tmpf ./ tmpc(:,:,z);
             tmpf = max(1-eps('single'), min(eps('single'), tmpf));
@@ -96,7 +151,13 @@ function mu = loopSlice(f, c, par, output)
         parfor (z=1:dim(3), par)
             tmpf = zeros(lat(1:2), 'single');
             for n=1:numel(f)
-                tmpf = tmpf + single(slice(f{n}, z, 3));
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                fz = z-bz(1)+1;
+                if fz >= 1 && fz <= size(f{n}, 3)
+                    tmpf(bx,by) = tmpf(bx,by) + single(slice(f{n}, fz, 3));
+                end
             end
             tmpf = tmpf ./ tmpc(:,:,z);
             tmpf = max(1-eps('single'), min(eps('single'), tmpf));
@@ -108,7 +169,13 @@ function mu = loopSlice(f, c, par, output)
         parfor (z=1:dim(3), par)
             tmpf = zeros(lat(1:2), 'single');
             for n=1:numel(f)
-                tmpf = tmpf + single(f{n}(:,:,z,:));
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                fz = z-bz(1)+1;
+                if fz >= 1 && fz <= size(f{n}, 3)
+                    tmpf(bx,by) = tmpf(bx,by) + single(f{n}(:,:,fz));
+                end
             end
             tmpf = tmpf ./ tmpc(:,:,z);
             tmpf = max(1-eps('single'), min(eps('single'), tmpf));
@@ -123,16 +190,21 @@ function mu = loopSlice(f, c, par, output)
     end
 end
 
-function mu = loopNone(f, c, output)
-
-    dim = [size(f{1}) 1];
-    lat = dim(1:3);
+function mu = loopNone(f, c, bb, output)
     
+    if isempty(bb)
+         bb1 = struct('x', 1:dim(1), 'y', 1:dim(2), 'z', 1:dim(3));
+        [bb{1:numel(f)}] = deal(bb1);
+    end
+
     mu   = zeros(lat, 'single');
     tmpc = zeros(lat, 'single');
     for n=1:numel(f)
-        mu   = mu   + single(numeric(f{n}));
-        tmpc = tmpc + single(numerci(c{n}));
+        bx = bb{n}.x;
+        by = bb{n}.y;
+        bz = bb{n}.z;
+        mu(bx,by,bz)   = mu(bx,by,bz)   + single(numeric(f{n}));
+        tmpc(bx,by,bz) = tmpc(bx,by,bz) + single(numerci(c{n}));
     end
     mu   = smooth_gaussian(mu, fwhm);
     tmpc = smooth_gaussian(tmpc, fwhm);

@@ -36,7 +36,7 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt, pgra)
     % --- Initialise line search
     if isfield(model, 'armijo'),    armijo = model.armijo;
     else                            armijo = 1; end;
-    llm0  = model.llm;
+    llm0 = model.llm;
     llz0 = - 0.5 * trace(model.wpz(2) * model.ww * (model.Sz + model.zz));
     if opt.nz0 == 0
         llz0 = llz0 + 0.5 * opt.N * proba('LogDet', ...
@@ -67,7 +67,7 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt, pgra)
         % - Update individual matching terms
         dat = batchProcess('Update', dat, model, opt1, ...
             {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
-            'clean', {'ipsi', 'iphi'});
+            'clean', {'ipsi', 'iphi', 'wmu'});
         
         % - Compute log-likelihood
         llm = 0;

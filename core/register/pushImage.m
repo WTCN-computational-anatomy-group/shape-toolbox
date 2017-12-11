@@ -52,12 +52,8 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     if ~iscell(output)
         output = {output};
     end
-    if numel(output) < 2;
+    if numel(output) < 2
         output = [output {[]}];
-    end
-    pf = prepareOnDisk(output{1}, [lat nc]);
-    if nargout > 1
-        c  = prepareOnDisk(output{2}, lat);
     end
     
     ipsi = single(numeric(ipsi));
