@@ -855,6 +855,10 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
     dim     = [size(model.w) 1 1 1];
     model.gw = prepareOnDisk(model.gw, [dim(1:3) 3 dim(5)], 'type', 'float32');
     model.hw = prepareOnDisk(model.hw, [dim(1:3) 6 dim(5)], 'type', 'float32');
+    for k=1:dim(5)
+        model.gw(:,:,:,:,k) = 0;
+        model.hw(:,:,:,:,k) = 0;
+    end
     
     % --- Batch processing
     if opt.verbose, before = plotBatchBegin('GH PG'); end;

@@ -110,14 +110,18 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
     end
     if isempty(gmu)
         g = prepareOnDisk(output{1}, [dlat nc]);
+        g(:) = 0;
     else
         g = prepareOnDisk(output{1}, [dlat nvec]);
+        g(:) = 0;
     end
     if nargout > 1
         if isempty(gmu)
             h = prepareOnDisk(output{2}, [dlat nc]);
+            h(:) = 0;
         else
             h = prepareOnDisk(output{2}, [dlat nvec*(nvec+1)/2]);
+            h(:) = 0;
         end
     end
     
