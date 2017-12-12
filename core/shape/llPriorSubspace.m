@@ -1,5 +1,5 @@
-function ll = llPriorSubspace(W, WW, vs, prm)
-% FORMAT ll = lbSubspace(EW, EWW, vs, prm, (H, reg))
+function ll = llPriorSubspace(W, WW, vs, prm, ld)
+% FORMAT ll = lbSubspace(EW, EWW, vs, prm, (ld))
 % W   - MAP subspace W
 % WW  - MAP precision W'*L*W
 % vs  - Voxel size
@@ -11,9 +11,13 @@ function ll = llPriorSubspace(W, WW, vs, prm)
     dim = [size(W) 1 1 1];
     lat = dim(1:3);
     K   = dim(5);
+    
+    if nargin < 5
+        ld = proba('LogDetDiffeo', lat, vs, prm);
+    end
 
     ll = - prod(dim) * log(2*pi) ...
-         + K * proba('LogDetDiffeo', lat, vs, prm) ...
+         + K * ld ...
          - trace(numeric(WW));
      ll = ll * 0.5;
 
