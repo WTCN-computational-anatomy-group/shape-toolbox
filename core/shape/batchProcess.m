@@ -801,7 +801,7 @@ function dat = oneStepFitResidual(dat, model, opt)
         lat = [size(model.mu) 1];
         dat.gr = prepareOnDisk(dat.gr, [lat(1:3) 3]); 
         dat.gr(:) = 0;
-        dat.hr = prepareOnDisk(dat.gr, [lat(1:3) 6]); 
+        dat.hr = prepareOnDisk(dat.hr, [lat(1:3) 6]); 
         dat.hr(:) = 0;
         bx = dat.bb.x;
         by = dat.bb.y;
@@ -1377,6 +1377,13 @@ function dat = batchUpdate(dat, model, opt, todo, varargin)
     for i=1:numel(todo)
         stodo.(todo{i}) = true;
     end
+    if ~iscell(clean)
+        clean = {clean};
+    end
+    stoclean = struct;
+    for i=1:numel(clean)
+        stoclean.(clean{i}) = true;
+    end
     
     % --- Batch processing
     if opt.verbose, before = plotBatchBegin('Update'); end;
@@ -1386,7 +1393,7 @@ function dat = batchUpdate(dat, model, opt, todo, varargin)
         
         if opt.verbose, before = plotBatch(i, batch, numel(dat), 50, before); end;
         
-        dat(n1:ne) = distribute('OneUpdate', dat(n1:ne), model, opt, stodo, clean);
+        dat(n1:ne) = distribute('OneUpdate', dat(n1:ne), model, opt, stodo, stoclean);
     end
     if opt.verbose, plotBatchEnd; end;
     
