@@ -115,7 +115,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
     mu = prepareOnDisk(output, lat, 'type', 'float32');
     
     if isempty(bb)
-         bb1 = struct('x', 1:dim(1), 'y', 1:dim(2), 'z', 1:dim(3));
+         bb1 = struct('x', 1:lat(1), 'y', 1:lat(2), 'z', 1:lat(3));
         [bb{1:numel(f)}] = deal(bb1);
     end
 
@@ -130,7 +130,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
     
     % -- Compute mu
     if ~par
-        for z=1:dim(3)
+        for z=1:lat(3)
             tmpf = zeros(lat(1:2), 'single');
             for n=1:numel(f)
                 bx = bb{n}.x;
@@ -148,7 +148,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
             mu(:,:,z,:) = tmpf;
         end
     elseif isa(f{1}, 'file_array')
-        parfor (z=1:dim(3), par)
+        parfor (z=1:lat(3), par)
             tmpf = zeros(lat(1:2), 'single');
             for n=1:numel(f)
                 bx = bb{n}.x;
@@ -166,7 +166,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
             mu(:,:,z,:) = tmpf;
         end
     else
-        parfor (z=1:dim(3), par)
+        parfor (z=1:lat(3), par)
             tmpf = zeros(lat(1:2), 'single');
             for n=1:numel(f)
                 bx = bb{n}.x;
@@ -193,7 +193,7 @@ end
 function mu = loopNone(f, c, bb, output)
     
     if isempty(bb)
-         bb1 = struct('x', 1:dim(1), 'y', 1:dim(2), 'z', 1:dim(3));
+         bb1 = struct('x', 1:lat(1), 'y', 1:lat(2), 'z', 1:lat(3));
         [bb{1:numel(f)}] = deal(bb1);
     end
 

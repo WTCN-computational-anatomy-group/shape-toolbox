@@ -228,7 +228,7 @@ function mu = loopSlice(f, c, s, bb, lat, par, output)
         [tmp.bb] = deal(bb{:});
     end
     if ~par
-        for z=1:dim(3)
+        for z=1:lat(3)
             tmpf = zeros([lat(1:2) 1 nc], 'single');
             if isempty(s)
                 tmpc = zeros([lat(1:2) 1],'single');
@@ -252,7 +252,7 @@ function mu = loopSlice(f, c, s, bb, lat, par, output)
             mu(:,:,z,:) = bsxfun(@rdivide, tmpf, tmpc);
         end
     elseif isa(tmp(1).f, 'file_array')
-        parfor (z=1:dim(3), par)
+        parfor (z=1:lat(3), par)
             tmpf = zeros([lat(1:2) 1 nc], 'single');
             if isempty(s)
                 tmpc = zeros([lat(1:2) 1],'single');
@@ -276,7 +276,7 @@ function mu = loopSlice(f, c, s, bb, lat, par, output)
             mu(:,:,z,:) = bsxfun(@rdivide, tmpf, tmpc);
         end
     else
-        parfor (z=1:dim(3), par)
+        parfor (z=1:lat(3), par)
             tmpf = zeros([lat(1:2) 1 nc], 'single');
             if isempty(s)
                 tmpc = zeros([lat(1:2) 1],'single');
