@@ -10,11 +10,41 @@ function ondisk = default_ondisk(type)
 %        * 'AllOnDisk':   Everything on disk.
 
     if nargin < 1
-        type = 'imageondisk';
+        type = 'optim';
     end
     
     ondisk = struct;
     switch lower(type)
+        case 'optim'
+            % Model
+            ondisk.model.mu   = true;
+            ondisk.model.gmu  = true;
+            ondisk.model.a    = true;
+            ondisk.model.w    = true;
+            ondisk.model.dw   = true;
+            ondisk.model.gw   = true;
+            ondisk.model.hw   = true;
+            ondisk.model.ww   = false;
+            ondisk.model.Az   = false;
+            ondisk.model.z    = false;
+            ondisk.model.zz   = false;
+            ondisk.model.Sz   = false;
+            % Subjects
+            ondisk.dat.wmu  = true;
+            ondisk.dat.iphi = false;
+            ondisk.dat.ipsi = false;
+            ondisk.dat.v    = true;
+            ondisk.dat.m    = true;
+            ondisk.dat.pf   = true;
+            ondisk.dat.c    = true;
+            ondisk.dat.gv   = true;
+            ondisk.dat.hv   = true;
+            ondisk.dat.r    = true;
+            ondisk.dat.gr   = false;
+            ondisk.dat.hr   = false;
+            ondisk.dat.z    = false;
+            ondisk.dat.zz   = false;
+            ondisk.dat.Sz   = false;
         case 'imageondisk'
             % Model
             ondisk.model.mu   = true;
