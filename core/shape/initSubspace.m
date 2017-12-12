@@ -42,7 +42,7 @@ function [w, ww] = initSubspace(lat, K, varargin)
     % --- Initialise
     switch lower(type)
         case 'zero'
-            for k=1:size(K, 5)
+            for k=1:size(w, 5)
                 w(:,:,:,:,k) = 0;
             end
             if nargout > 2

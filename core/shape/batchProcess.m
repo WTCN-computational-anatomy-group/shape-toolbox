@@ -64,12 +64,17 @@ function varargout = batchProcess(id, varargin)
 
 
     switch lower(id)
+        % -------
+        %  BATCH
+        % -------
         case 'initaffine'
             [varargout{1:nargout}] = batchInitAffine(varargin{:});
-        case 'initresidual'
-            [varargout{1:nargout}] = batchInitResidual(varargin{:});
         case 'initlatent'
             [varargout{1:nargout}] = batchInitLatent(varargin{:});
+        case 'initresidual'
+            [varargout{1:nargout}] = batchInitResidual(varargin{:});
+        case 'initzero'
+            [varargout{1:nargout}] = batchInitZero(varargin{:});
         case 'rotatelatent'
             [varargout{1:nargout}] = batchRotateLatent(varargin{:});
         case 'centrelatent'
@@ -84,6 +89,13 @@ function varargout = batchProcess(id, varargin)
             [varargout{1:nargout}] = batchGradHessSubspace(varargin{:});
         case 'update'
             [varargout{1:nargout}] = batchUpdate(varargin{:});
+        % ------
+        %  STEP
+        % ------
+        case 'onestepinitresidual'
+            [varargout{1:nargout}] = oneStepInitResidual(varargin{:});
+        case 'onestepinitzero'
+            [varargout{1:nargout}] = oneStepInitZero(varargin{:});
         case 'onestepfitaffine'
             [varargout{1:nargout}] = oneStepFitAffine(varargin{:});
         case 'onestepfitlatent'
@@ -166,7 +178,7 @@ end
 %    Init Residual
 % -------------------------------------------------------------------------
 
-function [dat, model] = batchInitResidual(mode, dat, model, opt)
+function dat = oneStepInitResidual(dat, ~, opt, mode)
 
     % --- Don't parallelise here, there is no need
     
@@ -179,22 +191,120 @@ function [dat, model] = batchInitResidual(mode, dat, model, opt)
             error('Unknwon mode %s', mode)
     end
     
-    model.llr = 0;
+    if strcmpi(mode, 'zero')
+        dat.r = prepareOnDisk(dat.r, [opt.lat 3]);
+        dat.r(:) = 0;
+    else
+        r         = create([opt.lat 3]);
+        dat.r  = saveOnDisk(dat.r, r);
+    end
+%     if isfield(opt, 'logdet')
+%         dat.llr = llPriorVelocity(r, ...
+%             'vs', opt.vs,  'logdet', opt.logdet, ...
+%             'prm', opt.prm, 'debug', opt.debug);
+%     else
+%         dat.llr = llPriorVelocity(r, ...
+%             'vs', opt.vs, 'prm', opt.prm, 'debug', opt.debug);
+%     end
+
+end
+
+function [dat, model] = batchInitResidual(mode, dat, model, opt)
+    % --- Detect parallelisation scheme
+    if strcmpi(opt.loop, 'subject') && opt.par > 0
+        batch = opt.batch;
+    else
+        batch = 1;
+    end
+
+%     % Init log-likelihood
+%     % -------------------
+%     model.llr = 0;
     
-    % Init subjects
-    % -------------
+    % --- Batch processing
     if opt.verbose, before = plotBatchBegin('Init R'); end;
-    for n=1:opt.N
-        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
-        r        = create([opt.lat 3]);
-        dat(n).r = saveOnDisk(dat(n).r, r);
-        dat(n).llr = llPriorVelocity(r, ...
-            'vs', sqrt(sum(model.Mmu(1:3,1:3).^2)), ...
-            'prm', opt.prm, 'debug', opt.debug);
-        model.llr = model.llr + dat(n).llr;
+    for i=1:ceil(opt.N/batch)
+        n1 = (i-1)*batch + 1;
+        ne = min(opt.N, i*batch);
+
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
+    
+        % Compute subjects grad/hess w.r.t. initial velocity
+        % --------------------------------------------------
+        dat(n1:ne) = distribute('OneStepInitResidual', dat(n1:ne), model, opt, mode);
+        
+%         for n=n1:ne
+%             
+%             % Add individual contributions
+%             % ----------------------------
+%             model.llr = model.llr + dat(n).llr;
+%         end
+        
     end
     if opt.verbose, plotBatchEnd; end;
+end
 
+% -------------------------------------------------------------------------
+%    Init Zeros
+% -------------------------------------------------------------------------
+% Init        r    = 0
+%             v    = 0
+%             iphi = id
+% Reconstruct ipsi
+%             pf c
+% Compute     llm
+% Clean       iphi
+%             ipsi
+
+function dat = oneStepInitZero(dat, model, opt)
+    
+    if strcmpi(opt.loop, 'subject')
+        loop = '';
+        par  = 0;
+    else
+        loop = opt.loop;
+        par  = opt.par;
+    end
+    
+    dat.r    = prepareOnDisk(dat.r, [opt.lat 3]);
+    dat.r(:) = 0;
+    dat.v    = prepareOnDisk(dat.v, [opt.lat 3]);
+    dat.v(:) = 0;
+    iphi     = spm_warps('identity', opt.lat);
+    latf = [size(dat.f) 1];
+    latf = latf(1:3);
+    ipsi = reconstructIPsi(dat.A, iphi, ...
+        'lat', latf, 'Mf', dat.Mf, 'Mmu', model.Mmu, ...
+        'debug', opt.debug);
+    clear iphi
+    [dat.pf, dat.c, dat.bb] = pushImage(ipsi, dat.f, opt.lat, ...
+        'loop', loop, 'par', par, ...
+        'output', {dat.pf, dat.c}, 'debug', opt.debug);
+
+end
+
+function [dat, model] = batchInitZero(dat, model, opt)
+    % --- Detect parallelisation scheme
+    if strcmpi(opt.loop, 'subject') && opt.par > 0
+        batch = opt.batch;
+    else
+        batch = 1;
+    end
+    
+    % --- Batch processing
+    if opt.verbose, before = plotBatchBegin('Init Zero'); end;
+    for i=1:ceil(opt.N/batch)
+        n1 = (i-1)*batch + 1;
+        ne = min(opt.N, i*batch);
+
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
+    
+        % Compute subjects grad/hess w.r.t. initial velocity
+        % --------------------------------------------------
+        dat(n1:ne) = distribute('OneStepInitZero', dat(n1:ne), model, opt);
+        
+    end
+    if opt.verbose, plotBatchEnd; end;
 end
 
 % -------------------------------------------------------------------------
@@ -382,7 +492,7 @@ function dat = oneStepFitAffine(dat, model, opt)
         % Line search
         % -----------
 %         dat = oneUpdate(dat, model, opt, struct('llmp', true));
-        [okq, q, llm, ~, A, pf, c, bb, ipsi] = lsAffine(...
+        [okq, q, llm, ~, A, pf, c, bb] = lsAffine(...
             noisemodel, dq, dat.q, dat.llm, model.mu, dat.f, ...
             'B', opt.affine_basis, 'regq', model.regq, 'rind', rind, ...
             'iphi', iphi, ...
@@ -402,7 +512,8 @@ function dat = oneStepFitAffine(dat, model, opt)
             dat.c       = prepareOnDisk(dat.c, size(c));
             dat.c(:)    = c(:);
             dat.bb      = bb;
-            dat.ipsi(:) = ipsi(:);
+%             dat.ipsi    = prepareOnDisk(dat.ipsi, size(ipsi));
+%             dat.ipsi(:) = ipsi(:);
         else
             break
         end
@@ -547,7 +658,7 @@ function dat = oneStepFitLatent(dat, model, opt)
         if isfield(dat, 'A'),         A = dat.A;
         else                          A = eye(4); end
 %         dat = oneUpdate(dat, model, opt, struct('llmp', true));
-        [okz, z, llm, ~, v, iphi, pf, c, bb, ipsi] = lsLatent(...
+        [okz, z, llm, ~, v, ~, pf, c, bb] = lsLatent(...
             noisemodel, dz, dat.z, dat.v, dat.llm, ...
             model.w, model.mu, dat.f, ...
             'regz', model.regz, ...
@@ -562,13 +673,13 @@ function dat = oneStepFitLatent(dat, model, opt)
             dat.zz      = z * z';
             dat.llm     = llm;
             dat.v(:)    = v(:);
-            dat.iphi(:) = iphi(:);
+%             dat.iphi(:) = iphi(:);
             dat.pf      = prepareOnDisk(dat.pf, size(pf));
             dat.pf(:)   = pf(:);
             dat.c       = prepareOnDisk(dat.c, size(c));
             dat.c(:)    = c(:);
             dat.bb      = bb;
-            dat.ipsi(:) = ipsi(:);
+%             dat.ipsi(:) = ipsi(:);
         else
             break
         end
@@ -690,7 +801,7 @@ function dat = oneStepFitResidual(dat, model, opt)
         lat = [size(model.mu) 1];
         dat.gr = prepareOnDisk(dat.gr, [lat(1:3) 3]); 
         dat.gr(:) = 0;
-        dat.hr = prepareOnDisk(dat.gr, [lat(1:3) 6]); 
+        dat.hr = prepareOnDisk(dat.hr, [lat(1:3) 6]); 
         dat.hr(:) = 0;
         bx = dat.bb.x;
         by = dat.bb.y;
@@ -712,7 +823,7 @@ function dat = oneStepFitResidual(dat, model, opt)
         % Line search
         % -----------
 %         dat = oneUpdate(dat, model, opt, struct( 'llmp', true));
-        [okr, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(...
+        [okr, r, llm, llr, ~, pf, c, bb, ~, v] = lsVelocity(...
             noisemodel, dr, dat.r, dat.llm, ...
             model.mu, dat.f, 'v0', dat.v, 'A', A, ....
             'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
@@ -727,13 +838,13 @@ function dat = oneStepFitResidual(dat, model, opt)
             dat.llm     = llm;
             dat.llr     = llr;
             dat.v(:)    = v(:);
-            dat.iphi(:) = iphi(:);
+%             dat.iphi(:) = iphi(:);
             dat.pf      = prepareOnDisk(dat.pf, size(pf));
             dat.pf(:)   = pf(:);
             dat.c       = prepareOnDisk(dat.c, size(c));
             dat.c(:)    = c(:);
             dat.bb      = bb;
-            dat.ipsi(:) = ipsi(:);
+%             dat.ipsi(:) = ipsi(:);
         else
             break
         end
@@ -1266,6 +1377,13 @@ function dat = batchUpdate(dat, model, opt, todo, varargin)
     for i=1:numel(todo)
         stodo.(todo{i}) = true;
     end
+    if ~iscell(clean)
+        clean = {clean};
+    end
+    stoclean = struct;
+    for i=1:numel(clean)
+        stoclean.(clean{i}) = true;
+    end
     
     % --- Batch processing
     if opt.verbose, before = plotBatchBegin('Update'); end;
@@ -1275,7 +1393,7 @@ function dat = batchUpdate(dat, model, opt, todo, varargin)
         
         if opt.verbose, before = plotBatch(i, batch, numel(dat), 50, before); end;
         
-        dat(n1:ne) = distribute('OneUpdate', dat(n1:ne), model, opt, stodo, clean);
+        dat(n1:ne) = distribute('OneUpdate', dat(n1:ne), model, opt, stodo, stoclean);
     end
     if opt.verbose, plotBatchEnd; end;
     

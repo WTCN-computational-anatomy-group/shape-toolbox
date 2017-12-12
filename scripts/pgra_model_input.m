@@ -42,8 +42,12 @@ function [opt, dat] = pgra_model_input(opt, dat)
                 Mf = Mf(1:end-1);
             else
                 n = nifti(opt.fnames.dat.f{i});
+                n.dat.permission = 'ro';
                 f{i}  = n.dat;
                 Mf{i} = n.mat0;
+                if numel(size(f{i})) > 4 && size(f{i}, 4) == 1
+                    f{i}.dim = [f{i}.dim(1:3) f{i}.dim(5:end)];
+                end
             end
         end
         dat = struct('f', f, 'Mf', Mf);
@@ -61,6 +65,7 @@ function [opt, dat] = pgra_model_input(opt, dat)
         else
             for i=1:numel(dat)
                 if isa(dat(i).f, 'file_array')
+                    dat(i).f.permission = 'ro';
                     fnames = {dat(i).f.fname};
                     if endsWith(fnames{1}, '.nii')
                         n = nifti(fnames{1});
@@ -70,6 +75,9 @@ function [opt, dat] = pgra_model_input(opt, dat)
                     end
                 else
                     dat(i).Mf = eye(4);
+                end
+                if numel(size(dat(i).f)) > 4 && size(dat(i).f, 4) == 1
+                    dat(i).f.dim = [dat(i).f.dim(1:3) dat(i).f.dim(5:end)];
                 end
             end
             

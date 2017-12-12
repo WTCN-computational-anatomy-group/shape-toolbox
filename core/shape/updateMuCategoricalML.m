@@ -125,7 +125,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
     
     % --- Compute mu
     if ~par
-        for z=1:dim(3)
+        for z=1:lat(3)
             tmpf = zeros([lat(1:2) 1 nc], 'single');
             for n=1:numel(f)
                 bx = bb{n}.x;
@@ -141,7 +141,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
             mu(:,:,z,:) = log(tmpf(:,:,:,:));
         end
     elseif isa(f{1}, 'file_array')
-        parfor (z=1:dim(3), par)
+        parfor (z=1:lat(3), par)
             tmpf = zeros([lat(1:2) 1 nc], 'single');
             for n=1:numel(f)
                 bx = bb{n}.x;
@@ -157,7 +157,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
             mu(:,:,z,:) = log(tmpf(:,:,:,:));
         end
     else
-        parfor (z=1:dim(3), par)
+        parfor (z=1:lat(3), par)
             tmpf = zeros([lat(1:2) 1 nc], 'single');
             for n=1:numel(f)
                 bx = bb{n}.x;

@@ -1,4 +1,4 @@
-function [ok, model, dat] = lsSubspace(dw, model, dat, opt, pgra)
+function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
 % FORMAT [ok, model, dat] = lsSubspace(dw, model, dat, opt)
 %
 % ** Required **
