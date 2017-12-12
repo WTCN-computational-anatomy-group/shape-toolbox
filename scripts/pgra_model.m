@@ -81,9 +81,15 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
     opt               = pgra_model_default(opt);
     [opt, dat, model] = pgra_model_data(opt, dat, model);
     
-    % -----------------------------------------------------------------
+    % ---------------------------------------------------------------------
+    %    Compute LogDet(L) and once and for all
+    % ---------------------------------------------------------------------
+    [~, opt.logdet] = spm_shoot_greens('kernel', double(opt.lat), double([opt.vs opt.prm]));
+    opt.logdet = opt.logdet(1);
+    
+    % ---------------------------------------------------------------------
     %    Noise variance
-    % -----------------------------------------------------------------
+    % ---------------------------------------------------------------------
     switch lower(opt.model.name)
         case {'normal', 'gaussian', 'l2'}
             nc = size(dat(1).f, 4);
@@ -139,6 +145,11 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
     % Lower bound
     model      = plotAll(model, opt, 'loop');
     % -----------
+    
+    if ~isempty(opt.fnames.result)
+        createAllNifti(dat, model, opt);
+        save(fullfile(opt.directory, opt.fnames.result), 'model', 'dat', 'opt');
+    end
     
     % ---------------------------------------------------------------------
     %    Variable factors
@@ -257,7 +268,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
 
             % -----------
             % Lower bound
-            model.llw  = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm);
+            model.llw  = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm, opt.logdet);
             model.lbz  = lbLatent(dat, model, opt);
             model      = plotAll(model, opt);
             % -----------
@@ -305,7 +316,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
 
             % -----------
             % Lower bound
-            model.llw  = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm);
+            model.llw  = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm, opt.logdet);
             model.lbaz = lbPrecisionMatrix(model.Az, opt.N, opt.nz0);
             model.lbz  = lbLatent(dat, model, opt);
             model      = plotAll(model, opt);
@@ -385,7 +396,10 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
         model     = plotAll(model, opt, 'loop');
         % -----------
         
-        save(fullfile(opt.directory, opt.fnames.result), 'model', 'dat', 'opt');
+        if ~isempty(opt.fnames.result)
+            createAllNifti(dat, model, opt);
+            save(fullfile(opt.directory, opt.fnames.result), 'model', 'dat', 'opt');
+        end
         
     end % < EM loop
     
@@ -500,7 +514,7 @@ function model = plotAll(model, opt, loop)
         
         % Plot
         % ----
-        vs = sqrt(sum(model.Mmu(1:3,1:3).^2));
+        vs = opt.vs;
         
         % Template & PG
         subplot(px, py, 1)
@@ -605,26 +619,18 @@ function [dat, model] = initAll(dat, model, opt)
     model.Aq   = eye(numel(opt.affine_rind));
     model.regq = model.Aq;
     
-    % --- Zero init of R (Residual)
-    model.lambda = opt.lambda0;
-    model.lambda_prev = model.lambda;
-    [dat, model] = batchProcess('InitResidual', 'zero', dat, model, opt);
-    
     % --- Zero init of W (Principal geodesic)
-    if ~checkarray(model.w)
-        model.w = initSubspace(opt.lat, opt.K, 'type', 'zero', ...
-            'debug', opt.debug, 'output', model.w);
-    end
-    if ~checkarray(model.ww)
-        model.ww = zeros(opt.K);
-    end
+    model.w = initSubspace(opt.lat, opt.K, 'type', 'zero', ...
+        'debug', opt.debug, 'output', model.w);
+    model.ww = zeros(opt.K);
     
     % --- Zero init of Z (Latent coordinates)
     [dat, model] = batchProcess('InitLatent', 'zero', dat, model, opt);
     
-    % --- Init of subject specific arrays
-    dat = batchProcess('Update', dat, model, opt, ...
-        {'v', 'ipsi', 'iphi', 'pf', 'c'}, 'clean', {'ipsi', 'iphi'});
+    % --- Zero init of lots of stuff (r, v) + inital push
+    model.lambda = opt.lambda0;
+    model.lambda_prev = model.lambda;
+    [dat, model] = batchProcess('InitZero', dat, model, opt);
     
     % --- Init template + Compute template spatial gradients + Build TPMs
     if opt.tpm
@@ -682,8 +688,7 @@ function [dat, model] = initAll(dat, model, opt)
                     opt.nlam0, opt.lambda0, opt.lat);
     model.lbz  = lbLatent(dat, model, opt);
     model.lbaz = lbPrecisionMatrix(model.Az, opt.N, opt.nz0);
-    ld = proba('LogDetDiffeo', opt.lat, sqrt(sum(model.Mmu(1:3,1:3).^2)), opt.prm);
-    model.llw  = 0.5 * opt.K * (ld - prod(opt.lat)*3*log(2*pi));
+    model.llw  = 0.5 * opt.K * (opt.logdet - prod(opt.lat)*3*log(2*pi));
     model.lbaq = lbPrecisionMatrix(model.Aq, opt.N, opt.nq0);
     model.lbq  = lbAffine(dat, model, opt);
 
