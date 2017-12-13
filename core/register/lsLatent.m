@@ -56,6 +56,7 @@ function [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v
     p.addParameter('nit',      6,      @isscalar);
     p.addParameter('itgr',     nan,    @isscalar);
     p.addParameter('prm',      [0.0001 0.001 0.2 0.05 0.2], @(X) length(X) == 5);
+    p.addParameter('bnd',      0, @(X) isscalar(X) && isnumeric(X));
     p.addParameter('par',      false,  @isscalar);
     p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'slice', 'component', 'none', ''})));
     p.addParameter('output',   []);
@@ -70,20 +71,20 @@ function [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v
     nit     = p.Results.nit;
     itgr    = p.Results.itgr;
     prm     = p.Results.prm;
+    bnd     = p.Results.bnd;
     par     = p.Results.par;
     loop    = p.Results.loop;
-    output  = p.Results.output;
     verbose = p.Results.verbose;
     debug   = p.Results.debug;
     
-    if debug, fprintf('* lsLatent\n'); end;
+    if debug, fprintf('* lsLatent\n'); end
     
     % --- Template voxel size
     vsmu = sqrt(sum(Mmu(1:3,1:3).^2)); 
     
     % --- Set some default parameter value
     if isempty(regz)
-        regz = precisionZ(W, vsmu, prm, 'debug', debug);
+        regz = precisionZ(W, vsmu, prm, bnd, 'debug', debug);
     end
     if isnan(llz0)
        llz0 = llPriorLatent(z0, regz, 'fast');
@@ -117,27 +118,27 @@ function [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v
     for i=1:nit
         z = single(z0 + dz / armijo);
         v = single(numeric(v0) + dv / armijo);
-        iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'debug', debug);
+        iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'bnd', bnd, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
         [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
         llm = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
         llz = llPriorLatent(z, regz, 'fast', 'debug', debug);
         ll  = llm + llz;
         
-        if verbose, printInfo(i, ll0, llm, llz); end;
+        if verbose, printInfo(i, ll0, llm, llz); end
         
         if ll <= ll0
-            if verbose, printInfo('failed'); end;
+            if verbose, printInfo('failed'); end
             armijo = armijo * 2;
         else
-            if verbose, printInfo('success'); end;
+            if verbose, printInfo('success'); end
             llz = llPriorLatent(z, regz, 'debug', debug);
             ok  = true;
             return
         end
     end
     
-    if verbose, printInfo('end'); end;
+    if verbose, printInfo('end'); end
     z   = z0;
 
 end

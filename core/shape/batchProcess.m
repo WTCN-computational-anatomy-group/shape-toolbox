@@ -159,9 +159,9 @@ function [dat, model] = batchInitAffine(mode, dat, model, opt)
     
     % Init subjects
     % -------------
-    if opt.verbose, before = plotBatchBegin('Init Q'); end;
+    if opt.verbose, before = plotBatchBegin('Init Q'); end
     for n=1:opt.N
-        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end
         q         = create([M, 1]);
         dat(n).q  = saveOnDisk(dat(n).q,  q);
         dat(n).qq = saveOnDisk(dat(n).qq, q*q');
@@ -170,7 +170,7 @@ function [dat, model] = batchInitAffine(mode, dat, model, opt)
         model.qq  = model.qq + q*q';
         dat(n).A  = exponentiateAffine(q, opt.affine_basis);
     end
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, plotBatchEnd; end
 
 end
 
@@ -201,10 +201,11 @@ function dat = oneStepInitResidual(dat, ~, opt, mode)
 %     if isfield(opt, 'logdet')
 %         dat.llr = llPriorVelocity(r, ...
 %             'vs', opt.vs,  'logdet', opt.logdet, ...
-%             'prm', opt.prm, 'debug', opt.debug);
+%             'prm', opt.prm, 'bnd', opt.shoot.bnd, 'debug', opt.debug);
 %     else
 %         dat.llr = llPriorVelocity(r, ...
-%             'vs', opt.vs, 'prm', opt.prm, 'debug', opt.debug);
+%             'vs', opt.vs, 'prm', opt.prm, 'bnd', opt.shoot.bnd, ...
+%             'debug', opt.debug);
 %     end
 
 end
@@ -222,12 +223,12 @@ function [dat, model] = batchInitResidual(mode, dat, model, opt)
 %     model.llr = 0;
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Init R'); end;
+    if opt.verbose, before = plotBatchBegin('Init R'); end
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
@@ -241,7 +242,7 @@ function [dat, model] = batchInitResidual(mode, dat, model, opt)
 %         end
         
     end
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, plotBatchEnd; end
 end
 
 % -------------------------------------------------------------------------
@@ -292,19 +293,19 @@ function [dat, model] = batchInitZero(dat, model, opt)
     end
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Init Zero'); end;
+    if opt.verbose, before = plotBatchBegin('Init Zero'); end
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
         dat(n1:ne) = distribute('OneStepInitZero', dat(n1:ne), model, opt);
         
     end
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, plotBatchEnd; end
 end
 
 % -------------------------------------------------------------------------
@@ -321,7 +322,7 @@ function [dat, model] = batchInitLatent(mode, dat, model, opt)
         case 'rand'
             create = @randn;
         otherwise
-            error('Unknwon mode %s', mode)
+            error('Unknown mode %s', mode)
     end
     
     % Init model
@@ -331,28 +332,28 @@ function [dat, model] = batchInitLatent(mode, dat, model, opt)
     
     % Init subjects
     % -------------
-    if opt.verbose, before = plotBatchBegin('Init Z'); end;
+    if opt.verbose, before = plotBatchBegin('Init Z'); end
     for n=1:opt.N
-        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end
         z        = create([opt.K, 1]);
         dat(n).z = saveOnDisk(dat(n).z, z);
         mz       = mz  + z;
         mzz      = mzz + z*z';
     end
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, plotBatchEnd; end
     
     % Center subjects
     % ---------------
-    if opt.verbose, before = plotBatchBegin('Center Z'); end;
+    if opt.verbose, before = plotBatchBegin('Center Z'); end
     for n=1:opt.N
-        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end
         z = numeric(dat(n).z) - mz/opt.N;
         
         dat(n).z  = saveOnDisk(dat(n).z, z);
         dat(n).zz = saveOnDisk(dat(n).z, z*z');
         dat(n).Sz = saveOnDisk(dat(n).Sz, zeros(opt.K));
     end
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, plotBatchEnd; end
     model.z  = saveOnDisk(model.z, zeros(opt.K, 1));
     model.zz = saveOnDisk(model.zz, mzz - mz*mz'/opt.N);
     model.Sz = saveOnDisk(model.Sz, zeros(opt.K));
@@ -370,27 +371,27 @@ function dat = batchCentreLatent(dat, opt, mean)
     % Compute the mean if needed
     % --------------------------
     if nargin < 3
-        if opt.verbose, before = plotBatchBegin('Accumul Z'); end;
+        if opt.verbose, before = plotBatchBegin('Accumul Z'); end
         mean = zeros(opt.K, 1);
         for n=1:opt.N
-            if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
+            if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end
             mean = mean + numeric(dat(n).z);
         end
-        if opt.verbose, plotBatchEnd; end;
+        if opt.verbose, plotBatchEnd; end
         mean = mean / opt.N;
     end
         
     
     % Center subjects
     % ---------------
-    if opt.verbose, before = plotBatchBegin('Centre Z'); end;
+    if opt.verbose, before = plotBatchBegin('Centre Z'); end
     for n=1:opt.N
-        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end
         z = numeric(dat(n).z) - mean;
         dat(n).z  = saveOnDisk(dat(n).z, z);
         dat(n).zz = saveOnDisk(dat(n).z, z*z');
     end
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, plotBatchEnd; end
 end
 
 % -------------------------------------------------------------------------
@@ -403,15 +404,15 @@ function dat = batchRotateLatent(dat, opt, R)
     
     % Rotate subjects
     % ---------------
-    if opt.verbose, before = plotBatchBegin('Rotate Z'); end;
+    if opt.verbose, before = plotBatchBegin('Rotate Z'); end
     for n=1:opt.N
-        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(n, 1, opt.N, 50, before); end
         z = R * numeric(dat(n).z);
         dat(n).z  = saveOnDisk(dat(n).z, z);
         dat(n).zz = saveOnDisk(dat(n).z, z*z');
         dat(n).Sz = saveOnDisk(dat(n).Sz, R * numeric(dat(n).Sz) * R');
     end
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, plotBatchEnd; end
 end
 
 % -------------------------------------------------------------------------
@@ -444,7 +445,7 @@ function dat = oneStepFitAffine(dat, model, opt)
         [dat.iphi, dat.phi, dat.jac] = exponentiateVelocity(dat.v, ...
             'iphi', 'phi', 'jac', ...
             'itgr', opt.itgr, 'vs', opt.vs, ...
-            'prm', opt.prm, 'debug', opt.debug, ...
+            'prm', opt.prm, 'bnd', opt.shoot.bnd, 'debug', opt.debug, ...
             'output', {dat.iphi, dat.phi, dat.jac});
         iphi = dat.iphi;
         phi  = dat.phi;
@@ -577,12 +578,12 @@ function [dat, model] = batchFitAffine(dat, model, opt)
     model.Sq   = zeros(M, M);
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Fit Affine'); end;
+    if opt.verbose, before = plotBatchBegin('Fit Affine'); end
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
@@ -600,8 +601,8 @@ function [dat, model] = batchFitAffine(dat, model, opt)
         end
         
     end
-    if opt.verbose, fprintf(' | %4d / %4d', okq, opt.N); end;
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, fprintf(' | %4d / %4d', okq, opt.N); end
+    if opt.verbose, plotBatchEnd; end
 
 end
 
@@ -656,14 +657,14 @@ function dat = oneStepFitLatent(dat, model, opt)
         % Line search
         % -----------
         if isfield(dat, 'A'),         A = dat.A;
-        else                          A = eye(4); end
-%         dat = oneUpdate(dat, model, opt, struct('llmp', true));
+        else,                         A = eye(4); end
         [okz, z, llm, ~, v, ~, pf, c, bb] = lsLatent(...
             noisemodel, dz, dat.z, dat.v, dat.llm, ...
             model.w, model.mu, dat.f, ...
             'regz', model.regz, ...
             'A', A, 'Mf', dat.Mf, 'Mmu', model.Mmu, ...
-            'nit', opt.lsit, 'itgr', opt.itgr, 'prm', opt.prm);
+            'nit', opt.lsit, 'itgr', opt.itgr, ...
+            'prm', opt.prm, 'bnd', opt.shoot.bnd);
 
         % Store better values
         % -------------------
@@ -673,20 +674,15 @@ function dat = oneStepFitLatent(dat, model, opt)
             dat.zz      = z * z';
             dat.llm     = llm;
             dat.v(:)    = v(:);
-%             dat.iphi(:) = iphi(:);
             dat.pf      = prepareOnDisk(dat.pf, size(pf));
             dat.pf(:)   = pf(:);
             dat.c       = prepareOnDisk(dat.c, size(c));
             dat.c(:)    = c(:);
             dat.bb      = bb;
-%             dat.ipsi(:) = ipsi(:);
         else
             break
         end
         
-%         dat = oneUpdate(dat, model, opt, ...
-%                         struct('wmu', true, 'llmw', true), ...
-%                         struct('wmu', true));
     end
     
     % Compute Laplace covariance
@@ -735,12 +731,12 @@ function [dat, model] = batchFitLatent(dat, model, opt)
     okz        = 0;
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Fit Latent'); end;
+    if opt.verbose, before = plotBatchBegin('Fit Latent'); end
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
@@ -759,8 +755,8 @@ function [dat, model] = batchFitLatent(dat, model, opt)
         end
         
     end
-    if opt.verbose, fprintf(' | %4d / %4d', okz, opt.N); end;
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, fprintf(' | %4d / %4d', okz, opt.N); end
+    if opt.verbose, plotBatchEnd; end
 end
 
 % --------------
@@ -784,10 +780,18 @@ function dat = oneStepFitResidual(dat, model, opt)
     end
     
     if isfield(dat, 'A'),         A = dat.A;
-    else                          A = eye(4); end
+    else,                         A = eye(4); end
     if isfield(model, 'lambda'),  lambda = model.lambda;
-    else                          lambda = 1; end
+    else,                         lambda = 1; end
     
+    % Set L boundary conditions
+    % -------------------------
+    if isfield(opt, 'shoot') && isfield(opt.shoot, 'bnd')
+        spm_diffeo('boundary', opt.shoot.bnd);
+    else
+        spm_diffeo('boundary', 0);
+    end
+        
     % Gauss-Newton iterations
     % -----------------------
     % It is useful to actually find a mode of the posterior (and not only
@@ -813,7 +817,7 @@ function dat = oneStepFitResidual(dat, model, opt)
             'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
         
         dat.gr(:,:,:,:) = dat.gr(:,:,:,:) + ghPriorVel(dat.r, ...
-            sqrt(sum(model.Mmu(1:3,1:3).^2)), lambda * opt.prm);
+            sqrt(sum(model.Mmu(1:3,1:3).^2)), lambda * opt.prm, opt.shoot.bnd);
 
         % Compute search direction
         % ------------------------
@@ -827,7 +831,7 @@ function dat = oneStepFitResidual(dat, model, opt)
             noisemodel, dr, dat.r, dat.llm, ...
             model.mu, dat.f, 'v0', dat.v, 'A', A, ....
             'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
-            'itgr', opt.itgr, 'prm', lambda * opt.prm, ...
+            'itgr', opt.itgr, 'prm', lambda * opt.prm,'bnd', opt.shoot.bnd, ...
             'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
 
         % Store better values
@@ -885,10 +889,9 @@ function dat = oneStepFitResidual(dat, model, opt)
     tr = spm_diffeo('trapprox', single(hr/lam), double([vs opt.prm]));
     tr = tr(1);
     % - reg prior
-    llr = llPriorVelocity(r, 'fast', 'vs', vs,  'prm', opt.prm);
+    llr = llPriorVelocity(r, 'fast', 'vs', vs,  'prm', opt.prm, 'bnd', opt.shoot.bnd);
     % - det prior
-    [~, ld1] = spm_shoot_greens('kernel', double(opt.lat), double([vs opt.prm]));
-    ld1 = ld1(1);
+    ld1 = opt.logdet;
     % - det posterior
     K = spm_diffeo('kernel', double(opt.lat), double([vs opt.prm]));
     hr(:,:,:,1) = hr(:,:,:,1) + lam*K(1,1,1,1,1);
@@ -937,12 +940,12 @@ function [dat, model] = batchFitResidual(dat, model, opt)
     okr        = 0;
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Fit Res'); end;
+    if opt.verbose, before = plotBatchBegin('Fit Res'); end
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
@@ -961,8 +964,8 @@ function [dat, model] = batchFitResidual(dat, model, opt)
         end
         
     end
-    if opt.verbose, fprintf(' | %4d / %4d', okr, opt.N); end;
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, fprintf(' | %4d / %4d', okr, opt.N); end
+    if opt.verbose, plotBatchEnd; end
 
 end
 
@@ -1007,12 +1010,12 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
     end
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('GH PG'); end;
+    if opt.verbose, before = plotBatchBegin('GH PG'); end
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
@@ -1037,7 +1040,7 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
         end
         
     end
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, plotBatchEnd; end
 
 end
 
@@ -1068,6 +1071,14 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         noisemodel = opt.model;
     end
     
+    % Set L boundary conditions
+    % -------------------------
+    if isfield(opt, 'shoot') && isfield(opt.shoot, 'bnd')
+        spm_diffeo('boundary', opt.shoot.bnd);
+    else
+        spm_diffeo('boundary', 0);
+    end
+    
     % --- Transform
     if isfield(todo, 'v')
         if isfield(dat, 'z') && isfield(dat, 'r')
@@ -1091,18 +1102,19 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         [dat.iphi, dat.phi, dat.jac] = exponentiateVelocity(dat.v, ...
             'iphi', 'phi', 'jac', ...
             'itgr', opt.itgr, 'vs', opt.vs, ...
-            'prm', opt.prm, 'debug', opt.debug, ...
-            'output', {dat.iphi, dat.phi, dat.jac});
+            'prm', opt.prm, 'bnd', opt.shoot.bnd, ...
+            'debug', opt.debug, 'output', {dat.iphi, dat.phi, dat.jac});
     elseif isfield(todo, 'iphi')
         dat.iphi = exponentiateVelocity(dat.v, 'iphi', ...
             'itgr', opt.itgr, 'vs', opt.vs, ...
-            'prm', opt.prm, 'debug', opt.debug, 'output', dat.iphi);
+            'prm', opt.prm, 'bnd', opt.shoot.bnd, ...
+            'debug', opt.debug, 'output', dat.iphi);
     elseif isfield(todo, 'phi') && isfield(todo, 'jac')
         [dat.phi, dat.jac] = exponentiateVelocity(dat.v, ...
             'phi', 'jac', ...
             'itgr', opt.itgr, 'vs', opt.vs, ...
-            'prm', opt.prm, 'debug', opt.debug, ...
-            'output', {dat.phi, dat.jac});
+            'prm', opt.prm, 'bnd', opt.shoot.bnd, ...
+            'debug', opt.debug, 'output', {dat.phi, dat.jac});
     end
     if isfield(toclean, 'v')
         dat.v = rmarray(dat.v);
@@ -1298,11 +1310,10 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         tr = spm_diffeo('trapprox', single(hr/lam0), double([vs opt.prm]));
         tr = tr(1);
         % - reg prior
-        llr = llPriorVelocity(r, 'fast', 'vs', vs,  'prm', opt.prm);
+        llr = llPriorVelocity(r, 'fast', 'vs', vs,  'prm', opt.prm, 'bnd', opt.shoot.bnd);
         clear r
         % - det prior
-        [~, ld1] = spm_shoot_greens('kernel', double(opt.lat), double([vs opt.prm]));
-        ld1 = ld1(1);
+        ld1 = opt.logdet;
         % - det posterior
         K = spm_diffeo('kernel', double(opt.lat), double([vs opt.prm]));
         hr(:,:,:,1) = hr(:,:,:,1) + lam*K(1,1,1,1,1);
@@ -1326,7 +1337,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
     if isfield(todo, 'llr')
         dat.llr = llPriorVelocity(dat.r, ...
             'vs', sqrt(sum(model.Mmu(1:3,1:3).^2)), ...
-            'prm', opt.prm);
+            'prm', opt.prm, 'bnd', opt.shoot.bnd);
     end
     if isfield(todo, 'klru')
         lam  = model.lambda;
@@ -1360,7 +1371,7 @@ function dat = batchUpdate(dat, model, opt, todo, varargin)
     p.parse(dat, model, opt, todo, varargin{:});
     clean = p.Results.clean;
     
-    if opt.debug, fprintf('* batchUpdate\n'); end;
+    if opt.debug, fprintf('* batchUpdate\n'); end
     
     % --- Detect parallelisation scheme
     if strcmpi(opt.loop, 'subject') && opt.par > 0
@@ -1386,16 +1397,16 @@ function dat = batchUpdate(dat, model, opt, todo, varargin)
     end
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Update'); end;
+    if opt.verbose, before = plotBatchBegin('Update'); end
     for i=1:ceil(numel(dat)/batch)
         n1 = (i-1)*batch + 1;
         ne = min(numel(dat), i*batch);
         
-        if opt.verbose, before = plotBatch(i, batch, numel(dat), 50, before); end;
+        if opt.verbose, before = plotBatch(i, batch, numel(dat), 50, before); end
         
         dat(n1:ne) = distribute('OneUpdate', dat(n1:ne), model, opt, stodo, stoclean);
     end
-    if opt.verbose, plotBatchEnd; end;
+    if opt.verbose, plotBatchEnd; end
     
 end
 

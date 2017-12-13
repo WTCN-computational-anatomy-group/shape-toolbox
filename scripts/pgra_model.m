@@ -81,10 +81,16 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
     opt               = pgra_model_default(opt);
     [opt, dat, model] = pgra_model_data(opt, dat, model);
     
+    
     % ---------------------------------------------------------------------
     %    Compute LogDet(L) and once and for all
     % ---------------------------------------------------------------------
-    [~, opt.logdet] = spm_shoot_greens('kernel', double(opt.lat), double([opt.vs opt.prm]));
+    if isfield(opt, 'shoot') && isfield(opt.shoot, 'bnd')
+        spm_diffeo('boundary', opt.shoot.bnd);
+    else
+        spm_diffeo('boundary', 0);
+    end
+    [~, opt.logdet] = spm_shoot_greens('kernel', double(opt.lat), double([opt.vs opt.prm]), opt.shoot.bnd);
     opt.logdet = opt.logdet(1);
     
     % ---------------------------------------------------------------------
@@ -240,6 +246,14 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
         
             [dat, model] = batchProcess('GradHessSubspace', dat, model, opt);
 
+            % Bàundary conditions
+            % -------------------
+            if isfield(opt, 'shoot') && isfield(opt.shoot, 'bnd')
+                spm_diffeo('boundary', opt.shoot.bnd);
+            else
+                spm_diffeo('boundary', 0);
+            end
+            
             % Factor of the prior : ln p(z|W) + ln p(W)
             % -------------------
             reg = model.wpz(2) * (model.zz + model.Sz) + eye(size(model.zz));
@@ -268,7 +282,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
 
             % -----------
             % Lower bound
-            model.llw  = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm, opt.logdet);
+            model.llw  = llPriorSubspace(model.w, model.ww, opt.logdet);
             model.lbz  = lbLatent(dat, model, opt);
             model      = plotAll(model, opt);
             % -----------
@@ -293,20 +307,20 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
 
             % Orthogonalise
             % -------------
-            if opt.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end;
+            if opt.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
             [U, iU] = orthogonalisationMatrix(model.zz, model.ww);
-            if opt.verbose, fprintf('| %6gs\n', toc); end;
+            if opt.verbose, fprintf('| %6gs\n', toc); end
 
             % Rescale
             % -------
-            if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end;
+            if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
             ezz = U*(model.zz + model.Sz)*U';
             if opt.nz0 == 0
                 [Q, iQ] = scalePG(opt.N, opt.K);
             else
                 [Q, iQ] = gnScalePG(ezz, opt.nz0, opt.N, model.wpz(2));
             end
-            if opt.verbose, fprintf('| %6gs\n', toc); end;
+            if opt.verbose, fprintf('| %6gs\n', toc); end
             Q = Q*U;
             iQ = iU*iQ;
             [model, dat] = rotateAll(model, dat, opt, Q, iQ);
@@ -316,7 +330,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
 
             % -----------
             % Lower bound
-            model.llw  = llPriorSubspace(model.w, model.ww, opt.vs, opt.prm, opt.logdet);
+            model.llw  = llPriorSubspace(model.w, model.ww, opt.logdet);
             model.lbaz = lbPrecisionMatrix(model.Az, opt.N, opt.nz0);
             model.lbz  = lbLatent(dat, model, opt);
             model      = plotAll(model, opt);
@@ -348,7 +362,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
             model.lambda_prev = model.lambda;
             model.lambda = precisionResidualGamma(opt.lambda0, opt.nlam0, ...
                 model.err, opt.N, opt.lat);
-            if opt.verbose, fprintf('%10s | %10g\n', 'Lambda', model.lambda); end;
+            if opt.verbose, fprintf('%10s | %10g\n', 'Lambda', model.lambda); end
                 
             % -----------
             % Lower bound
@@ -367,7 +381,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
         % -----------------------------------------------------------------
         %    Template
         % -----------------------------------------------------------------
-        if opt.verbose, fprintf('%10s | %10s ', 'Template', ''); tic; end;
+        if opt.verbose, fprintf('%10s | %10s ', 'Template', ''); tic; end
         if opt.tpm
             model.a = updateMuML(opt.model, dat, 'fwhm', opt.fwhm, ...
                                  'par', opt.par, 'debug', opt.debug, ...
@@ -384,7 +398,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
             model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
                 'debug', opt.debug, 'output', model.gmu);
         end
-        if opt.verbose, fprintf('| %6gs\n', toc); end;
+        if opt.verbose, fprintf('| %6gs\n', toc); end
         
         % -----------
         % Lower bound
