@@ -530,7 +530,7 @@ function model = plotAll(model, opt, loop)
         image(reshape(pg, [dim(1:2) dim(4)]));
         daspect(1./vs);
         axis off
-        title('PG1 y')
+        title('PG1')
         % Precision
         subplot(px, py, 4)
         imagesc(model.ww)
