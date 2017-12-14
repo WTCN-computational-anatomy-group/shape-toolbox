@@ -13,7 +13,7 @@ function c = catToColor(f, pal)
     if numel(size(f)) == 4 && size(f, 3) == 1
         tri = true;
         dim = [size(f) 1 1];
-        reshape(f, [dim(1:2) dim(4)]);
+        f = reshape(f, [dim(1:2) dim(4)]);
     end
     if isa(pal, 'function_handle')
         pal = pal(size(f,3));
