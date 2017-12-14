@@ -130,7 +130,7 @@ end
 
 
 function plotBatchEnd
-    fprintf(' | %fs\n', toc);
+    fprintf(' | %6.3fs\n', toc);
 end
 
 % -------------------------------------------------------------------------
@@ -426,127 +426,144 @@ end
 function dat = oneStepFitAffine(dat, model, opt)
 
     % Detect parallelisation scheme
-    % ------------------------
+    % -----------------------------
     if strcmpi(opt.loop, 'subject')
         opt.loop = '';
         opt.par  = 0;
         opt.verbose = false;
     end
-        
+    
     if isfield(dat, 'model')
         noisemodel = dat.model;
     else
         noisemodel = opt.model;
     end
     
-    % Compute phi/jac (needed for Affine fitting)
-    % ---------------
-    if isfield(dat, 'v')
-        [dat.iphi, dat.phi, dat.jac] = exponentiateVelocity(dat.v, ...
-            'iphi', 'phi', 'jac', ...
-            'itgr', opt.itgr, 'vs', opt.vs, ...
-            'prm', opt.prm, 'bnd', opt.shoot.bnd, 'debug', opt.debug, ...
-            'output', {dat.iphi, dat.phi, dat.jac});
-        iphi = dat.iphi;
-        phi  = dat.phi;
-        jac  = dat.jac;
+    if numel(opt.affine_rind) > 0 || dat.okq >= 0
+        % Compute phi/jac (needed for Affine fitting)
+        % ---------------
+        if isfield(dat, 'v')
+            [dat.iphi, dat.phi, dat.jac] = exponentiateVelocity(dat.v, ...
+                'iphi', 'phi', 'jac', ...
+                'itgr', opt.itgr, 'vs', opt.vs, ...
+                'prm', opt.prm, 'bnd', opt.shoot.bnd, 'debug', opt.debug, ...
+                'output', {dat.iphi, dat.phi, dat.jac});
+            iphi = dat.iphi;
+            phi  = dat.phi;
+            jac  = dat.jac;
+        else
+            iphi = warps('identity', opt.lat);
+            phi  = [];
+            jac  = [];
+        end
+    end
+        
+    % Penalise previous failure
+    % -------------------------
+    if dat.okq < 0
+        dat.okq = dat.okq + 1;
+        compute_hessian = true;
     else
-        iphi = warps('identity', opt.lat);
-        phi  = [];
-        jac  = [];
-    end
+
+        % Gauss-Newton iterations
+        % -----------------------
+        % It is useful to actually find a mode of the posterior (and not only
+        % an improved value) when we use the Laplace precision for the update
+        % of W. In that case, setting gnit > 1 might help converge faster.
+        cumokq  = false;
+        for i=1:opt.gnit
+
+            % Compute gradient/hessian
+            % ------------------------
+
+            [dat.gq, dat.hq] = ghMatchingAffine(noisemodel, ...
+                model.mu, dat.pf, dat.c, ...
+                model.gmu, dat.A, opt.affine_basis, ...
+                phi, jac, 'bb', dat.bb, ...
+                'Mmu', model.Mmu, 'loop', opt.loop, 'par', opt.par, ...
+                'debug', opt.debug, 'approx', opt.happrox);
+
+            if checkarray(model.regq)
+                rind = opt.affine_rind;
+                [gq, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
+                dat.gq(rind)      = dat.gq(rind)      + gq;
+                dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
+                clear gq hq
+            else
+                rind = [];
+            end
+
+            dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness)
+
+            % Compute search direction
+            % ------------------------
+            dq = -dat.hq \ dat.gq;
+
+            % Line search
+            % -----------
+            [okq, q, llm, ~, A, pf, c, bb] = lsAffine(...
+                noisemodel, dq, dat.q, dat.llm, model.mu, dat.f, ...
+                'B', opt.affine_basis, 'regq', model.regq, 'rind', rind, ...
+                'iphi', iphi, ...
+                'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
+                'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
+
+            % Store better values
+            % -------------------
+            cumokq = cumokq || okq;
+            compute_hessian = okq;
+            if okq
+                dat.q       = q;
+                dat.qq      = q * q';
+                dat.llm     = llm;
+                dat.A       = A;
+                dat.pf      = prepareOnDisk(dat.pf, size(pf));
+                dat.pf(:)   = pf(:);
+                dat.c       = prepareOnDisk(dat.c, size(c));
+                dat.c(:)    = c(:);
+                dat.bb      = bb;
+            else
+                break
+            end
+
+        end % < GN iterations
+        if cumokq
+            dat.okq2 = 0;
+            dat.okq  = 1; 
+        else
+            dat.okq2 = dat.okq2 - 1;
+            dat.okq  = dat.okq2; 
+        end
+        
+    end % < penalise previous failure
+        
     
-    % Gauss-Newton iterations
-    % -----------------------
-    % It is useful to actually find a mode of the posterior (and not only
-    % an improved value) when we use the Laplace precision for the update
-    % of W. In that case, setting gnit > 1 might help converge faster.
-    dat.okq = false;
-    for i=1:opt.gnit
+    if numel(opt.affine_rind) > 0
+        % Prior / KL-divergence
+        % ---------------------
 
-        % Compute gradient/hessian
-        % ------------------------
-        
-        [dat.gq, dat.hq] = ghMatchingAffine(noisemodel, ...
-            model.mu, dat.pf, dat.c, ...
-            model.gmu, dat.A, opt.affine_basis, ...
-            phi, jac, 'bb', dat.bb, ...
-            'Mmu', model.Mmu, 'loop', opt.loop, 'par', opt.par, ...
-            'debug', opt.debug, 'approx', opt.happrox);
-        
-        if checkarray(model.regq)
-            rind = opt.affine_rind;
-            [gq, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
-            dat.gq(rind)      = dat.gq(rind)      + gq;
-            dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
-            clear gq hq
-        else
-            rind = [];
+        if compute_hessian
+            dat.hq = ghMatchingAffine(noisemodel, ...
+                model.mu, dat.pf, dat.c, ...
+                model.gmu, dat.A, opt.affine_basis, ...
+                dat.phi, dat.jac, ...
+                'bb', dat.bb', 'hessian', true, ...
+                'Mmu', model.Mmu, 'loop', opt.loop, 'par', opt.par, ...
+                'debug', opt.debug, 'approx', opt.happrox);
+
+            if checkarray(model.regq)
+                [~, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
+                dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
+                clear hq
+            end
+
+            dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness
+
         end
-        
-        dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness)
-
-        % Compute search direction
-        % ------------------------
-        dq = -dat.hq \ dat.gq;
-
-        % Line search
-        % -----------
-%         dat = oneUpdate(dat, model, opt, struct('llmp', true));
-        [okq, q, llm, ~, A, pf, c, bb] = lsAffine(...
-            noisemodel, dq, dat.q, dat.llm, model.mu, dat.f, ...
-            'B', opt.affine_basis, 'regq', model.regq, 'rind', rind, ...
-            'iphi', iphi, ...
-            'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
-            'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
-
-        % Store better values
-        % -------------------
-        dat.okq = dat.okq || okq;
-        if okq
-            dat.q       = q;
-            dat.qq      = q * q';
-            dat.llm     = llm;
-            dat.A       = A;
-            dat.pf      = prepareOnDisk(dat.pf, size(pf));
-            dat.pf(:)   = pf(:);
-            dat.c       = prepareOnDisk(dat.c, size(c));
-            dat.c(:)    = c(:);
-            dat.bb      = bb;
-%             dat.ipsi    = prepareOnDisk(dat.ipsi, size(ipsi));
-%             dat.ipsi(:) = ipsi(:);
-        else
-            break
-        end
-
-%         dat = oneUpdate(dat, model, opt, ...
-%                         struct('wmu', true, 'llmw', true), ...
-%                         struct('wmu', true));
-        
+        dat.Sq = inv(dat.hq);
+    else
+        dat.Sq = zeros(size(opt.affine_basis, 3));
     end
-        
-    % Compute Laplace covariance
-    % --------------------------
-
-    if okq
-        dat.hq = ghMatchingAffine(noisemodel, ...
-            model.mu, dat.pf, dat.c, ...
-            model.gmu, dat.A, opt.affine_basis, ...
-            dat.phi, dat.jac, ...
-            'bb', dat.bb', 'hessian', true, ...
-            'Mmu', model.Mmu, 'loop', opt.loop, 'par', opt.par, ...
-            'debug', opt.debug, 'approx', opt.happrox);
-
-        if checkarray(model.regq)
-            [~, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
-            dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
-            clear hq
-        end
-
-        dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness
-        
-    end
-    dat.Sq = inv(dat.hq);
     
     % Cleaning
     % --------
@@ -571,11 +588,12 @@ function [dat, model] = batchFitAffine(dat, model, opt)
     % Init gradient/hessian
     % ---------------------
     model.llm  = 0;
-    okq        = 0;
     M          = size(opt.affine_basis, 3);
     model.q    = zeros(M, 1);
     model.qq   = zeros(M, M);
     model.Sq   = zeros(M, M);
+    
+    N = sum([dat.okq] >= 0);
     
     % --- Batch processing
     if opt.verbose, before = plotBatchBegin('Fit Affine'); end
@@ -594,14 +612,14 @@ function [dat, model] = batchFitAffine(dat, model, opt)
             % Add individual contributions
             % ----------------------------
             model.llm  = model.llm + dat(n).llm;
-            okq        = okq       + dat(n).okq;
             model.q    = model.q   + dat(n).q;
             model.qq   = model.qq  + dat(n).qq;
             model.Sq   = model.Sq  + dat(n).Sq;
         end
         
     end
-    if opt.verbose, fprintf(' | %4d / %4d', okq, opt.N); end
+    okq = sum([dat.okq] > 0);
+    if opt.verbose, fprintf(' | %3d / %3d / %3d', okq, N, opt.N); end
     if opt.verbose, plotBatchEnd; end
 
 end
@@ -625,70 +643,87 @@ function dat = oneStepFitLatent(dat, model, opt)
     else
         noisemodel = opt.model;
     end
-    
-    % Gauss-Newton iterations
-    % -----------------------
-    % It is useful to actually find a mode of the posterior (and not only
-    % an improved value) when we use the Laplace precision for the update
-    % of W. In that case, setting gnit > 1 might help converge faster.
-    dat.okz = false;
-    for i=1:opt.gnit
+        
+    % Penalise previous failure
+    % -------------------------
+    if dat.okz < 0
+        dat.okz = dat.okz + 1;
+        compute_hessian = true;
+    else
 
-        % Compute gradient/hessian
-        % ------------------------
+        % Gauss-Newton iterations
+        % -----------------------
+        % It is useful to actually find a mode of the posterior (and not only
+        % an improved value) when we use the Laplace precision for the update
+        % of W. In that case, setting gnit > 1 might help converge faster.
+        cumokz = false;
+        for i=1:opt.gnit
 
-        [dat.gz, dat.hz] = ghMatchingLatent(noisemodel, ...
-            model.mu, dat.pf, dat.c, model.gmu, model.w, ...
-            'bb', dat.bb, ...
-            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
-            'output', {dat.gz, dat.hz});
+            % Compute gradient/hessian
+            % ------------------------
 
-        [gz, hz] = ghPriorLatent(dat.z, model.regz, 'debug', opt.debug);
-        dat.gz = dat.gz + gz;
-        dat.hz = dat.hz + hz;
-        clear gz hz
+            [dat.gz, dat.hz] = ghMatchingLatent(noisemodel, ...
+                model.mu, dat.pf, dat.c, model.gmu, model.w, ...
+                'bb', dat.bb, ...
+                'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
+                'output', {dat.gz, dat.hz});
 
-        dat.hz = loadDiag(dat.hz); % Additional regularisation for robustness
+            [gz, hz] = ghPriorLatent(dat.z, model.regz, 'debug', opt.debug);
+            dat.gz = dat.gz + gz;
+            dat.hz = dat.hz + hz;
+            clear gz hz
 
-        % Compute search direction
-        % ------------------------
-        dz = -dat.hz \ dat.gz;
+            dat.hz = loadDiag(dat.hz); % Additional regularisation for robustness
 
-        % Line search
-        % -----------
-        if isfield(dat, 'A'),         A = dat.A;
-        else,                         A = eye(4); end
-        [okz, z, llm, ~, v, ~, pf, c, bb] = lsLatent(...
-            noisemodel, dz, dat.z, dat.v, dat.llm, ...
-            model.w, model.mu, dat.f, ...
-            'regz', model.regz, ...
-            'A', A, 'Mf', dat.Mf, 'Mmu', model.Mmu, ...
-            'nit', opt.lsit, 'itgr', opt.itgr, ...
-            'prm', opt.prm, 'bnd', opt.shoot.bnd);
+            % Compute search direction
+            % ------------------------
+            dz = -dat.hz \ dat.gz;
 
-        % Store better values
-        % -------------------
-        dat.okz = dat.okz || okz;
-        if okz
-            dat.z       = z;
-            dat.zz      = z * z';
-            dat.llm     = llm;
-            dat.v(:)    = v(:);
-            dat.pf      = prepareOnDisk(dat.pf, size(pf));
-            dat.pf(:)   = pf(:);
-            dat.c       = prepareOnDisk(dat.c, size(c));
-            dat.c(:)    = c(:);
-            dat.bb      = bb;
+            % Line search
+            % -----------
+            if isfield(dat, 'A'),         A = dat.A;
+            else,                         A = eye(4); end
+            [okz, z, llm, ~, v, ~, pf, c, bb] = lsLatent(...
+                noisemodel, dz, dat.z, dat.v, dat.llm, ...
+                model.w, model.mu, dat.f, ...
+                'regz', model.regz, ...
+                'A', A, 'Mf', dat.Mf, 'Mmu', model.Mmu, ...
+                'nit', opt.lsit, 'itgr', opt.itgr, ...
+                'prm', opt.prm, 'bnd', opt.shoot.bnd);
+
+            % Store better values
+            % -------------------
+            cumokz = cumokz || okz;
+            compute_hessian = okz;
+            if okz
+                dat.z       = z;
+                dat.zz      = z * z';
+                dat.llm     = llm;
+                dat.v(:)    = v(:);
+                dat.pf      = prepareOnDisk(dat.pf, size(pf));
+                dat.pf(:)   = pf(:);
+                dat.c       = prepareOnDisk(dat.c, size(c));
+                dat.c(:)    = c(:);
+                dat.bb      = bb;
+            else
+                break
+            end
+
+        end % < GN iterations
+        if cumokz
+            dat.okz2 = 0;
+            dat.okz  = 1; 
         else
-            break
+            dat.okz2 = dat.okz2 - 1;
+            dat.okz  = dat.okz2; 
         end
         
-    end
+    end % < penalise previous failure
     
     % Compute Laplace covariance
     % --------------------------
 
-    if okz
+    if compute_hessian
         dat.hz = ghMatchingLatent(noisemodel, ...
             model.mu, dat.pf, dat.c, model.gmu, model.w,...
             'bb', dat.bb, 'hessian', true);
@@ -728,7 +763,8 @@ function [dat, model] = batchFitLatent(dat, model, opt)
     model.z    = zeros(opt.K, 1);
     model.zz   = zeros(opt.K, opt.K);
     model.Sz   = zeros(opt.K, opt.K);
-    okz        = 0;
+    
+    N = sum([dat.okz] >= 0);
     
     % --- Batch processing
     if opt.verbose, before = plotBatchBegin('Fit Latent'); end
@@ -750,12 +786,12 @@ function [dat, model] = batchFitLatent(dat, model, opt)
             model.zz   = model.zz  + dat(n).zz;
             model.Sz   = model.Sz  + dat(n).Sz;
             model.llm  = model.llm + dat(n).llm;
-            okz        = okz + dat(n).okz;
             
         end
         
     end
-    if opt.verbose, fprintf(' | %4d / %4d', okz, opt.N); end
+    okz = sum([dat.okz] > 0);
+    if opt.verbose, fprintf(' | %3d / %3d / %3d', okz, N, opt.N); end
     if opt.verbose, plotBatchEnd; end
 end
 
@@ -766,7 +802,7 @@ end
 function dat = oneStepFitResidual(dat, model, opt)
 
     % Detect parallelisation scheme
-    % ------------------------
+    % -----------------------------
     if strcmpi(opt.loop, 'subject')
         opt.loop = '';
         opt.par  = 0;
@@ -792,76 +828,87 @@ function dat = oneStepFitResidual(dat, model, opt)
         spm_diffeo('boundary', 0);
     end
         
-    % Gauss-Newton iterations
-    % -----------------------
-    % It is useful to actually find a mode of the posterior (and not only
-    % an improved value) when we use the Laplace precision for the update
-    % of W. In that case, setting gnit > 1 might help converge faster.
-    dat.okr = false;
-    for i=1:opt.gnit
-
-        % Compute gradient/hessian
-        % ------------------------
-        lat = [size(model.mu) 1];
-        dat.gr = prepareOnDisk(dat.gr, [lat(1:3) 3]); 
-        dat.gr(:) = 0;
-        dat.hr = prepareOnDisk(dat.hr, [lat(1:3) 6]); 
-        dat.hr(:) = 0;
-        bx = dat.bb.x;
-        by = dat.bb.y;
-        bz = dat.bb.z;
+    % Penalise previous failure
+    % -------------------------
+    if dat.okr < 0
+        dat.okr = dat.okr + 1;
+        compute_hessian = true;
+    else
         
-        [dat.gr(bx,by,bz,:), dat.hr(bx,by,bz,:)] = ghMatchingVel(...
-            noisemodel, ...
-            model.mu, dat.pf, dat.c, model.gmu, 'bb', dat.bb, ...
-            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
-        
-        dat.gr(:,:,:,:) = dat.gr(:,:,:,:) + ghPriorVel(dat.r, ...
-            sqrt(sum(model.Mmu(1:3,1:3).^2)), lambda * opt.prm, opt.shoot.bnd);
+        % Gauss-Newton iterations
+        % -----------------------
+        % It is useful to actually find a mode of the posterior (and not only
+        % an improved value) when we use the Laplace precision for the update
+        % of W. In that case, setting gnit > 1 might help converge faster.
+        cumokr = false;
+        for i=1:opt.gnit
 
-        % Compute search direction
-        % ------------------------
-        dr = -spm_diffeo('fmg', single(dat.hr), single(dat.gr), ...
-            double([sqrt(sum(model.Mmu(1:3,1:3).^2)) lambda * opt.prm 2 2]));
+            % Compute gradient/hessian
+            % ------------------------
+            lat = [size(model.mu) 1];
+            dat.gr = prepareOnDisk(dat.gr, [lat(1:3) 3]); 
+            dat.gr(:) = 0;
+            dat.hr = prepareOnDisk(dat.hr, [lat(1:3) 6]); 
+            dat.hr(:) = 0;
+            bx = dat.bb.x;
+            by = dat.bb.y;
+            bz = dat.bb.z;
 
-        % Line search
-        % -----------
-%         dat = oneUpdate(dat, model, opt, struct( 'llmp', true));
-        [okr, r, llm, llr, ~, pf, c, bb, ~, v] = lsVelocity(...
-            noisemodel, dr, dat.r, dat.llm, ...
-            model.mu, dat.f, 'v0', dat.v, 'A', A, ....
-            'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
-            'itgr', opt.itgr, 'prm', lambda * opt.prm,'bnd', opt.shoot.bnd, ...
-            'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
+            [dat.gr(bx,by,bz,:), dat.hr(bx,by,bz,:)] = ghMatchingVel(...
+                noisemodel, ...
+                model.mu, dat.pf, dat.c, model.gmu, 'bb', dat.bb, ...
+                'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
 
-        % Store better values
-        % -------------------
-        dat.okr = dat.okr || okr;
-        if okr
-            dat.r(:)    = r(:);
-            dat.llm     = llm;
-            dat.llr     = llr;
-            dat.v(:)    = v(:);
-%             dat.iphi(:) = iphi(:);
-            dat.pf      = prepareOnDisk(dat.pf, size(pf));
-            dat.pf(:)   = pf(:);
-            dat.c       = prepareOnDisk(dat.c, size(c));
-            dat.c(:)    = c(:);
-            dat.bb      = bb;
-%             dat.ipsi(:) = ipsi(:);
+            dat.gr(:,:,:,:) = dat.gr(:,:,:,:) + ghPriorVel(dat.r, ...
+                sqrt(sum(model.Mmu(1:3,1:3).^2)), lambda * opt.prm, opt.shoot.bnd);
+
+            % Compute search direction
+            % ------------------------
+            dr = -spm_diffeo('fmg', single(dat.hr), single(dat.gr), ...
+                double([sqrt(sum(model.Mmu(1:3,1:3).^2)) lambda * opt.prm 2 2]));
+
+            % Line search
+            % -----------
+            [okr, r, llm, llr, ~, pf, c, bb, ~, v] = lsVelocity(...
+                noisemodel, dr, dat.r, dat.llm, ...
+                model.mu, dat.f, 'v0', dat.v, 'A', A, ....
+                'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
+                'itgr', opt.itgr, 'prm', lambda * opt.prm,'bnd', opt.shoot.bnd, ...
+                'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
+
+            % Store better values
+            % -------------------
+            cumokr = cumokr || okr;
+            compute_hessian = okr;
+            if okr
+                dat.r(:)    = r(:);
+                dat.llm     = llm;
+                dat.llr     = llr;
+                dat.v(:)    = v(:);
+                dat.pf      = prepareOnDisk(dat.pf, size(pf));
+                dat.pf(:)   = pf(:);
+                dat.c       = prepareOnDisk(dat.c, size(c));
+                dat.c(:)    = c(:);
+                dat.bb      = bb;
+            else
+                break
+            end
+
+        end % < GN iterations
+        if cumokr
+            dat.okr2 = 0;
+            dat.okr  = 1; 
         else
-            break
+            dat.okr2 = dat.okr2 - 1;
+            dat.okr  = dat.okr2; 
         end
         
-%         dat = oneUpdate(dat, model, opt, ...
-%                         struct('wmu', true, 'llmw', true), ...
-%                         struct('wmu', true));
-    end
+    end % < penalise previous failure
     
     % Compute Laplace covariance
     % --------------------------
 
-    if okr
+    if compute_hessian
         bx = dat.bb.x;
         by = dat.bb.y;
         bz = dat.bb.z;
@@ -937,7 +984,8 @@ function [dat, model] = batchFitResidual(dat, model, opt)
     model.llm  = 0;
     model.llr  = 0;
     model.err  = 0;
-    okr        = 0;
+    
+    N = sum([dat.okr] >= 0);
     
     % --- Batch processing
     if opt.verbose, before = plotBatchBegin('Fit Res'); end
@@ -959,12 +1007,12 @@ function [dat, model] = batchFitResidual(dat, model, opt)
             model.llm  = model.llm + dat(n).llm;
             model.llr  = model.llr + dat(n).llr;
             model.err  = model.err + dat(n).err;
-            okr        = okr + dat(n).okr;
             
         end
         
     end
-    if opt.verbose, fprintf(' | %4d / %4d', okr, opt.N); end
+    okr = sum([dat.okr] > 0);
+    if opt.verbose, fprintf(' | %3d / %3d / %3d', okr, N, opt.N); end
     if opt.verbose, plotBatchEnd; end
 
 end

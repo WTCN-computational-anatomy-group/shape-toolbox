@@ -179,6 +179,8 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
     % converges
     lbthreshold = 1e-4;
     activated = struct('affine', true, 'pg', true, 'residual', false);
+    model.okw = 0; 
+    model.okw2 = 0; % consecutive failures
     
     % ---------------------------------------------------------------------
     %    EM iterations
@@ -244,49 +246,62 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
 
         if activated.pg
         
-            [dat, model] = batchProcess('GradHessSubspace', dat, model, opt);
-
-            % Bàundary conditions
-            % -------------------
-            if isfield(opt, 'shoot') && isfield(opt.shoot, 'bnd')
-                spm_diffeo('boundary', opt.shoot.bnd);
+            % Penalise previous failure
+            % -------------------------
+            if model.okw < 0
+                model.okw = model.okw + 1;
             else
-                spm_diffeo('boundary', 0);
-            end
             
-            % Factor of the prior : ln p(z|W) + ln p(W)
-            % -------------------
-            reg = model.wpz(2) * (model.zz + model.Sz) + eye(size(model.zz));
+                [dat, model] = batchProcess('GradHessSubspace', dat, model, opt);
 
-            % Gradient
-            % --------
-            for k=1:opt.K
-                lw = spm_diffeo('vel2mom', single(model.w(:,:,:,:,k)), [opt.vs, opt.prm]);
-                model.gw(:,:,:,:,k) = model.gw(:,:,:,:,k) + reg(k,k) * lw;
-            end
+                % Bàundary conditions
+                % -------------------
+                if isfield(opt, 'shoot') && isfield(opt.shoot, 'bnd')
+                    spm_diffeo('boundary', opt.shoot.bnd);
+                else
+                    spm_diffeo('boundary', 0);
+                end
 
-            % Search direction
-            % ----------------
-            model.dw = prepareOnDisk(model.dw, size(model.w));
-            for k=1:opt.K
-                model.dw(:,:,:,:,k) = -spm_diffeo('fmg', ...
-                    single(model.hw(:,:,:,:,k)), single(model.gw(:,:,:,:,k)), ...
-                    double([opt.vs reg(k,k) * opt.prm 2 2]));
-            end
-            model.gw = rmarray(model.gw);
-            model.hw = rmarray(model.hw);
+                % Factor of the prior : ln p(z|W) + ln p(W)
+                % -------------------
+                reg = model.wpz(2) * (model.zz + model.Sz) + eye(size(model.zz));
 
-            [~, model, dat] = lsSubspace(model.dw, model, dat, opt);
+                % Gradient
+                % --------
+                for k=1:opt.K
+                    lw = spm_diffeo('vel2mom', single(model.w(:,:,:,:,k)), [opt.vs, opt.prm]);
+                    model.gw(:,:,:,:,k) = model.gw(:,:,:,:,k) + reg(k,k) * lw;
+                end
 
-            model.regz = model.wpz(1) * model.Az + model.wpz(2) * model.ww;
+                % Search direction
+                % ----------------
+                model.dw = prepareOnDisk(model.dw, size(model.w));
+                for k=1:opt.K
+                    model.dw(:,:,:,:,k) = -spm_diffeo('fmg', ...
+                        single(model.hw(:,:,:,:,k)), single(model.gw(:,:,:,:,k)), ...
+                        double([opt.vs reg(k,k) * opt.prm 2 2]));
+                end
+                model.gw = rmarray(model.gw);
+                model.hw = rmarray(model.hw);
 
-            % -----------
-            % Lower bound
-            model.llw  = llPriorSubspace(model.w, model.ww, opt.logdet);
-            model.lbz  = lbLatent(dat, model, opt);
-            model      = plotAll(model, opt);
-            % -----------
+                [~, model, dat] = lsSubspace(model.dw, model, dat, opt);
+
+                if model.okw > 0
+                    model.okw2 = 0;
+                    model.regz = model.wpz(1) * model.Az + model.wpz(2) * model.ww;
+
+                    % -----------
+                    % Lower bound
+                    model.llw  = llPriorSubspace(model.w, model.ww, opt.logdet);
+                    model.lbz  = lbLatent(dat, model, opt);
+                    model      = plotAll(model, opt);
+                    % -----------
+                else
+                    model.okw2 = model.okw2 - 1;
+                    model.okw  = model.okw2;
+                end
             
+            end % < penalise previous failure
         end
         
         % -----------------------------------------------------------------
@@ -309,7 +324,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
             % -------------
             if opt.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
             [U, iU] = orthogonalisationMatrix(model.zz, model.ww);
-            if opt.verbose, fprintf('| %6gs\n', toc); end
+            if opt.verbose, fprintf('| %6.3s\n', toc); end
 
             % Rescale
             % -------
@@ -320,7 +335,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
             else
                 [Q, iQ] = gnScalePG(ezz, opt.nz0, opt.N, model.wpz(2));
             end
-            if opt.verbose, fprintf('| %6gs\n', toc); end
+            if opt.verbose, fprintf('| %6.3s\n', toc); end
             Q = Q*U;
             iQ = iU*iQ;
             [model, dat] = rotateAll(model, dat, opt, Q, iQ);
@@ -398,7 +413,7 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
             model.gmu = templateGrad(model.mu, opt.itrp, opt.bnd, ...
                 'debug', opt.debug, 'output', model.gmu);
         end
-        if opt.verbose, fprintf('| %6gs\n', toc); end
+        if opt.verbose, fprintf('| %6.3s\n', toc); end
         
         % -----------
         % Lower bound
@@ -615,9 +630,9 @@ function model = plotAll(model, opt, loop)
         else
             fprintf('%10s | ', '');
         end
-        fprintf(' %6g', model.lb(end));
+        fprintf(' %6.3g', model.lb(end));
         if loop
-            fprintf([repmat(' ', 1, 37) ' | %6e'], model.lbgain);
+            fprintf([repmat(' ', 1, 37) ' | %6.3e'], model.lbgain);
         end
         fprintf('\n')
     end

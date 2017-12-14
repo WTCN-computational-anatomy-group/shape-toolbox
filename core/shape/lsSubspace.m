@@ -110,9 +110,11 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
             {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
             'clean', {'ipsi', 'iphi'});
         model.armijo = min(1.1 * armijo, 100);
+        model.okw = -1;
     else
         model.ll  = ll;
         model.llm = llm;
+        model.okw = 1;
     end
     rmarray(w0);
     rmarray(ww0);
@@ -127,17 +129,17 @@ function printInfo(which, oll, llm, llz, llw)
             fprintf('%10s | %10s | %10s = %10s + %10s + %10s  | %10s\n', 'LS PG', 'Armijo', 'RLL', 'LL-Match', 'RLL-Z', 'RLL-W', 'LL-Diff');
             fprintf([repmat('-', 1, 100) '\n']);
         elseif strcmpi(which, 'initial')
-            fprintf('%10s | %10s | %10g = %10g + %10g + %10g \n', 'LS PG', 'Initial', oll, llm, llz, llw);
+            fprintf('%10s | %10s | %10.6g = %10.6g + %10.6g + %10.6g \n', 'LS PG', 'Initial', oll, llm, llz, llw);
         elseif strcmpi(which, 'failed')
-            fprintf(' | Failed\n');
+            fprintf(' | :(\n');
         elseif strcmpi(which, 'success')
-            fprintf(' | Success\n');
+            fprintf(' | :D\n');
             fprintf([repmat('_', 1, 100) '\n']);
         elseif strcmpi(which, 'end')
             fprintf('%10s | Complete failure\n', 'LS PG');
             fprintf([repmat('_', 1, 100) '\n']);
         end
     else
-        fprintf('%10s | %10g | %10g = %10g + %10g + %10g  | %10g ', 'LS PG', which, llm+llz+llw, llm, llz, llw, llm+llz+llw-oll);
+        fprintf('%10s | %10.6g | %10.6g = %10.6g + %10.6g + %10.6g  | %10.6g ', 'LS PG', which, llm+llz+llw, llm, llz, llw, llm+llz+llw-oll);
     end
 end
