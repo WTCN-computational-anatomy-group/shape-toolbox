@@ -5,11 +5,12 @@ function frames = animatePG(model, opt, pg, fname)
     end
         
     allz = -0.3:0.01:0.3;
+    allz = [allz(:)' allz(end:-1:1)];
 
     Z = ceil(opt.lat(3)/2);
-    [X,Y] = ndgrid(1:opt.lat(1), 1:opt.lat(2));
-    U = reshape(model.w(:,:,Z,1,5), [opt.lat(1) opt.lat(2)]);
-    V = reshape(model.w(:,:,Z,2,5), [opt.lat(1) opt.lat(2)]);
+%     [X,Y] = ndgrid(1:opt.lat(1), 1:opt.lat(2));
+%     U = reshape(model.w(:,:,Z,1,5), [opt.lat(1) opt.lat(2)]);
+%     V = reshape(model.w(:,:,Z,2,5), [opt.lat(1) opt.lat(2)]);
     
     loops = numel(allz);
     frames(loops) = struct('cdata',[],'colormap',[]);
@@ -20,10 +21,10 @@ function frames = animatePG(model, opt, pg, fname)
         mu = warp(iphi, model.mu);
         mu = colorimage(mu, Z);
         image(mu);
-        hold on
-        quiver(Y,X,V,U, 'w')
+%         hold on
+%         quiver(Y,X,V,U, 'w')
+%         hold off
         axis off
-        hold off
         drawnow
         frames(i) = getframe(gcf);
         if endsWith(fname, 'gif')
