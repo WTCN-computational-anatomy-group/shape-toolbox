@@ -150,11 +150,11 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm, bnd)
     end
 
     % Inversion kernel
-    try
+%     try
         F = spm_shoot_greens('kernel', double(lattice_dim), double([vs prm]), bnd);
-    catch
-        error('Unexpected stuff happening')
-    end
+%     catch
+%         error('Unexpected stuff happening')
+%     end
     % Identity transform
     id = single(transfo('idmap', lattice_dim));
     % Initial momentum (m_0 = L v_0)
@@ -192,11 +192,11 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm, bnd)
         end
         % Update velocity
         % v_{t+1} = K m_{t+1}
-        try
+%         try
             v = spm_shoot_greens(m, F, double([vs prm]), bnd);
-        catch
-            error('Unexpected stuff happening')
-        end
+%         catch
+%             error('Unexpected stuff happening')
+%         end
         % Update transform
         diphi = id - v/N;
         try
