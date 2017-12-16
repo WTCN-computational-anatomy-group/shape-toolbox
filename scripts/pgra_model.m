@@ -630,9 +630,9 @@ function model = plotAll(model, opt, loop)
         else
             fprintf('%10s | ', '');
         end
-        fprintf(' %6.3g', model.lb(end));
+        fprintf('%10.3g', model.lb(end));
         if loop
-            fprintf([repmat(' ', 1, 37) ' | %6.3e'], model.lbgain);
+            fprintf([repmat(' ', 1, 40) ' | %10.3e'], model.lbgain);
         end
         fprintf('\n')
     end
