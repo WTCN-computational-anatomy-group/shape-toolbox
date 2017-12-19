@@ -1,7 +1,15 @@
 function [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
-% FORMAT [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v0, llm0, W, mu, f, ...)
+%__________________________________________________________________________
 %
-% ** Required **
+% Performs a line search along a direction to find better latent
+% coordinates. The line search direction is usually found by Gauss-Newton.
+%
+%--------------------------------------------------------------------------
+%
+% FORMAT [ok, z, ...] = lsLatent(model, dz, z0, v0, llm0, W, mu, f, ...)
+%
+% REQUIRED
+% --------
 % model - Structure with fields:
 %           * 'name'    : 'normal', 'laplace', 'bernoulli' or 'categorical'
 %           * ('sigma2'): Normal variance  [1]
@@ -13,7 +21,9 @@ function [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v
 % W    - Principal subspace
 % mu   - Template (in native space)
 % f    - Image (in native space)
-% ** Keyword arguments **
+%
+% KEYWORD ARGUMENTS
+% -----------------
 % llz0 - Previous log-likelihood (prior term) [compute]
 % regz - Precision matrix of the latent parameters [none]
 % A    - Affine transform [eye(4)]
@@ -24,7 +34,9 @@ function [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v
 % prm  - Differential operator parameters [0.0001 0.001 0.2 0.05 0.2]
 % loop - How to split processing [auto]
 % par  - If true, parallelise processing [false]
-% ** Output **
+% 
+% OUTPUT
+% ------
 % ok   - True if a better parameter value was found
 % z    - New parameter value
 % llm  - New log-likelihood (matching term)
@@ -34,9 +46,7 @@ function [ok, z, llm, llz, v, iphi, pf, c, bb, ipsi] = lsLatent(model, dz, z0, v
 % c    - New pushed voxel count
 % bb   - New Bounding box
 % ipsi - New complete affine+diffeomorphic mapping
-%
-% Performs a line search along a direction to find better latent
-% coordinates. The line search direction is usually found by Gauss-Newton.
+%__________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
