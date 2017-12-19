@@ -150,19 +150,11 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm, bnd)
     end
 
     % Inversion kernel
-%     try
-        F = spm_shoot_greens('kernel', double(lattice_dim), double([vs prm]), bnd);
-%     catch
-%         error('Unexpected stuff happening')
-%     end
+    F = spm_shoot_greens('kernel', double(lattice_dim), double([vs prm]), bnd);
     % Identity transform
     id = single(transfo('idmap', lattice_dim));
     % Initial momentum (m_0 = L v_0)
-    try
-        m = spm_diffeo('vel2mom', single(v), double([vs prm]));
-    catch
-        error('Unexpected stuff happening')
-    end
+    m = spm_diffeo('vel2mom', single(v), double([vs prm]));
 
     % First iteration
     iphi = id - v/N;
@@ -172,11 +164,7 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm, bnd)
     for t=2:N
         % Jacobian of the step
         % dJ_t = Jac( I - dv_t )
-        try
-            dJ = spm_diffeo('jacobian', single(diphi));
-        catch
-            error('Unexpected stuff happening')
-        end
+        dJ = spm_diffeo('jacobian', single(diphi));
         m1 = zeros(size(m), 'single');
         % Pointwise matrix multiplication
         % tmp = dJ_t' * m_t
@@ -185,18 +173,11 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm, bnd)
         m1(:,:,:,3) = dJ(:,:,:,1,3).*m(:,:,:,1) + dJ(:,:,:,2,3).*m(:,:,:,2) + dJ(:,:,:,3,3).*m(:,:,:,3);
         % Push values to their new locations
         % m_{t+1} = dphi_t( dJ_t' * m_t )
-        try
-            m = spm_diffeo('pushc', m1, id + v/N);
-        catch
-            error('Unexpected stuff happening')
-        end
+        m = spm_diffeo('pushc', m1, id + v/N);
         % Update velocity
         % v_{t+1} = K m_{t+1}
-%         try
-            v = spm_shoot_greens(m, F, double([vs prm]), bnd);
-%         catch
-%             error('Unexpected stuff happening')
-%         end
+        v = spm_shoot_greens(m, F, double([vs prm]), bnd);
+%         v = spm_diffeo('mom2vel', m, [vs prm 2 2]);
         % Update transform
         diphi = id - v/N;
         try
@@ -209,10 +190,6 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm, bnd)
     end
     
     if nargout > 1
-        try
-            ijac = spm_diffeo('jacobian', single(iphi));
-        catch
-            error('Unexpected stuff happening')
-        end
+        ijac = spm_diffeo('jacobian', single(iphi));
     end
 end
