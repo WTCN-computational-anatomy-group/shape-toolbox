@@ -462,7 +462,6 @@ function dat = oneStepFitAffine(dat, model, opt)
     % -------------------------
     if dat.okq < 0
         dat.okq = dat.okq + 1;
-        compute_hessian = true;
     else
 
         % Gauss-Newton iterations
@@ -483,9 +482,9 @@ function dat = oneStepFitAffine(dat, model, opt)
                 'Mmu', model.Mmu, 'loop', opt.loop, 'par', opt.par, ...
                 'debug', opt.debug, 'approx', opt.happrox);
 
-            if checkarray(model.regq)
+            if checkarray(model.Aq)
                 rind = opt.affine_rind;
-                [gq, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
+                [gq, hq] = ghPriorAffine(dat.q(rind), model.Aq, 'debug', opt.debug);
                 dat.gq(rind)      = dat.gq(rind)      + gq;
                 dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
                 clear gq hq
@@ -503,7 +502,7 @@ function dat = oneStepFitAffine(dat, model, opt)
             % -----------
             [okq, q, llm, ~, A, pf, c, bb] = lsAffine(...
                 noisemodel, dq, dat.q, dat.llm, model.mu, dat.f, ...
-                'B', opt.affine_basis, 'regq', model.regq, 'rind', rind, ...
+                'B', opt.affine_basis, 'regq', model.Aq, 'rind', rind, ...
                 'iphi', iphi, ...
                 'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
                 'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
@@ -535,35 +534,35 @@ function dat = oneStepFitAffine(dat, model, opt)
             dat.okq  = dat.okq2; 
         end
         
-    end % < penalise previous failure
-        
-    
-    if numel(opt.affine_rind) > 0
-        % Prior / KL-divergence
-        % ---------------------
+        if numel(opt.affine_rind) > 0
+            
+            % Prior / KL-divergence
+            % ---------------------
 
-        if compute_hessian
-            dat.hq = ghMatchingAffine(noisemodel, ...
-                model.mu, dat.pf, dat.c, ...
-                model.gmu, dat.A, opt.affine_basis, ...
-                dat.phi, dat.jac, ...
-                'bb', dat.bb', 'hessian', true, ...
-                'Mmu', model.Mmu, 'loop', opt.loop, 'par', opt.par, ...
-                'debug', opt.debug, 'approx', opt.happrox);
+            if compute_hessian
+                dat.hq = ghMatchingAffine(noisemodel, ...
+                    model.mu, dat.pf, dat.c, ...
+                    model.gmu, dat.A, opt.affine_basis, ...
+                    dat.phi, dat.jac, ...
+                    'bb', dat.bb', 'hessian', true, ...
+                    'Mmu', model.Mmu, 'loop', opt.loop, 'par', opt.par, ...
+                    'debug', opt.debug, 'approx', opt.happrox);
 
-            if checkarray(model.regq)
-                [~, hq] = ghPriorAffine(dat.q(rind), model.regq, 'debug', opt.debug);
-                dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
-                clear hq
+                if checkarray(model.Aq)
+                    [~, hq] = ghPriorAffine(dat.q(rind), model.Aq, 'debug', opt.debug);
+                    dat.hq(rind,rind) = dat.hq(rind,rind) + hq;
+                    clear hq
+                end
+
+                dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness
+
             end
-
-            dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness
-
+            dat.Sq = inv(dat.hq);
+        else
+            dat.Sq = zeros(size(opt.affine_basis, 3));
         end
-        dat.Sq = inv(dat.hq);
-    else
-        dat.Sq = zeros(size(opt.affine_basis, 3));
-    end
+    
+    end % < penalise previous failure
     
     % Cleaning
     % --------
@@ -633,8 +632,8 @@ function dat = oneStepFitLatent(dat, model, opt)
     % Detect parallelisation scheme
     % ------------------------
     if strcmpi(opt.loop, 'subject')
-        opt.loop = '';
-        opt.par  = 0;
+        opt.loop    = '';
+        opt.par     = 0;
         opt.verbose = false;
     end
     
@@ -648,7 +647,6 @@ function dat = oneStepFitLatent(dat, model, opt)
     % -------------------------
     if dat.okz < 0
         dat.okz = dat.okz + 1;
-        compute_hessian = true;
     else
 
         % Gauss-Newton iterations
@@ -668,7 +666,7 @@ function dat = oneStepFitLatent(dat, model, opt)
                 'loop', opt.loop, 'par', opt.par, 'debug', opt.debug, ...
                 'output', {dat.gz, dat.hz});
 
-            [gz, hz] = ghPriorLatent(dat.z, model.regz, 'debug', opt.debug);
+            [gz, hz] = ghPriorLatent(dat.z, model.Az, 'debug', opt.debug);
             dat.gz = dat.gz + gz;
             dat.hz = dat.hz + hz;
             clear gz hz
@@ -686,10 +684,11 @@ function dat = oneStepFitLatent(dat, model, opt)
             [okz, z, llm, ~, v, ~, pf, c, bb] = lsLatent(...
                 noisemodel, dz, dat.z, dat.v, dat.llm, ...
                 model.w, model.mu, dat.f, ...
-                'regz', model.regz, ...
-                'A', A, 'Mf', dat.Mf, 'Mmu', model.Mmu, ...
+                'regz', model.Az,  'A', A, 'Mf', dat.Mf, 'Mmu', model.Mmu, ...
                 'nit', opt.lsit, 'itgr', opt.itgr, ...
-                'prm', opt.prm, 'bnd', opt.shoot.bnd);
+                'prm', opt.prm, 'bnd', opt.shoot.bnd, ...
+                'par', opt.par, 'loop', opt.loop, ...
+                'verbose', opt.verbose, 'debug', opt.debug);
 
             % Store better values
             % -------------------
@@ -718,24 +717,25 @@ function dat = oneStepFitLatent(dat, model, opt)
             dat.okz  = dat.okz2; 
         end
         
-    end % < penalise previous failure
     
-    % Compute Laplace covariance
-    % --------------------------
+        % Prior / KL divergence
+        % ---------------------
 
-    if compute_hessian
-        dat.hz = ghMatchingLatent(noisemodel, ...
-            model.mu, dat.pf, dat.c, model.gmu, model.w,...
-            'bb', dat.bb, 'hessian', true);
+        if compute_hessian
+            dat.hz = ghMatchingLatent(noisemodel, ...
+                model.mu, dat.pf, dat.c, model.gmu, model.w,...
+                'bb', dat.bb, 'hessian', true);
 
-        [~, hz] = ghPriorLatent(dat.z, model.regz);
-        dat.hz = dat.hz + hz;
-        clear hz
+            [~, hz] = ghPriorLatent(dat.z, model.Az);
+            dat.hz = dat.hz + hz;
+            clear hz
 
-        dat.hz = loadDiag(dat.hz); % Additional regularisation for robustness
-        
-    end
+            dat.hz = loadDiag(dat.hz); % Additional regularisation for robustness
+
+        end
     dat.Sz = inv(dat.hz);
+    
+    end % < penalise previous failure
         
     % Cleaning
     % --------
@@ -832,7 +832,6 @@ function dat = oneStepFitResidual(dat, model, opt)
     % -------------------------
     if dat.okr < 0
         dat.okr = dat.okr + 1;
-        compute_hessian = true;
     else
         
         % Gauss-Newton iterations
@@ -874,7 +873,7 @@ function dat = oneStepFitResidual(dat, model, opt)
                 model.mu, dat.f, 'v0', dat.v, 'A', A, ....
                 'Mf', dat.Mf, 'Mmu', model.Mmu, 'nit', opt.lsit, ...
                 'itgr', opt.itgr, 'prm', lambda * opt.prm,'bnd', opt.shoot.bnd, ...
-                'par', opt.par, 'verbose', opt.verbose, 'debug', opt.debug);
+                'par', opt.par, 'loop', opt.loop, 'verbose', opt.verbose, 'debug', opt.debug);
 
             % Store better values
             % -------------------
@@ -902,63 +901,63 @@ function dat = oneStepFitResidual(dat, model, opt)
             dat.okr2 = dat.okr2 - 1;
             dat.okr  = dat.okr2; 
         end
-        
-    end % < penalise previous failure
     
-    % Compute Laplace covariance
-    % --------------------------
+        % Prior / KL-divergence
+        % ---------------------
 
-    if compute_hessian
-        bx = dat.bb.x;
-        by = dat.bb.y;
-        bz = dat.bb.z;
-        dat.hr(bx,by,bz,:) = ghMatchingVel(noisemodel, ...
-            model.mu, dat.pf, dat.c, model.gmu, ...
-            'bb', dat.bb, 'hessian', true, ...
-            'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
-    end
+        if compute_hessian
+            bx = dat.bb.x;
+            by = dat.bb.y;
+            bz = dat.bb.z;
+            dat.hr(bx,by,bz,:) = ghMatchingVel(noisemodel, ...
+                model.mu, dat.pf, dat.c, model.gmu, ...
+                'bb', dat.bb, 'hessian', true, ...
+                'loop', opt.loop, 'par', opt.par, 'debug', opt.debug);
+        end
+
+        % Statistics for precision update
+        % -------------------------------
+
+        % err: trace(E[RR]L) -> for lambda upadte
+        % klr1: prior part of the KL divergence
+        % klr2: posterior part of the KL divergence
+
+        lam = model.lambda;
+        hr = single(numeric(dat.hr));
+        r  = single(numeric(dat.r));
+        vs = sqrt(sum(model.Mmu(1:3,1:3).^2));
+
+        % 1) Compute all elements
+
+        % - trace
+        tr = spm_diffeo('trapprox', single(hr/lam), double([vs opt.prm]));
+        tr = tr(1);
+        % - reg prior
+        llr = llPriorVelocity(r, 'fast', 'vs', vs,  'prm', opt.prm, 'bnd', opt.shoot.bnd);
+        % - det prior
+        ld1 = opt.logdet;
+        % - det posterior
+        K = spm_diffeo('kernel', double(opt.lat), double([vs opt.prm]));
+        hr(:,:,:,1) = hr(:,:,:,1) + lam*K(1,1,1,1,1);
+        hr(:,:,:,2) = hr(:,:,:,2) + lam*K(1,1,1,2,2);
+        if size(hr, 3) == 1
+            hr(:,:,:,3)   = 1;
+            hr(:,:,:,5:6) = 0;
+        else
+            hr(:,:,:,3) = hr(:,:,:,3) + lam*K(1,1,1,3,3);
+        end
+        ld2 = sumall(log(abs(pointwise3(hr, 'd'))));
+
+        % 2) Sum each statistic
+        dat.err  = 0.5*(tr/lam + llr);
+        dat.trr  = tr;   % (keep track so that we do not need recomputing it)
+        dat.llr  = llr;  % (keep track so that we do not need recomputing it)
+        dat.klr1 = 0.5*(tr - prod(opt.lat)*3*log(lam) + lam*llr);
+        dat.klr2 = 0.5*(ld2 - ld1 - prod(opt.lat)*3);
+        dat.klr  = dat.klr1 + dat.klr2;
     
-    % Statistics for precision update
-    % -------------------------------
     
-    % err: trace(E[RR]L) -> for lambda upadte
-    % klr1: prior part of the KL divergence
-    % klr2: posterior part of the KL divergence
-    
-    lam = model.lambda;
-    hr = single(numeric(dat.hr));
-    r  = single(numeric(dat.r));
-    vs = sqrt(sum(model.Mmu(1:3,1:3).^2));
-    
-    % 1) Compute all elements
-    
-    % - trace
-    tr = spm_diffeo('trapprox', single(hr/lam), double([vs opt.prm]));
-    tr = tr(1);
-    % - reg prior
-    llr = llPriorVelocity(r, 'fast', 'vs', vs,  'prm', opt.prm, 'bnd', opt.shoot.bnd);
-    % - det prior
-    ld1 = opt.logdet;
-    % - det posterior
-    K = spm_diffeo('kernel', double(opt.lat), double([vs opt.prm]));
-    hr(:,:,:,1) = hr(:,:,:,1) + lam*K(1,1,1,1,1);
-    hr(:,:,:,2) = hr(:,:,:,2) + lam*K(1,1,1,2,2);
-    if size(hr, 3) == 1
-        hr(:,:,:,3)   = 1;
-        hr(:,:,:,5:6) = 0;
-    else
-        hr(:,:,:,3) = hr(:,:,:,3) + lam*K(1,1,1,3,3);
-    end
-    ld2 = sumall(log(abs(pointwise3(hr, 'd'))));
-    
-    % 2) Sum each statistic
-    dat.err  = 0.5*(tr/lam + llr);
-    dat.trr  = tr;   % (keep track so that we do not need recomputing it)
-    dat.llr  = llr;  % (keep track so that we do not need recomputing it)
-    dat.klr1 = 0.5*(tr - prod(opt.lat)*3*log(lam) + lam*llr);
-    dat.klr2 = 0.5*(ld2 - ld1 - prod(opt.lat)*3);
-    dat.klr  = dat.klr1 + dat.klr2;
-    
+    end % < penalise previous failure
     % Cleaning
     % --------
     % I should probably clear variables and remove files that are not
@@ -1073,13 +1072,16 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
             
             % Add individual contributions
             % ----------------------------
+            gv = numeric(dat(n).gv);
+            hv = numeric(dat(n).hv);
             for k=1:opt.K
                 bx = dat(n).bb.x;
                 by = dat(n).bb.y;
                 bz = dat(n).bb.z;
-                model.gw(bx,by,bz,:,k) = model.gw(bx,by,bz,:,k) + numeric(dat(n).gv) * single(dat(n).z(k));
-                model.hw(bx,by,bz,:,k) = model.hw(bx,by,bz,:,k) + numeric(dat(n).hv) * single(dat(n).z(k))^2;
+                model.gw(bx,by,bz,:,k) = model.gw(bx,by,bz,:,k) + gv * single(dat(n).z(k));
+                model.hw(bx,by,bz,:,k) = model.hw(bx,by,bz,:,k) + hv * single(dat(n).z(k))^2;
             end
+            clear gv hv
             
             % Clear individual grad/hess
             % --------------------------
@@ -1238,7 +1240,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
             opt.affine_basis, dat.phi, dat.jac, ...
             'bb', dat.bb, 'loop', loop, 'par', par);
 
-        [gq, hq] = ghPriorAffine(dat.q, model.regq);
+        [gq, hq] = ghPriorAffine(dat.q, model.Aq);
         dat.gq = dat.gq + gq;
         dat.hq = dat.hq + hq;
         clear gq hq
@@ -1248,7 +1250,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
             opt.affine_basis, dat.phi, dat.jac, ...
             'bb', dat.bb', 'hessian', true, 'loop', loop, 'par', par);
 
-        [~, hq] = ghPriorAffine(dat.q, model.regq);
+        [~, hq] = ghPriorAffine(dat.q, model.Aq);
         dat.hq = dat.hq + hq;
         clear hq
     elseif isfield(todo, 'gq')
@@ -1257,7 +1259,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
             opt.affine_basis, dat.phi, dat.jac, ...
             'bb', dat.bb, 'loop', loop, 'par', par);
 
-        gq = ghPriorAffine(dat.q, model.regq);
+        gq = ghPriorAffine(dat.q, model.Aq);
         dat.gq = dat.gq + gq;
         clear gq
     end
@@ -1282,7 +1284,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         dat.hq = rmarray(dat.hq);
     end
     if isfield(todo, 'llq')
-        dat.llq = llPriorLatent(dat.q, model.regq, 'debug', opt.debug);
+        dat.llq = llPriorLatent(dat.q, model.Aq, 'debug', opt.debug);
     end
     
     % --- G/H latent
@@ -1291,7 +1293,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
             'bb', dat.bb, 'loop', loop, 'par', par);
 
-        [gz, hz] = ghPriorLatent(dat.z, model.regz);
+        [gz, hz] = ghPriorLatent(dat.z, model.Az);
         dat.gz = dat.gz + gz;
         dat.hz = dat.hz + hz;
         clear gz hz
@@ -1300,7 +1302,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
             'bb', dat.bb, 'hessian', true, 'loop', loop, 'par', par);
 
-        [~, hz] = ghPriorLatent(dat.z, model.regz);
+        [~, hz] = ghPriorLatent(dat.z, model.Az);
         dat.hz = dat.hz + hz;
         clear hz
     elseif isfield(todo, 'gz')
@@ -1308,7 +1310,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
             model.mu, dat.pf, dat.c, model.gmu, model.w, ...
             'bb', dat.bb, 'loop', loop, 'par', par);
 
-        gz = ghPriorLatent(dat.z, model.regz);
+        gz = ghPriorLatent(dat.z, model.Az);
         dat.gz = dat.gz + gz;
         clear gz
     end
@@ -1330,7 +1332,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         dat.hz = rmarray(dat.hz);
     end
     if isfield(todo, 'llz')
-        dat.llz = llPriorLatent(dat.z, model.regz, 'debug', opt.debug);
+        dat.llz = llPriorLatent(dat.z, model.Az, 'debug', opt.debug);
     end
     
     % --- G/H residual

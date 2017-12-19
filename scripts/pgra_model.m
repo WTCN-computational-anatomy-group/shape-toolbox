@@ -228,12 +228,18 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
             % Update prior
             % ------------
             rind = opt.affine_rind;
-            model.Aq = precisionWishart(opt.nq0, model.qq(rind,rind) + model.Sq(rind,rind), opt.N);
-            model.regq = model.Aq;
+            model.Aq = spm_prob('Wishart', 'up', ...
+                                opt.N, 0, model.qq(rind,rind) + model.Sq(rind,rind), ...
+                                eye(numel(rind)), opt.nq0);
 
             % -----------
             % Lower bound
-            model.lbaq = lbPrecisionMatrix(model.Aq, opt.N, opt.nq0);
+            if opt.nq0
+                model.lbaq = -spm_prob('Wishart', 'kl', ...
+                                       model.Aq,            opt.nq0+opt.N, ...
+                                       eye(numel(rind)), opt.nq0, ...
+                                       'normal');
+            end
             model.lbq  = lbAffine(dat, model, opt);
             model      = plotAll(model, opt);
             % -----------
@@ -288,12 +294,10 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
 
                 if model.okw > 0
                     model.okw2 = 0;
-                    model.regz = model.wpz(1) * model.Az + model.wpz(2) * model.ww;
 
                     % -----------
                     % Lower bound
                     model.llw  = llPriorSubspace(model.w, model.ww, opt.logdet);
-                    model.lbz  = lbLatent(dat, model, opt);
                     model      = plotAll(model, opt);
                     % -----------
                 else
@@ -323,30 +327,31 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
             % Orthogonalise
             % -------------
             if opt.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
-            [U, iU] = orthogonalisationMatrix(model.zz, model.ww);
+            [U, iU] = orthogonalisationMatrix(model.zz + model.Sz, model.ww);
             if opt.verbose, fprintf('| %6.3s\n', toc); end
 
             % Rescale
             % -------
             if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
-            ezz = U*(model.zz + model.Sz)*U';
-            if opt.nz0 == 0
-                [Q, iQ] = scalePG(opt.N, opt.K);
-            else
-                [Q, iQ] = gnScalePG(ezz, opt.nz0, opt.N, model.wpz(2));
-            end
+%             [Q, iQ] = gnScalePG(model.ww, model.zz + model.Sz, opt.nz0, opt.N);
+            [Q, iQ] = gnScalePG2(model.ww, model.zz + model.Sz, opt.nz0, opt.N);
             if opt.verbose, fprintf('| %6.3s\n', toc); end
-            Q = Q*U;
+            Q  = Q*U;
             iQ = iU*iQ;
             [model, dat] = rotateAll(model, dat, opt, Q, iQ);
-            model.Az = precisionWishart(opt.nz0, model.zz + model.Sz, opt.N);
-
-            model.regz = model.wpz(1) * model.Az + model.wpz(2) * model.ww;
-
+            model.Az = spm_prob('Wishart', 'up', ...
+                                opt.N, 0, model.zz + model.Sz, ...
+                                eye(opt.K), opt.nz0);
+            
             % -----------
             % Lower bound
             model.llw  = llPriorSubspace(model.w, model.ww, opt.logdet);
-            model.lbaz = lbPrecisionMatrix(model.Az, opt.N, opt.nz0);
+            if opt.nz0
+                model.lbaz = -spm_prob('Wishart', 'kl', ...
+                                       model.Az,            opt.nz0+opt.N, ...
+                                       eye(size(model.Az)), opt.nz0, ...
+                                       'normal');
+            end
             model.lbz  = lbLatent(dat, model, opt);
             model      = plotAll(model, opt);
             % -----------
@@ -694,7 +699,7 @@ function [dat, model] = initAll(dat, model, opt)
     
     % --- Init precision of z
     model.Az   = eye(opt.K);
-    model.regz = model.wpz(1) * model.Az;
+    model.regz = model.Az;
     
     % Compute initial Lower Bound
     % ---------------------------
