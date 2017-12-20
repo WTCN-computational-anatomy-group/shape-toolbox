@@ -35,7 +35,7 @@ function v = reconstructVelocity(varargin)
     output = p.Results.output;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* reconstructVelocity\n'); end;
+    if debug, fprintf('* reconstructVelocity\n'); end
     
     % --- Check that there are enough arguments
     if checkarray(z) + checkarray(W) == 1
@@ -74,13 +74,33 @@ function v = reconstructVelocity(varargin)
         if strcmpi(loop, 'none')
             v(:,:,:,:) = lat2vel(z, W);
         elseif strcmpi(loop, 'slice')
-            parfor (iz=1:nz, par)
-                v(:,:,iz,:) = v(:,:,iz,:) + lat2vel(z, W(:,:,iz,:,:));
+            if ~par
+                for iz=1:nz
+                    v(:,:,iz,:) = lat2vel(z, W(:,:,iz,:,:));
+                end
+            elseif isa(W, 'file_array')
+                parfor (iz=1:nz, par)
+                    v(:,:,iz,:) = wrap_lat2vel(z, W, iz, 3);
+                end
+            else
+                parfor (iz=1:nz, par)
+                    v(:,:,iz,:) = lat2vel(z, W(:,:,iz,:,:));
+                end
             end
         else % strcmpi(loop, 'component')
             tmp = zeros(size(v), 'single');
-            parfor (k=1:nk, par)
-                tmp = tmp + lat2vel(z(k), W(:,:,:,:,k));
+            if ~par
+                for k=1:nk
+                    tmp = tmp + lat2vel(z(k), W(:,:,:,:,k));
+                end
+            elseif isa(W, 'file_array')
+                parfor (k=1:nk, par)
+                    tmp = tmp + wrap_lat2vel(z, W, k, 5);
+                end
+            else
+                parfor (k=1:nk, par)
+                    tmp = tmp + lat2vel(z(k), W(:,:,:,:,k));
+                end
             end
             v(:,:,:,:) = tmp(:,:,:,:);
             clear tmp
@@ -92,8 +112,26 @@ function v = reconstructVelocity(varargin)
         if any(strcmpi(loop, {'none', 'component'}))
             v(:) = v(:) + s * r(:);
         else % strcmpi(loop, 'slice')
-            parfor (iz=1:nz, par)
-                v(:,:,iz,:) = v(:,:,iz,:) + s * r(:,:,iz,:);
+            if ~par
+                for iz=1:nz
+                    v(:,:,iz,:) = v(:,:,iz,:) + s * r(:,:,iz,:);
+                end
+            elseif isa(v, 'file_array') && isa(r, 'file_array')
+                parfor (iz=1:nz, par)
+                    wrap_addtov(v, iz, 3, s * slicevol(r, iz, 3));
+                end
+            elseif isa(v, 'file_array')
+                parfor (iz=1:nz, par)
+                    wrap_addtov(v, iz, 3, s * r(:,:,iz,:));
+                end
+            elseif isa(r, 'file_array')
+                parfor (iz=1:nz, par)
+                    v(:,:,iz,:) = v(:,:,iz,:) + s * slicevol(r, iz, 3);
+                end
+            else
+                parfor (iz=1:nz, par)
+                    v(:,:,iz,:) = v(:,:,iz,:) + s * r(:,:,iz,:);
+                end
             end
         end
     end
@@ -103,6 +141,9 @@ function v = reconstructVelocity(varargin)
     v = saveOnDisk(output, v);
 end
 
+% PERFORM W*Z
+% -----------
+
 function v = lat2vel(z, W)
     dim = [size(W) 1 1 1];
     lat = dim(1:3);
@@ -110,4 +151,45 @@ function v = lat2vel(z, W)
     nk = dim(5);
     
     v = reshape(reshape(numeric(W), [], nk) * z(:), [lat nv]);
+end
+
+% WRAPPERS FOR EFFICIENT PARFOR
+% -----------------------------
+
+function v = wrap_addtov(v, ind, dim, value)
+    if nargin < 3
+        dim = 0;
+    end
+    switch dim
+        case 0
+        case 1
+            v(ind,:,:,:) = v(ind,:,:,:) + value;
+        case 2
+            v(:,ind,:,:) = v(:,ind,:,:) + value;
+        case 3
+            v(:,:,ind,:) = v(:,:,ind,:) + value;
+        otherwise
+            error('Cannot split v along dimension %d', dim)
+    end
+end
+
+function v = wrap_lat2vel(z, W, ind, dim)
+    if nargin < 4
+        dim = 0;
+    end
+    switch dim
+        case 0
+        case 1
+            W = W(ind,:,:,:,:);
+        case 2
+            W = W(:,ind,:,:,:);
+        case 3
+            W = W(:,:,ind,:,:);
+        case 5
+            W = W(:,:,:,:,ind);
+            z = z(ind);
+        otherwise
+            error('Cannot split W along dimension %d', dim)
+    end
+    v = lat2vel(z, W, ind, dim);
 end

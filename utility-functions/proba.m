@@ -159,7 +159,10 @@ function ll = gn(lambda, n)
 end
 
 % -------------------------------------------------------------------------
-function ld = LogDetDiffeo(lat, vs, prm)
-    [~, ld] = spm_shoot_greens('kernel', lat, [vs prm]);
+function ld = LogDetDiffeo(lat, vs, prm, bnd)
+    if nargin < 4
+        bnd = 0;
+    end
+    [~, ld] = spm_shoot_greens('kernel', lat, [vs prm], bnd);
     ld = ld(1);
 end

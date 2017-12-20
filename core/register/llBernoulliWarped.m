@@ -62,12 +62,48 @@ function ll = llBernoulliWarped(mu, f, varargin)
             end
         end
         if strcmpi(type, 'proba')
-            parfor (z=1:dlat(3), par)
-                ll = ll + onMemoryProba(mu(:,:,z,1), f(:,:,z,1));
+            if ~par
+                for z=1:dlat(3)
+                    ll = ll + onMemoryProba(mu(:,:,z,1), f(:,:,z,1));
+                end
+            elseif isa(mu, 'file_array') && isa(f, 'file_array')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(slice(mu, z, 3), slice(f, z, 3));
+                end
+            elseif isa(mu, 'file_array')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(slice(mu, z, 3), f(:,:,z,1));
+                end
+            elseif isa(f, 'file_array')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(mu(:,:,z,1), slice(f, z, 3));
+                end
+            else
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(mu(:,:,z,1), f(:,:,z,1));
+                end
             end
         elseif strcmpi(type, 'log')
-            parfor (z=1:dlat(3), par)
-                ll = ll + onMemoryLog(mu(:,:,z,1), f(:,:,z,1));
+            if ~par
+                for z=1:dlat(3)
+                    ll = ll + onMemoryLog(mu(:,:,z,1), f(:,:,z,1));
+                end
+            elseif isa(mu, 'file_array') && isa(f, 'file_array')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(slice(mu, z, 3), slice(f, z, 3));
+                end
+            elseif isa(mu, 'file_array')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(slice(mu, z, 3), f(:,:,z,1));
+                end
+            elseif isa(f, 'file_array')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(mu(:,:,z,1), slice(f, z, 3));
+                end
+            else
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(mu(:,:,z,1), f(:,:,z,1));
+                end
             end
         else
             error('Unknown template type %s', type);

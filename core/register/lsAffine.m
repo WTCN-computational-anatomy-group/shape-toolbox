@@ -1,39 +1,50 @@
-function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f, varargin)
-% FORMAT [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f, ...)
+function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, mu, f, varargin)
+%__________________________________________________________________________
 %
-% ** Required **
+% Performs a line search along a direction to find better affine
+% parameters. The line search direction is usually found by Gauss-Newton
+%
+%--------------------------------------------------------------------------
+%
+% FORMAT [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, mu, f, ...)
+%
+% REQUIRED
+% --------
 % model - Structure with fields:
 %           * 'name'    : 'normal', 'laplace', 'bernoulli' or 'categorical'
 %           * ('sigma2'): Normal variance  [1]
 %           * ('b')     : Laplace variance [1]
-% dq   - Line search direction (ascent if maximising, descent if minimising)
-% q0   - Previous parameter value
-% llm0 - Previous log-likelihood (matching term)
-% mu   - Template (in native space)
-% f    - Image (in native space)
-% ** Keyword arguments **
-% llq0 - Previous log-likelihood (prior term) [compute]
-% B    - Affine basis [affine_basis('affine')]
-% regq - Precision matrix of the affine parameters [none]
-% rind - Indices of regularised affine parameters []
-% iphi - Diffeomorphic part [identity]
-% Mf   - Image voxel-to-world mappinf [eye(4)]
-% Mmu  - Template voxel-ti-world mapping [eye(4)]
-% nit  - Number of line-search iterations [6]
-% loop - How to split processing [auto]
-% par  - If true, parallelise processing [false]
-% ** Output **
-% ok   - True if a better parameter value was found
-% q    - New parameter value
-% llm  - New log-likelihood (matching term)
-% llq  - New log-likelihood (prior term)
-% A    - New affine transform
-% pf   - New pushed image
-% c    - New pushed voxel count
-% ipsi - (if needed) New complete affine+diffeomorphic mapping
+% dq    - Line search direction (ascent if maximising, descent if minimising)
+% q0    - Previous parameter value
+% llm0  - Previous log-likelihood (matching term)
+% mu    - Template (in native space)
+% f     - Image (in native space)
 %
-% Performs a line search along a direction to find better affine
-% parameters. The line search direction is usually found by Gauss-Newton
+% KEYWORD ARGUMENTS
+% -----------------
+% llq0  - Previous log-likelihood (prior term) [compute]
+% B     - Affine basis [affine_basis('affine')]
+% regq  - Precision matrix of the affine parameters [none]
+% rind  - Indices of regularised affine parameters []
+% iphi  - Diffeomorphic part [identity]
+% Mf    - Image voxel-to-world mappinf [eye(4)]
+% Mmu   - Template voxel-ti-world mapping [eye(4)]
+% nit   - Number of line-search iterations [6]
+% loop  - How to split processing [auto]
+% par   - If true, parallelise processing [false]
+% 
+% OUTPUT
+% ------
+% ok    - True if a better parameter value was found
+% q     - New parameter value
+% llm   - New log-likelihood (matching term)
+% llq   - New log-likelihood (prior term)
+% A     - New affine transform
+% pf    - New pushed image
+% c     - New pushed voxel count
+% bb    - Bounding box of pushed image in template space.
+% ipsi  - (if needed) New complete affine+diffeomorphic mapping
+%__________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
@@ -68,11 +79,10 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
     nit    = p.Results.nit;
     par    = p.Results.par;
     loop   = p.Results.loop;
-    output = p.Results.output;
     verbose = p.Results.verbose;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* lsAffine\n'); end;
+    if debug, fprintf('* lsAffine\n'); end
     
     % --- Set some default parameter value
     if isempty(B)
@@ -83,7 +93,7 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
     end
     if isnan(llq0)
         if ~isempty(regq),  llq0 = llPriorAffine(q0(rind), regq, 'fast', 'debug', debug);
-        else                llq0 = 0; end;
+        else,               llq0 = 0; end
     end
     dim  = [size(mu) 1 1];
     lat = dim(1:3);
@@ -116,8 +126,8 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
         q = q0 + dq / armijo;
         A = exponentiateAffine(q, B, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
-        [pf, c] = pushImage(ipsi, f, lat, 'par', par, 'loop', loop, 'debug', debug);
-        llm = llMatching(model, mu, pf, c, 'par', par, 'loop', loop, 'debug', debug);
+        [pf, c, bb] = pushImage(ipsi, f, lat, 'par', par, 'loop', loop, 'debug', debug);
+        llm = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
         if checkarray(regq)
             llq = llPriorAffine(q(rind), regq, 'fast', 'debug', debug);
         else
@@ -125,13 +135,13 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
         end
         ll  = llm + llq;
         
-        if verbose, printInfo(i, ll0, llm, llq); end;
+        if verbose, printInfo(i, ll0, llm, llq); end
         
         if ll <= ll0
-            if verbose, printInfo('failed'); end;
+            if verbose, printInfo('failed'); end
             armijo = armijo * 2;
         else
-            if verbose, printInfo('success'); end;
+            if verbose, printInfo('success'); end
             if checkarray(regq)
                 llq = llPriorAffine(q(rind), regq, 'debug', debug);
             end
@@ -140,7 +150,7 @@ function [ok, q, llm, llq, A, pf, c, ipsi] = lsAffine(model, dq, q0, llm0, mu, f
         end
     end
     
-    if verbose, printInfo('end'); end;
+    if verbose, printInfo('end'); end
     q   = q0;
 
 end

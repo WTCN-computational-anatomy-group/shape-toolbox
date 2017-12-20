@@ -1,23 +1,35 @@
 function mu = updateMuLaplaceML(varargin)
-% FORMAT mu = updateMuLaplaceML('f', pf1, ..., pfN, 
-%                               'c', c1, ..., cN,
-%                               ('b', b1, ..., bN),
-%                               ('fwhm', fwhm),
-%                               ('loop', loop), ('par', par))
-% ** Required **
-% pfi  - Image pushed in template space
-% ci   - Pushed voxel count
-% ** Optional **
-% bi   - Individual noise variance (b)
-% ** Keyword arguments **
-% fwhm  - Smoothing kernel used as pseudo prior [do not use]
-% loop - How to split processing: 'component', 'slice', 'none' or '' [auto]
-% par  - Distribute compute [auto]
-% ** Output **
-% mu   - Updated template
+%__________________________________________________________________________
 %
 % Closed form M-step update of the template for the Laplace noise model.
 % (Maximum likelihood update: no prior on Mu)
+%
+% -------------------------------------------------------------------------
+%
+% FORMAT mu = updateMuNormalML('f', ..., 'c', ...,
+%                              ('b', ...),  ('bb', ...), ...)
+%
+% REQUIRED KEYWORD (LIST)
+% -----------------------
+% f   - Images pushed in template space
+% c   - Pushed voxel counts
+%
+% OPTIONAL KEYWORD (LIST)
+% -----------------------
+% b    - Individual noise variances
+% bb   - Bounding boxes (if different from template)
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% lat  - Template lattice [temporarily REQUIRED]
+% fwhm - Smoothing kernel used as pseudo prior [do not use]
+% loop - How to split processing: 'component', 'slice', 'none' or '' [auto]
+% par  - Distribute compute [auto]
+%
+% OUTPUT
+% ------
+% mu   - Updated template
+%__________________________________________________________________________
 
 
     i = 1;
@@ -30,16 +42,24 @@ function mu = updateMuLaplaceML(varargin)
         end
     end
     
+    f = {};
     if ischar(varargin{1}) && strcmpi(varargin{1}, 'f')
         f = varargin(2:N+1);
         varargin = varargin(N+2:end);
     end
+    c = {};
     if ischar(varargin{1}) && strcmpi(varargin{1}, 'c')
         c = varargin(2:N+1);
         varargin = varargin(N+2:end);
     end
+    b = {};
     if ischar(varargin{1}) && strcmpi(varargin{1}, 'b')
         b = varargin(2:N+1);
+        varargin = varargin(N+2:end);
+    end
+    bb = {};
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'bb')
+        bb = varargin(2:N+1);
         varargin = varargin(N+2:end);
     end
 
@@ -49,22 +69,31 @@ function mu = updateMuLaplaceML(varargin)
     if numel(b) > 0 && numel(b) ~= N
         error('There should be as many b as intensity images')
     end
+    if numel(bb) > 0 && numel(bb) ~= N
+        error('There should be as many bounding boxes as intensity images')
+    end
 
     % --- Parse inputs
     p = inputParser;
     p.FunctionName = 'updateMuLaplaceML';
+    p.addParameter('lat',    [],    @isnumeric);
     p.addParameter('fwhm',   0,     @isnumeric);
     p.addParameter('loop',   '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'component', 'subject', 'none', ''})));
     p.addParameter('par',    false, @isscalar);
     p.addParameter('debug',  false, @isscalar);
     p.addParameter('output', false);
     p.parse(varargin{:});
+    lat    = p.Results.lat;
     fwhm   = p.Results.fwhm;
     loop   = p.Results.loop;
     par    = p.Results.par;
     debug  = p.Results.debug;
     
     if debug, fprintf('* updateMuLaplaceML\n'); end;
+
+    if isempty(lat)
+        error('For now, the lattice size MUST be provided')
+    end
 
     [par, loop] = autoParLoop(par, loop, isa(f{1}, 'file_array'), ...
                               size(f{1}, 3), size(f{1}, 4));
@@ -75,7 +104,7 @@ function mu = updateMuLaplaceML(varargin)
     switch lower(loop)
         case 'none'
             if debug, fprintf('   - No loop\n'); end;
-            mu = loopNone(f, c, output, fwhm);
+            mu = loopNone(f, c, b, bb, lat, output, fwhm);
         case 'component'
             if debug
                 if par > 0
@@ -84,7 +113,7 @@ function mu = updateMuLaplaceML(varargin)
                     fprintf('   - Serialise on components\n');
                 end
             end
-            mu = loopComponent(f, c, par, output, fwhm);
+            mu = loopComponent(f, c, b, bb, lat, par, output, fwhm);
         case 'slice'
             if debug
                 if par > 0
@@ -93,31 +122,77 @@ function mu = updateMuLaplaceML(varargin)
                     fprintf('   - Serialise on slices\n');
                 end
             end
-            mu = loopSlice(f, c, par, output);
+            mu = loopSlice(f, c, b, bb, lat, par, output);
         otherwise
             error('Unknown loop type ''%s''', loop)
     end
 
 end
 
-function mu = loopComponent(f, c, par, output, fwhm)
+function mu = loopComponent(f, c, b, bb, lat, par, output, fwhm)
 
-    mu = prepareOnDisk(output, size(f{1}), 'type', 'float32');
-    dim = [size(mu) 1 1];
-    lat = dim(1:3);
-    nc  = dim(4);
+    nc = size(f{1}, 4);
+    mu = prepareOnDisk(output, [lat nc], 'type', 'float32');
     
-    parfor (k=1:nc, par)
-        tmpf = zeros([lat numel(f)], 'single');
-        tmpc = zeros([lat numel(f)], 'single');
-        for n=1:numel(f)
-            tmpf(:,:,:,n) = single(f{n}(:,:,:,k));
-            tmpc(:,:,:,n) = single(c{n}(:,:,:));
+    if isempty(b)
+        [b{1:numel(f)}] = deal(ones(1, nc));
+    end
+    if isempty(bb)
+         bb1 = struct('x', 1:lat(1), 'y', 1:lat(2), 'z', 1:lat(3));
+        [bb{1:numel(f)}] = deal(bb1);
+    end
+
+    if ~par
+        for k=1:nc
+            tmpf = zeros([lat numel(f)], 'single');
+            tmpc = zeros([lat numel(f)], 'single');
+            for n=1:numel(f)
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                c1 = single(numeric(c{n}));
+                tmpf(bx,by,bz,n) = single(f{n}(:,:,:,k)) ./ c1;
+                tmpc(bx,by,bz,n) = c1./b{n}(k);
+            end
+            tmpf = smooth_gaussian(tmpf, fwhm);
+            tmpc = smooth_gaussian(tmpc, fwhm);
+            tmpf = wmedian(tmpf, tmpc);
+            mu(:,:,:,k) = tmpf;
         end
-        tpmf = smooth_gaussian(tmpf, fwhm);
-        tpmc = smooth_gaussian(tmpc, fwhm);
-        tmpf = wmedian(tmpf, tmpc);
-        mu(:,:,:,k) = tmpf;
+    elseif isa(f{1}, 'file_array')
+        parfor (k=1:nc, par)
+            tmpf = zeros([lat numel(f)], 'single');
+            tmpc = zeros([lat numel(f)], 'single');
+            for n=1:numel(f)
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                c1 = single(numeric(c{n}));
+                tmpf(bx,by,bz,n) = single(slicevol(f{n}, k, 4)) ./ c1;
+                tmpc(bx,by,bz,n) = c1./b{n}(k);
+            end
+            tmpf = smooth_gaussian(tmpf, fwhm);
+            tmpc = smooth_gaussian(tmpc, fwhm);
+            tmpf = wmedian(tmpf, tmpc);
+            mu(:,:,:,k) = tmpf;
+        end
+    else
+        parfor (k=1:nc, par)
+            tmpf = zeros([lat numel(f)], 'single');
+            tmpc = zeros([lat numel(f)], 'single');
+            for n=1:numel(f)
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                c1 = single(numeric(c{n}));
+                tmpf(bx,by,bz,n) = single(f{n}(:,:,:,k)) ./ c1;
+                tmpc(bx,by,bz,n) = c1./b{n}(k);
+            end
+            tmpf = smooth_gaussian(tmpf, fwhm);
+            tmpc = smooth_gaussian(tmpc, fwhm);
+            tmpf = wmedian(tmpf, tmpc);
+            mu(:,:,:,k) = tmpf;
+        end
     end
     
     if ~isempty(output)
@@ -125,27 +200,75 @@ function mu = loopComponent(f, c, par, output, fwhm)
     end
 end
 
-function mu = loopSlice(f, c, par, output)
+function mu = loopSlice(f, c, b, bb, lat, par, output)
 
-    mu = prepareOnDisk(output, size(f{1}), 'type', 'float32');
-    dim = [size(mu) 1 1];
-    lat = dim(1:3);
-    nc  = dim(4);
+    nc = size(f{1}, 4);
+    mu = prepareOnDisk(output, [lat nc], 'type', 'float32');
     
-    % --- Compute count
-    tmpc = zeros(lat, 'single');
-    for n=1:numel(f)
-        tmpc = tmpc + single(numeric(c{n}));
+    if isempty(b)
+        [b{1:numel(f)}] = deal(ones(1, nc));
+    end
+    if isempty(bb)
+         bb1 = struct('x', 1:lat(1), 'y', 1:lat(2), 'z', 1:lat(3));
+        [bb{1:numel(f)}] = deal(bb1);
     end
     
     % --- Compute mu
-    parfor (z=1:dim(3), par)
-        tmpf = zeros([lat(1:2) 1 nc numel(f)], 'single');
-        for n=1:numel(f)
-            tmpf(:,:,1,:,n) = single(f{n}(:,:,z,:));
+    if ~par
+        for z=1:lat(3)
+            tmpf = zeros([lat(1:2) 1 nc numel(f)], 'single');
+            tmpc = zeros([lat(1:2) 1 nc numel(f)], 'single');
+            for n=1:numel(f)
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                fz = z-bz(1)+1;
+                if fz >= 1 && fz <= size(f{n}, 3)
+                    c1 = single(c{n}(:,:,fz));
+                    tmpf(bx,by,1,:,n) = bsxfun(@rdivide, single(f{n}(:,:,fz,:)), c1);
+                    tmpc(bx,by,1,:,n) = bsxfun(@rdivide, c1, reshape(b{n}, [1 1 1 nc]));
+                end
+            end
+            tmpf = wmedian(tmpf, tmpc);
+            mu(:,:,z,:) = tmpf;
         end
-        tmpf = wmedian(tmpf, tmpc(:,:,z));
-        mu(:,:,z,:) = tmpf;
+    elseif isa(f{1}, 'file_array')
+        parfor (z=1:lat(3), par)
+            tmpf = zeros([lat(1:2) 1 nc numel(f)], 'single');
+            tmpc = zeros([lat(1:2) 1 nc numel(f)], 'single');
+            for n=1:numel(f)
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                fz = z-bz(1)+1;
+                if fz >= 1 && fz <= size(f{n}, 3)
+                    c1 = single(slicevol(c{n}, fz, 3));
+                    tmpf(bx,by,1,:,n) = bsxfun(@rdivide, single(slicevol(f{n}, fz, 3)), c1);
+                    tmpc(bx,by,1,:,n) = bsxfun(@rdivide, c1, reshape(b{n}, [1 1 1 nc]));
+                end
+            end
+            tmpf = wmedian(tmpf, tmpc);
+            mu(:,:,z,:) = tmpf;
+        end
+    else
+        parfor (z=1:lat(3), par)
+            tmpf = zeros([lat(1:2) 1 nc numel(f)], 'single');
+            tmpc = zeros([lat(1:2) 1 nc numel(f)], 'single');
+            for n=1:numel(f)
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                fz = z-bz(1)+1;
+                if fz >= 1 && fz <= size(f{n}, 3)
+                    c1 = single(c{n}(:,:,fz));
+                    tmpf(bx,by,1,:,n) = bsxfun(@rdivide, single(f{n}(:,:,fz,:)), c1);
+                    tmpc(bx,by,1,:,n) = bsxfun(@rdivide, c1, reshape(b{n}, [1 1 1 nc]));
+                    tmpf(:,:,1,:,n) = single(f{n}(:,:,fz,:));
+                end
+            end
+            tmpf = wmedian(tmpf, tmpc);
+            mu(:,:,z,:) = tmpf;
+        end
     end
     
     if ~isempty(output)
@@ -153,20 +276,30 @@ function mu = loopSlice(f, c, par, output)
     end
 end
 
-function mu = loopNone(f, c, output)
+function mu = loopNone(f, c, b, bb, lat, output)
 
-    dim = [size(f{1}) 1 1];
-    lat = dim(1:3);
-    nc  = dim(4);
+    nc = size(f{1}, 4);
     
+    if isempty(b)
+        [b{1:numel(f)}] = deal(ones(1, nc));
+    end
+    if isempty(bb)
+         bb1 = struct('x', 1:lat(1), 'y', 1:lat(2), 'z', 1:lat(3));
+        [bb{1:numel(f)}] = deal(bb1);
+    end
+
     mu   = zeros([lat nc numel(f)], 'single');
-    tmpc = zeros([lat numel(f)], 'single');
+    tmpc = zeros([lat nc numel(f)], 'single');
     for n=1:numel(f)
-        mu(:,:,:,:,n) = single(numeric(f{n}));
-        tmpc(:,:,:,n) = single(numeric(c{n}));
+        bx = bb{n}.x;
+        by = bb{n}.y;
+        bz = bb{n}.z;
+        c1 = single(numeric(c{n}));
+        mu(bx,by,bz,:,n)   = bsxfun(@rdivide, single(numeric(f{n})), c1);
+        tmpc(bx,by,bz,:,n) = bsxfun(@rdivide, c1, reshape(b{n}, [1 1 1 nc]));
     end
     mu   = smooth_gaussian(mu, fwhm);
-    tpmc = smooth_gaussian(tmpc, fwhm);
+    tmpc = smooth_gaussian(tmpc, fwhm);
     mu   = wmedian(mu, tmpc);
     
     if ~isempty(output)

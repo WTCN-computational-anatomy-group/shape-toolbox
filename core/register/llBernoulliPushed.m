@@ -1,20 +1,35 @@
-function ll = llBernoulliPushed(mu, f, c, varargin)
-% FORMAT ll = llBernoulliPushed(mu, f, c, (type), ('loop', loop), ('par', par))
+ function ll = llBernoulliPushed(mu, f, c, varargin)
+%__________________________________________________________________________
 %
-% ** Required **
+% Log-likelihood of the Bernoulli matching term
+%
+% -------------------------------------------------------------------------
+%
+% FORMAT ll = llBernoulliPushed(mu, f, c, (type), ...)
+%
+% REQUIRED
+% --------
 % mu   - Template
 % f    - Observed image pushed in the template space.
 % c    - Pushed voxel count.
-% ** Optional **
+% 
+% OPTIONAL
+% --------
 % type - Type of the provided template:
 %        * 'proba': Probability space [default]
 %        * 'log'  : Log-probability space
-% ** Keyword arguments **
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% bb   - Bounding box (if different between template and pushed image)
 % loop - Specify how to split data processing
-%        ('slice' or 'none' [default])
+%        ('component', 'slice' or 'none' [default])
 % par  - If true, parallelise processing [default: false]
-% ** Output **
-% ll   - Log-likelihood of the Normal matching term
+% 
+% OUTPUT
+% ------
+% ll   - Log-likelihood of the Bernoulli matching term
+%__________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
@@ -23,11 +38,13 @@ function ll = llBernoulliPushed(mu, f, c, varargin)
     p.addRequired('f',    @checkarray);
     p.addRequired('c',    @checkarray);
     p.addOptional('type',    'proba', @(X) ischar(X) && any(strcmpi(X, {'log', 'proba'})) );
+    p.addParameter('bb',     struct, @isstruct);
     p.addParameter('loop',   '',      @ischar);
     p.addParameter('par',    false,   @isscalar);
     p.addParameter('debug',  false,   @isscalar);
     p.parse(mu, f, c, varargin{:});
     type  = p.Results.type;
+    bb    = p.Results.bb;
     par   = p.Results.par;
     loop  = p.Results.loop;
     
@@ -36,8 +53,19 @@ function ll = llBernoulliPushed(mu, f, c, varargin)
     % --- Optimise parallelisation and splitting schemes
     [par, loop] = autoParLoop(par, loop, isa(mu, 'file_array'), size(mu, 3), size(mu, 4));
     
+    % --- Default bounding box
+    if ~isfield(bb, 'x')
+        bb.x = 1:size(mu, 1);
+    end
+    if ~isfield(bb, 'y')
+        bb.y = 1:size(mu, 2);
+    end
+    if ~isfield(bb, 'z')
+        bb.z = 1:size(mu, 3);
+    end
+    
     % --- Read dimensions
-    dim  = [size(mu) 1 1];
+    dim  = [numel(bb.x)  numel(bb.y) numel(bb.z)];
     dlat = dim(1:3);
     
     % --- Initialise
@@ -47,11 +75,9 @@ function ll = llBernoulliPushed(mu, f, c, varargin)
     if strcmpi(loop, 'none')
         if p.Results.debug, fprintf('   - No loop\n'); end;
         if strcmpi(type, 'proba')
-            ll = ll + onMemoryProba(mu(:,:,:,1), f(:,:,:,1), c(:,:,:,1));
+            ll = ll + onMemoryProba(mu(bb.x,bb.y,bb.z,:), f, c);
         elseif strcmpi(type, 'log')
-            ll = ll + onMemoryLog(mu(:,:,:,1), f(:,:,:,1), c(:,:,:,1));
-        else
-            error('Unknown template type %s', type);
+            ll = ll + onMemoryLog(mu(bb.x,bb.y,bb.z,:), f, c);
         end
         
     % --- Loop on slices
@@ -63,16 +89,58 @@ function ll = llBernoulliPushed(mu, f, c, varargin)
                 fprintf('   - Serialise on slices\n'); 
             end
         end
-        if strcmpi(type, 'proba')
-            parfor (z=1:dlat(3), par)
-                ll = ll + onMemoryProba(mu(:,:,z,1), f(:,:,z,1), c(:,:,z));
+        if ~par
+            if strcmpi(type, 'proba')
+                for z=1:dlat(3)
+                    ll = ll + onMemoryProba(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z,:));
+                end
+            elseif strcmpi(type, 'log')
+                for z=1:dlat(3)
+                    ll = ll + onMemoryLog(mu(bb.x,bb.y,bb.z(1)+z-1,:), f(:,:,z,:), c(:,:,z,:));
+                end
             end
-        elseif strcmpi(type, 'log')
-            parfor (z=1:dlat(3), par)
-                ll = ll + onMemoryLog(mu(:,:,z,1), f(:,:,z,1), c(:,:,z));
+        elseif isa(mu, 'file_array') && isa(f, 'file_array')
+            if strcmpi(type, 'proba')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), b);
+                end
+            elseif strcmpi(type, 'log')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), slicevol(f, z, 3), slicevol(c, z, 3), b);
+                end
+            end
+        elseif isa(mu, 'file_array')
+            if strcmpi(type, 'proba')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z,:));
+                end
+            elseif strcmpi(type, 'log')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(slicevol(mu, {bb.x, bb.y, bb.z(1)+z-1}), f(:,:,z,:), c(:,:,z,:));
+                end
+            end
+        elseif isa(f, 'file_array')
+            mu = mu(bb.x, bb.y, bb.z,:);
+            if strcmpi(type, 'proba')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3));
+                end
+            elseif strcmpi(type, 'log')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3));
+                end
             end
         else
-            error('Unknown template type %s', type);
+            mu = mu(bb.x, bb.y, bb.z,:);
+            if strcmpi(type, 'proba')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryProba(mu(:,:,z,:), f(:,:,z,:), c(:,:,z,:));
+                end
+            elseif strcmpi(type, 'log')
+                parfor (z=1:dlat(3), par)
+                    ll = ll + onMemoryLog(mu(:,:,z,:), f(:,:,z,:), c(:,:,z,:));
+                end
+            end
         end
         
     end

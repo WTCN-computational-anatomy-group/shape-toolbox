@@ -1,47 +1,89 @@
 function mu = updateMuCategoricalML(varargin)
-% FORMAT mu = updateMuCategoricalML(pf1, ..., pfN, c1, ..., cN,
-%                                   ('fwhm', fwhm),
-%                                   ('loop', loop), ('par', par))
-% ** Required **
-% pfi  - Image pushed in template space
-% ci   - Pushed voxel count
-% ** Keyword arguments **
-% fwhm  - Smoothing kernel used as pseudo prior [do not use]
-% loop - How to split processing: 'slice', 'none' or '' [auto]
-% par  - Distribute compute [auto]
-% ** Output **
-% mu   - Updated template
+%__________________________________________________________________________
 %
-% Closed form M-step update of the template for the categorical model.
+% Closed form M-step update of the template for the Categorical model.
 % (Maximum likelihood update: no prior on Mu)
+%
+% -------------------------------------------------------------------------
+%
+% FORMAT mu = updateMuCategoricalML('f', ..., 'c', ..., ('bb', ...), ...)
+%
+% REQUIRED KEYWORD (LIST)
+% -----------------------
+% f   - Images pushed in template space
+% c   - Pushed voxel counts
+%
+% OPTIONAL KEYWORD (LIST)
+% -----------------------
+% bb   - Bounding boxes (if different from template)
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% lat  - Template lattice [first image]
+% fwhm - Smoothing kernel used as pseudo prior [do not use]
+% loop - How to split processing: 'component', 'slice', 'none' or '' [auto]
+% par  - Distribute compute [auto]
+%
+% OUTPUT
+% ------
+% mu   - Updated template
+%__________________________________________________________________________
+    
+    i = 1;
+    if ischar(varargin{1})
+        i = i + 1;
+        N = 0;
+        while i <= numel(varargin) && ~ischar(varargin{i})
+            i = i + 1;
+            N = N + 1;
+        end
+    end
+    
+    f = {};
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'f')
+        f = varargin(2:N+1);
+        varargin = varargin(N+2:end);
+    end
+    c = {};
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'c')
+        c = varargin(2:N+1);
+        varargin = varargin(N+2:end);
+    end
+    bb = {};
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'bb')
+        bb = varargin(2:N+1);
+        varargin = varargin(N+2:end);
+    end
 
-    N = 0;
-    while N < numel(varargin) && ~ischar(varargin{N+1})
-        N = N+1;
+    if numel(c) ~= N
+        error('There should be as many count as intensity images')
     end
-    if mod(N,2)
-        error('There should be as many intensity as count images')
+    if numel(bb) > 0 && numel(bb) ~= N
+        error('There should be as many bounding boxes as intensity images')
     end
-    f = varargin(1:(N/2));
-    c = varargin((N/2+1):N);
-    varargin = varargin(N+1:end);
 
     % --- Parse inputs
     p = inputParser;
     p.FunctionName = 'updateMuCategoricalML';
+    p.addParameter('lat',    [],    @isnumeric);
     p.addParameter('fwhm',   0,     @isnumeric);
     p.addParameter('loop',   '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'subject', 'none', ''})));
     p.addParameter('par',    false, @isscalar);
     p.addParameter('debug',  false, @isscalar);
     p.addParameter('output', false);
     p.parse(varargin{:});
+    lat    = p.Results.lat;
     fwhm   = p.Results.fwhm;
     loop   = p.Results.loop;
     par    = p.Results.par;
     debug  = p.Results.debug;
     output = p.Results.output;
     
-    if debug, fprintf('* updateMuCategoricalML\n'); end;
+    if debug, fprintf('* updateMuCategoricalML\n'); end
+
+    if isempty(lat)
+        error('For now, the lattice size MUST be provided')
+    end
 
     [par, loop] = autoParLoop(par, loop, isa(f{1}, 'file_array'), size(f{1}, 3));
     if fwhm > 0 && strcmpi(loop, 'slice')
@@ -50,8 +92,8 @@ function mu = updateMuCategoricalML(varargin)
     
     switch lower(loop)
         case 'none'
-            if debug, fprintf('   - No loop\n'); end;
-            mu = loopNone(f, c, output, fwhm);
+            if debug, fprintf('   - No loop\n'); end
+            mu = loopNone(f, c, bb, lat, output, fwhm);
         case 'slice'
             if debug
                 if par > 0
@@ -60,35 +102,76 @@ function mu = updateMuCategoricalML(varargin)
                     fprintf('   - Serialise on slices\n');
                 end
             end
-            mu = loopSlice(f, c, par, output);
+            mu = loopSlice(f, c, bb, lat, par, output);
         otherwise
             error('Unknown loop type ''%s''', loop)
     end
 
 end
 
-function mu = loopSlice(f, c, par, output)
+function mu = loopSlice(f, c, bb, lat, par, output)
 
-    mu = prepareOnDisk(output, size(f{1}), 'type', 'float32');
-    dim = [size(mu) 1 1];
-    lat = dim(1:3);
-    nc  = dim(4);
+    nc = size(f{1}, 4);
+    mu = prepareOnDisk(output, [lat nc], 'type', 'float32');
     
     % --- Compute count
     tmpc = zeros(lat, 'single');
     for n=1:numel(f)
-        tmpc = tmpc + single(numeric(c{n}));
+        bx = bb{n}.x;
+        by = bb{n}.y;
+        bz = bb{n}.z;
+        tmpc(bx,by,bz) = tmpc(bx,by,bz) + single(numeric(c{n}));
     end
     
     % --- Compute mu
-    parfor (z=1:dim(3), par)
-        tmpf = zeros([lat(1:2) 1 nc], 'single');
-        for n=1:numel(f)
-            tmpf = tmpf + single(f{n}(:,:,z,:));
+    if ~par
+        for z=1:lat(3)
+            tmpf = zeros([lat(1:2) 1 nc], 'single');
+            for n=1:numel(f)
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                fz = z-bz(1)+1;
+                if fz >= 1 && fz <= size(f{n}, 3)
+                    tmpf(bx,by,1,:) = tmpf(bx,by,1,:) + single(f{n}(:,:,fz,:));
+                end
+            end
+            tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
+            tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
+            mu(:,:,z,:) = log(tmpf(:,:,:,:));
         end
-        tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
-        tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
-        mu(:,:,z,:) = log(tmpf(:,:,:,:));
+    elseif isa(f{1}, 'file_array')
+        parfor (z=1:lat(3), par)
+            tmpf = zeros([lat(1:2) 1 nc], 'single');
+            for n=1:numel(f)
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                fz = z-bz(1)+1;
+                if fz >= 1 && fz <= size(f{n}, 3)
+                    tmpf(bx,by,1,:) = tmpf(bx,by,1,:) + single(slicevol(f{n}, fz, 3));
+                end
+            end
+            tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
+            tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
+            mu(:,:,z,:) = log(tmpf(:,:,:,:));
+        end
+    else
+        parfor (z=1:lat(3), par)
+            tmpf = zeros([lat(1:2) 1 nc], 'single');
+            for n=1:numel(f)
+                bx = bb{n}.x;
+                by = bb{n}.y;
+                bz = bb{n}.z;
+                fz = z-bz(1)+1;
+                if fz >= 1 && fz <= size(f{n}, 3)
+                    tmpf(bx,by,1,:) = tmpf(bx,by,1,:) + single(f{n}(:,:,fz,:));
+                end
+            end
+            tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
+            tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
+            mu(:,:,z,:) = log(tmpf(:,:,:,:));
+        end
     end
     
     if ~isempty(output)
@@ -96,17 +179,18 @@ function mu = loopSlice(f, c, par, output)
     end
 end
 
-function mu = loopNone(f, c, output, fwhm)
+function mu = loopNone(f, c, bb, lat, output, fwhm)
 
-    dim = [size(f{1}) 1 1];
-    lat = dim(1:3);
-    nc  = dim(4);
+    nc = size(f{1}, 4);
     
     mu   = zeros([lat nc], 'single');
     tmpc = zeros(lat, 'single');
     for n=1:numel(f)
-        mu   = mu   + single(numeric(f{n}));
-        tmpc = tmpc + single(numeric(c{n}));
+        bx = bb{n}.x;
+        by = bb{n}.y;
+        bz = bb{n}.z;
+        mu(bx,by,bz,:) = mu(bx,by,bz,:) + single(numeric(f{n}));
+        tmpc(bx,by,bz) = tmpc(bx,by,bz) + single(numeric(c{n}));
     end
     mu   = smooth_gaussian(mu, fwhm);
     tmpc = smooth_gaussian(tmpc, fwhm);
