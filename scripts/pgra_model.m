@@ -333,8 +333,8 @@ function [model, dat] = pgra_model(opt, dat, model, cont)
             % Rescale
             % -------
             if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
-%             [Q, iQ] = gnScalePG(model.ww, model.zz + model.Sz, opt.nz0, opt.N);
-            [Q, iQ] = gnScalePG2(model.ww, model.zz + model.Sz, opt.nz0, opt.N);
+            [Q, iQ, model.wscl] = gnScalePG(model.ww, model.zz + model.Sz, ...
+                                            opt.nz0, opt.N, model.wscl);
             if opt.verbose, fprintf('| %6.3s\n', toc); end
             Q  = Q*U;
             iQ = iU*iQ;
@@ -651,12 +651,12 @@ function [dat, model] = initAll(dat, model, opt)
     % --- Zero init of Q (Affine)
     [dat, model] = batchProcess('InitAffine', 'zero', dat, model, opt);
     model.Aq   = eye(numel(opt.affine_rind));
-    model.regq = model.Aq;
     
     % --- Zero init of W (Principal geodesic)
     model.w = initSubspace(opt.lat, opt.K, 'type', 'zero', ...
         'debug', opt.debug, 'output', model.w);
-    model.ww = zeros(opt.K);
+    model.ww   = zeros(opt.K);
+    model.wscl = zeros(opt.K,1)-0.5*log(opt.N);
     
     % --- Zero init of Z (Latent coordinates)
     [dat, model] = batchProcess('InitLatent', 'zero', dat, model, opt);
@@ -699,7 +699,6 @@ function [dat, model] = initAll(dat, model, opt)
     
     % --- Init precision of z
     model.Az   = eye(opt.K);
-    model.regz = model.Az;
     
     % Compute initial Lower Bound
     % ---------------------------

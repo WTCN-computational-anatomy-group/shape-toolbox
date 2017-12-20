@@ -1,5 +1,5 @@
-function [Q, iQ] = gnScalePG(WW, EZZ, n0, N)
-% FORMAT [Q, iQ] = gnScalePG(ww, ezz, n0, N)
+function [Q, iQ, q] = gnScalePG(WW, EZZ, n0, N, q0)
+% FORMAT [Q, iQ] = gnScalePG(ww, ezz, n0, N, q0)
 % ww  - W'LW
 %       > Must have been orthogonalised before.
 % ezz - Expected value of sum_n z_n * z_n'.
@@ -11,8 +11,11 @@ function [Q, iQ] = gnScalePG(WW, EZZ, n0, N)
     
     K = size(EZZ, 1);
 
-    q    = zeros(K,1)-0.5*log(N);
-    q    = min(max(q,-10),10);  % Heuristic to avoid bad starting estimate
+    if nargin < 5 || isempty(q0)
+        q0    = zeros(K,1)-0.5*log(N);
+    end
+
+    q    = min(max(q0,-10),10);  % Heuristic to avoid bad starting estimate
     Q    = diag(exp(q));
     A    = spm_prob('Wishart', 'up', N, 0, Q*EZZ*Q, eye(K), n0); % suffstat update
     E    = 0.5*(trace(Q*EZZ*Q*A) + trace(WW/(Q*Q)));

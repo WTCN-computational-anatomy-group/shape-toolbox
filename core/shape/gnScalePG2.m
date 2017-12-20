@@ -1,5 +1,5 @@
-function [Q, iQ] = gnScalePG2(ww, ezz, n0, N)
-% FORMAT [Q, iQ] = gnScalePG2(ww, ezz, n0, N)
+function [Q, iQ, q] = gnScalePG2(ww, ezz, n0, N, q0)
+% FORMAT [Q, iQ] = gnScalePG2(ww, ezz, n0, N, q0)
 % ww  - W'LW
 % ezz - Expected value of sum_n z_n * z_n'.
 %       > Must have been orthogonalised before.
@@ -13,9 +13,12 @@ function [Q, iQ] = gnScalePG2(ww, ezz, n0, N)
     z = diag(ezz);
     w = diag(ww);
     
+    if nargin < 5 || isempty(q0)
+        q0    = zeros(K,1)-0.5*log(N);
+    end
+    
     % --- Initial state
-    q = zeros(K, 1) - 0.5*log(N);
-    q = min(max(q,-10),10);
+    q = min(max(q0,-10),10);
     Q = diag(exp(q));
     iQ = diag(exp(-q));
     E = obj(ww, ezz, Q, iQ, n0, N);
