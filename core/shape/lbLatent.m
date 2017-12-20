@@ -18,9 +18,7 @@ function lb = lbLatent(dat, model, opt)
     lb = lb - trace(model.zz * model.Az);
     if opt.nz0
         ld = spm_prob('Wishart', 'Elogdet', ...
-                      model.Az,             opt.nz0+opt.N, ...
-                      eye(size(model.Az)),  opt.nz0, ...
-                      'normal');
+                      model.Az, opt.nz0+opt.N, 'normal');
         lb = lb + opt.N * model.wpz(1) * ld;
     else
         lb = lb + opt.N * spm_matcomp('LogDet', model.Az);
