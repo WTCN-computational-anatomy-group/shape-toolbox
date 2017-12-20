@@ -69,7 +69,7 @@ function e = obj(ww, ezz, Q, iQ, n0, N)
 
     ezz = Q*ezz*Q;
     ww  = iQ*ww*iQ;
-    A   = spm_prob('Wishart', 'up', N, 0, ezz, eye(4), n0);
+    A   = spm_prob('Wishart', 'up', N, 0, ezz, eye(size(ezz)), n0);
 
 
     e1 = - trace(ww);
@@ -98,6 +98,14 @@ end
 % e1 = z*exp(2*q)*(n0+N)/(n0+N*z*exp(2*q));
 % e2 = w*exp(-2*q);
 % e3 = N*log(n0+N*z*exp(2*q));
+% e  = simplify(e1 + e2 + e3);
+% g  = simplify(diff(e, q));
+% h  = simplify(diff(g, q));
+% dq = -h\g;
+% 
+% e1 = z*(q^2)*(n0+N)/(n0+N*z*(q^2));
+% e2 = w*(q^(-2));
+% e3 = N*log(n0+N*z*(q^2));
 % e  = simplify(e1 + e2 + e3);
 % g  = simplify(diff(e, q));
 % h  = simplify(diff(g, q));
