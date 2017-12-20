@@ -79,11 +79,10 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
     nit    = p.Results.nit;
     par    = p.Results.par;
     loop   = p.Results.loop;
-    output = p.Results.output;
     verbose = p.Results.verbose;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* lsAffine\n'); end;
+    if debug, fprintf('* lsAffine\n'); end
     
     % --- Set some default parameter value
     if isempty(B)
@@ -94,7 +93,7 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
     end
     if isnan(llq0)
         if ~isempty(regq),  llq0 = llPriorAffine(q0(rind), regq, 'fast', 'debug', debug);
-        else                llq0 = 0; end;
+        else,               llq0 = 0; end
     end
     dim  = [size(mu) 1 1];
     lat = dim(1:3);
@@ -136,13 +135,13 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
         end
         ll  = llm + llq;
         
-        if verbose, printInfo(i, ll0, llm, llq); end;
+        if verbose, printInfo(i, ll0, llm, llq); end
         
         if ll <= ll0
-            if verbose, printInfo('failed'); end;
+            if verbose, printInfo('failed'); end
             armijo = armijo * 2;
         else
-            if verbose, printInfo('success'); end;
+            if verbose, printInfo('success'); end
             if checkarray(regq)
                 llq = llPriorAffine(q(rind), regq, 'debug', debug);
             end
@@ -151,7 +150,7 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
         end
     end
     
-    if verbose, printInfo('end'); end;
+    if verbose, printInfo('end'); end
     q   = q0;
 
 end

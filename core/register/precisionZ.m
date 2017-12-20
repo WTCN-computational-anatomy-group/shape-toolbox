@@ -4,6 +4,7 @@ function ww = precisionZ(w, varargin)
 % vs  - Voxel size of the initial velocity lattice [1 1 1]
 % prm - Parameters of the L operator (see spm_diffeo)
 %       [0.0001 0.001 0.2 0.05 0.2]
+% bnd - L differential operator boundary conditions (0/1/2/3) [0]
 % ww  - Precision matrix of P(Z | W), i.e., W' * L * W
 %
 % Compute the precision matrix of p(z|W), where Z are the latent
@@ -16,13 +17,17 @@ function ww = precisionZ(w, varargin)
     p.addRequired('w', @checkarray);
     p.addOptional('vs', [1 1 1]);
     p.addOptional('prm', [0.0001 0.001 0.2 0.05 0.2]);
+    p.addOptional('bnd',      0, @(X) isscalar(X) && isnumeric(X));
     p.addParameter('output', []);
     p.addParameter('debug', false);
     p.parse(w, varargin{:});
+    bnd    = p.Results.bnd;
     output = p.Results.output;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* precisionZ\n'); end;
+    if debug, fprintf('* precisionZ\n'); end
+    
+    spm_diffeo('boundary', bnd);
     
     % --- Dim info
     dim         = [size(w) 1 1 1];

@@ -32,6 +32,7 @@ function [ok, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(model, dr, r0,
 % nit  - Number of line-search iterations [6]
 % itgr - Number of integration steps for geodesic shooting [auto]
 % prm  - Differential operator parameters [0.0001 0.001 0.2 0.05 0.2]
+% bnd  - Differential operator boundary conditions (0/1/2/3) [0]
 % loop - How to split processing [auto]
 % par  - If true, parallelise processing [false]
 %
@@ -70,6 +71,7 @@ function [ok, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(model, dr, r0,
     p.addParameter('nit',      6,      @isscalar);
     p.addParameter('itgr',     nan,    @isscalar);
     p.addParameter('prm',      [0.0001 0.001 0.2 0.05 0.2], @(X) length(X) == 5);
+    p.addParameter('bnd',      0, @(X) isscalar(X) && isnumeric(X));
     p.addParameter('par',      false,  @isscalar);
     p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'slice', 'component', 'none', ''})));
     p.addParameter('output',   []);
@@ -85,13 +87,13 @@ function [ok, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(model, dr, r0,
     nit     = p.Results.nit;
     itgr    = p.Results.itgr;
     prm     = p.Results.prm;
+    bnd     = p.Results.bnd;
     par     = p.Results.par;
     loop    = p.Results.loop;
-    output  = p.Results.output;
     verbose = p.Results.verbose;
     debug   = p.Results.debug;
     
-    if debug, fprintf('* lsVelocity\n'); end;
+    if debug, fprintf('* lsVelocity\n'); end
     
     % --- Template voxel size
     vsmu = sqrt(sum(Mmu(1:3,1:3).^2)); 
@@ -101,7 +103,7 @@ function [ok, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(model, dr, r0,
         v0 = r0;
     end
     if isnan(llr0)
-       llr0 = llPriorVelocity(r0, 'fast', 'vs', vsmu, 'prm', prm, 'debug', debug);
+       llr0 = llPriorVelocity(r0, 'fast', 'vs', vsmu, 'prm', prm, 'bnd', bnd, 'debug', debug);
     end
     
     % --- Load some data (in case it is on disk)
@@ -131,27 +133,27 @@ function [ok, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(model, dr, r0,
     for i=1:nit
         r = single(r0 + dr / armijo);
         v = single(v0 + sigma * dr / armijo);
-        iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'debug', debug);
+        iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'bnd', bnd, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
         [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
         llm = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
-        llr = llPriorVelocity(r,  'fast', 'vs', vsmu, 'prm', prm, 'debug', debug);
+        llr = llPriorVelocity(r,  'fast', 'vs', vsmu, 'prm', prm, 'bnd', bnd, 'debug', debug);
         ll  = llm + llr;
         
-        if verbose, printInfo(i, ll0, llm, llr); end;
+        if verbose, printInfo(i, ll0, llm, llr); end
         
         if ll <= ll0
-            if verbose, printInfo('failed'); end;
+            if verbose, printInfo('failed'); end
             armijo = armijo * 2;
         else
-            if verbose, printInfo('success'); end;
-            llr = llPriorVelocity(r, 'vs', vsmu, 'prm', prm, 'debug', debug);
+            if verbose, printInfo('success'); end
+            llr = llPriorVelocity(r, 'vs', vsmu, 'prm', prm, 'bnd', bnd, 'debug', debug);
             ok  = true;
             return
         end
     end
     
-    if verbose, printInfo('end'); end;
+    if verbose, printInfo('end'); end
     r   = r0;
     v   = v0;
 
