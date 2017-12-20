@@ -18,7 +18,6 @@ function ll = llPriorVelocity(v, varargin)
 % vs     - Voxel size of the velocity lattice [1 1 1]
 % prm    - Parameters of the L operator (see spm_diffeo)
 %          [0.0001 0.001 0.2 0.05 0.2]
-% bnd    - L differential operator boundary conditions (0/1/2/3) [0]
 % logdet - Log determinant of the kernel (so that it is not computed
 %          several times)
 %
@@ -35,20 +34,16 @@ function ll = llPriorVelocity(v, varargin)
     p.addOptional('fast',    '', @(X) ischar(X) && strcmpi(X, 'fast'));
     p.addParameter('vs',     [1 1 1], @(X) isscalar(X) || checkarray(X));
     p.addParameter('prm',    [0.0001 0.001 0.2 0.05 0.2], @checkarray);
-    p.addParameter('bnd',       0, @(X) isscalar(X) && isnumeric(X));
     p.addParameter('logdet',  [], @isnumeric);
     p.addParameter('debug',  false, @isscalar);
     p.parse(v, varargin{:});
     fast = strcmpi(p.Results.fast, 'fast');
     vs    = p.Results.vs;
     prm   = p.Results.prm;
-    bnd   = p.Results.bnd;
     ld    = p.Results.logdet;
     debug = p.Results.debug;
     
-    if debug, fprintf('* llPriorVelocity\n'); end
-    
-    spm_diffeo('boundary', bnd);
+    if debug, fprintf('* llPriorVelocity\n'); end;
     
     % --- Load in memory
     v = single(numeric(v));
@@ -56,7 +51,7 @@ function ll = llPriorVelocity(v, varargin)
     lat = dim(1:3);
     
     % --- Discard bad voxels (they should not exist but just in case)
-    if ~fast, count = sumall(isfinite(v)); end
+    if ~fast, count = sumall(isfinite(v)); end;
     v(~isfinite(v)) = 0;
     
     % --- Compute log-likelihood

@@ -93,20 +93,6 @@ function opt = pgra_model_default(opt)
         opt.fwhm = 0;
     end
     
-    % --- Shoot parameters
-    if ~isfield(opt, 'shoot')
-        opt.shoot = struct;
-    end
-    if ~isfield(opt.shoot, 'itgr')
-        opt.shoot.itgr = nan;
-    end
-    if ~isfield(opt.shoot, 'bnd')
-        opt.shoot.bnd = 0;
-    end
-    if ~isfield(opt.shoot, 'prm')
-        opt.shoot.prm = [0.0001 0.001 0.2 0.05 0.2];
-    end
-    
     % --- Check n0
     if 0 < opt.nz0 && opt.nz0 < opt.K
         warning(['Wishart prior: nz0 must be greater or equal to %d. ' ...

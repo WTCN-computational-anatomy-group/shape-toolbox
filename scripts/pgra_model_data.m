@@ -112,22 +112,13 @@ function [opt, dat, model] = pgra_model_data(opt, dat, model)
     end
     
     if ~isfield(dat, 'okq')
-        [dat.okq] = deal(0);
+        [dat.okq] = deal(false);
     end
     if ~isfield(dat, 'okz')
-        [dat.okz] = deal(0);
+        [dat.okz] = deal(false);
     end
     if ~isfield(dat, 'okr')
-        [dat.okr] = deal(0);
-    end
-    if ~isfield(dat, 'okq2')
-        [dat.okq2] = deal(0);
-    end
-    if ~isfield(dat, 'okz2')
-        [dat.okz2] = deal(0);
-    end
-    if ~isfield(dat, 'okr2')
-        [dat.okr2] = deal(0);
+        [dat.okr] = deal(false);
     end
     if ~isfield(dat, 'llm')
         [dat.llm] = deal(double([]));

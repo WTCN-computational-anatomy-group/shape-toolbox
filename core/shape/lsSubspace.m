@@ -23,7 +23,7 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
     p.addRequired('opt',    @isstruct);
     p.parse(dw, model, dat, opt);
     
-    if opt.debug, fprintf('* lsSubspace\n'); end
+    if opt.debug, fprintf('* lsSubspace\n'); end;
     
     % --- Initial point
     w0 = model.w;
@@ -35,9 +35,15 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
     
     % --- Initialise line search
     if isfield(model, 'armijo'),    armijo = model.armijo;
-    else,                           armijo = 1; end
+    else                            armijo = 1; end;
     llm0 = model.llm;
     llz0 = - 0.5 * trace(model.wpz(2) * model.ww * (model.Sz + model.zz));
+    if opt.nz0 == 0
+        llz0 = llz0 + 0.5 * opt.N * proba('LogDet', ...
+            model.wpz(1) * model.Az + model.wpz(2) * model.ww);
+    else
+        llz0 = llz0 + model.wpz(2) * 0.5 * opt.N * proba('LogDet', model.ww);
+    end
     llw0 = - 0.5 * trace(model.ww);
     ll0  = llm0 + llz0 + llw0;
     ok   = false;
@@ -56,7 +62,7 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
         for k=1:opt.K
             model.w(:,:,:,:,k) = w0(:,:,:,:,k) + dw(:,:,:,:,k) / armijo;
         end
-        model.ww = precisionZ(model.w, opt.vs, opt.prm, opt.shoot.bnd);
+        model.ww = precisionZ(model.w, opt.vs, opt.prm);
         
         % - Update individual matching terms
         dat = batchProcess('Update', dat, model, opt1, ...
@@ -69,16 +75,22 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
             llm = llm + dat(n).llm;
         end
         llz = - 0.5 * trace(model.wpz(2) * model.ww * (model.Sz + model.zz));
+        if opt.nz0 == 0
+            llz = llz + 0.5 * opt.N * proba('LogDet', ...
+                model.wpz(1) * model.Az + model.wpz(2) * model.ww);
+        else
+            llz = llz + model.wpz(2) * 0.5 * opt.N * proba('LogDet', model.ww);
+        end
         llw = - 0.5 * trace(model.ww);
         
         ll = llm + llz + llw;
-        if opt.verbose, printInfo(armijo, ll0, llm, llz, llw); end
+        if opt.verbose, printInfo(armijo, ll0, llm, llz, llw); end;
         
         if ll <= ll0
-            if opt.verbose, printInfo('failed'); end
+            if opt.verbose, printInfo('failed'); end;
             armijo = armijo * 2;
         else
-            if opt.verbose, printInfo('success'); end
+            if opt.verbose, printInfo('success'); end;
             if isfield(model, 'armijo')
                 model.armijo = max(0.9 * armijo, 1);
             end
@@ -98,11 +110,9 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
             {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
             'clean', {'ipsi', 'iphi'});
         model.armijo = min(1.1 * armijo, 100);
-        model.okw = -1;
     else
         model.ll  = ll;
         model.llm = llm;
-        model.okw = 1;
     end
     rmarray(w0);
     rmarray(ww0);
@@ -117,17 +127,17 @@ function printInfo(which, oll, llm, llz, llw)
             fprintf('%10s | %10s | %10s = %10s + %10s + %10s  | %10s\n', 'LS PG', 'Armijo', 'RLL', 'LL-Match', 'RLL-Z', 'RLL-W', 'LL-Diff');
             fprintf([repmat('-', 1, 100) '\n']);
         elseif strcmpi(which, 'initial')
-            fprintf('%10s | %10s | %10.6g = %10.6g + %10.6g + %10.6g \n', 'LS PG', 'Initial', oll, llm, llz, llw);
+            fprintf('%10s | %10s | %10g = %10g + %10g + %10g \n', 'LS PG', 'Initial', oll, llm, llz, llw);
         elseif strcmpi(which, 'failed')
-            fprintf(' | :(\n');
+            fprintf(' | Failed\n');
         elseif strcmpi(which, 'success')
-            fprintf(' | :D\n');
+            fprintf(' | Success\n');
             fprintf([repmat('_', 1, 100) '\n']);
         elseif strcmpi(which, 'end')
             fprintf('%10s | Complete failure\n', 'LS PG');
             fprintf([repmat('_', 1, 100) '\n']);
         end
     else
-        fprintf('%10s | %10.6g | %10.6g = %10.6g + %10.6g + %10.6g  | %10.6g ', 'LS PG', which, llm+llz+llw, llm, llz, llw, llm+llz+llw-oll);
+        fprintf('%10s | %10g | %10g = %10g + %10g + %10g  | %10g ', 'LS PG', which, llm+llz+llw, llm, llz, llw, llm+llz+llw-oll);
     end
 end

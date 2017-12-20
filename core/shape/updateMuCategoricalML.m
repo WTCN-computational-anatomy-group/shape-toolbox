@@ -79,7 +79,7 @@ function mu = updateMuCategoricalML(varargin)
     debug  = p.Results.debug;
     output = p.Results.output;
     
-    if debug, fprintf('* updateMuCategoricalML\n'); end
+    if debug, fprintf('* updateMuCategoricalML\n'); end;
 
     if isempty(lat)
         error('For now, the lattice size MUST be provided')
@@ -92,7 +92,7 @@ function mu = updateMuCategoricalML(varargin)
     
     switch lower(loop)
         case 'none'
-            if debug, fprintf('   - No loop\n'); end
+            if debug, fprintf('   - No loop\n'); end;
             mu = loopNone(f, c, bb, lat, output, fwhm);
         case 'slice'
             if debug

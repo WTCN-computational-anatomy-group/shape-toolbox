@@ -22,5 +22,10 @@ function ll = lbPrecisionMatrix(EA, N, n0, EA0)
         return
     end
     
-    ll = -spm_prob('Wishart', 'kl', EA, n0+N, EA0, n0, 'normal');
+    % Use usual Wishart parameters
+    n  = n0+N;
+    B  = EA/n;
+    B0 = EA0/n0;
+    
+    ll = -klWishart(n, B, n0, B0);
 end
