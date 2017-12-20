@@ -1,7 +1,7 @@
 function frames = animatePG(model, opt, pg, fname, sigma)
 
     if nargin < 5
-        sigma = 1.5;
+        sigma = 3;
         if nargin < 4
             fname = '';
         end
