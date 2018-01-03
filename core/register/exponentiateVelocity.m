@@ -17,6 +17,7 @@ function varargout = exponentiateVelocity(v, varargin)
 % vs     - Voxel size of the initial velocity lattice [1 1 1]
 % prm    - Parameters of the L operator (see spm_diffeo) 
 %          [0.0001 0.001 0.2 0.05 0.2]
+% bnd    - L differential operator boundary conditions (0/1/2/3) [0]
 %
 % Exponentiate the initial velocity to recover transforms.
 
@@ -60,17 +61,20 @@ function varargout = exponentiateVelocity(v, varargin)
     p.addParameter('itgr',   nan);
     p.addParameter('vs',     [1 1 1]);
     p.addParameter('prm',    [0.0001 0.001 0.2 0.05 0.2]);
+    p.addParameter('bnd',      0, @(X) isscalar(X) && isnumeric(X));
     p.addParameter('output', []);
     p.addParameter('debug',  false);
     p.parse(v, varargin{:});
     itgr   = p.Results.itgr;
     vs     = p.Results.vs;
     prm    = p.Results.prm;
+    bnd    = p.Results.bnd;
     debug  = p.Results.debug;
     output = p.Results.output;
     
+    if debug, fprintf('* exponentiateVelocity\n'); end
     
-    if debug, fprintf('* exponentiateVelocity\n'); end;
+    spm_diffeo('boundary', bnd);
     
     % --- Load data in memory
     v = single(numeric(v));
@@ -80,7 +84,7 @@ function varargout = exponentiateVelocity(v, varargin)
         if do.ijac
             [out.iphi, out.ijac] = pushIPhiJac(v, itgr, vs, prm);
         else
-            out.iphi = pushIPhi(v, itgr, vs, prm);
+            out.iphi = pushIPhi(v, itgr, vs, prm, bnd);
         end
     elseif do.phi && ~do.iphi
         if do.jac
@@ -132,7 +136,7 @@ function [iphi, ijac, phi, jac] = pushIPhiPhiJac(v, itgr, vs, prm)
     [phi, jac, ~, iphi, ijac] = spm_shoot3d(v, [vs prm], itgr);
 end
 
-function [iphi, ijac] = pushIPhi(v, itgr, vs, prm)
+function [iphi, ijac] = pushIPhi(v, itgr, vs, prm, bnd)
 
     % --- Dimension info
     dim = [size(v) 1 1 1 1];
@@ -146,7 +150,7 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm)
     end
 
     % Inversion kernel
-    F = spm_shoot_greens('kernel', double(lattice_dim), double([vs prm]));
+    F = spm_shoot_greens('kernel', double(lattice_dim), double([vs prm]), bnd);
     % Identity transform
     id = single(transfo('idmap', lattice_dim));
     % Initial momentum (m_0 = L v_0)
@@ -172,12 +176,17 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm)
         m = spm_diffeo('pushc', m1, id + v/N);
         % Update velocity
         % v_{t+1} = K m_{t+1}
-        v = spm_shoot_greens(m, F, [vs prm]);
+        v = spm_shoot_greens(m, F, double([vs prm]), bnd);
+%         v = spm_diffeo('mom2vel', m, [vs prm 2 2]);
         % Update transform
         diphi = id - v/N;
-        iphi(:,:,:,1) = spm_diffeo('bsplins', iphi(:,:,:,1)-id(:,:,:,1), diphi, [1 1 1  1 1 1]) + diphi(:,:,:,1);
-        iphi(:,:,:,2) = spm_diffeo('bsplins', iphi(:,:,:,2)-id(:,:,:,2), diphi, [1 1 1  1 1 1]) + diphi(:,:,:,2);
-        iphi(:,:,:,3) = spm_diffeo('bsplins', iphi(:,:,:,3)-id(:,:,:,3), diphi, [1 1 1  1 1 1]) + diphi(:,:,:,3);
+        try
+            iphi(:,:,:,1) = spm_diffeo('bsplins', iphi(:,:,:,1)-id(:,:,:,1), diphi, [1 1 1  1 1 1]) + diphi(:,:,:,1);
+            iphi(:,:,:,2) = spm_diffeo('bsplins', iphi(:,:,:,2)-id(:,:,:,2), diphi, [1 1 1  1 1 1]) + diphi(:,:,:,2);
+            iphi(:,:,:,3) = spm_diffeo('bsplins', iphi(:,:,:,3)-id(:,:,:,3), diphi, [1 1 1  1 1 1]) + diphi(:,:,:,3);
+        catch
+            error('Unexpected stuff happening')
+        end
     end
     
     if nargout > 1

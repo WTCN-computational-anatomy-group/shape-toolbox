@@ -35,7 +35,7 @@ function v = reconstructVelocity(varargin)
     output = p.Results.output;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* reconstructVelocity\n'); end;
+    if debug, fprintf('* reconstructVelocity\n'); end
     
     % --- Check that there are enough arguments
     if checkarray(z) + checkarray(W) == 1
