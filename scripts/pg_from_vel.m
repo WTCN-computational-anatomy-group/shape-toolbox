@@ -117,7 +117,7 @@ function [model, dat] = pg_from_vel(opt, dat, model, cont)
         %    Principal subspace
         % -----------------------------------------------------------------
         
-        if opt.verbose, fprintf('%10s | %10s ', 'PG', ''); tic; end
+        if opt.verbose, fprintf('%10s | %10s ', 'PG', ''); tic; end;
         M = model.Sz + model.zz + eye(opt.K) / model.lam;
         M = loadDiag(M);
         P = model.Z' / M;
@@ -133,7 +133,7 @@ function [model, dat] = pg_from_vel(opt, dat, model, cont)
         end
         clear M P
         model.ww = precisionZ(model.w, opt.vs, opt.prm);
-        if opt.verbose, fprintf('| %6gs\n', toc); end
+        if opt.verbose, fprintf('| %6gs\n', toc); end;
         
         % -----------
         % Lower bound
@@ -172,20 +172,20 @@ function [model, dat] = pg_from_vel(opt, dat, model, cont)
         
 %         % Orthogonalisation matrix
 %         % ------------------------
-%         if opt.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
+%         if opt.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end;
 %         [U, iU] = orthogonalisationMatrix(model.zz + model.Sz, model.ww);
-%         if opt.verbose, fprintf('| %6gs\n', toc); end
+%         if opt.verbose, fprintf('| %6gs\n', toc); end;
 %         
 %         % Rescaling
 %         % ---------
-%         if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
+%         if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end;
 %         zz = U*model.zz*U';
 %         Sz = U*model.Sz*U';
 %         ww = iU'*model.ww*iU;
 %         [Q, iQ] = gnScalePG_vel(Sz, zz, ww, opt.nz0, opt.N);
 % %         Q  = eye(opt.K);
 % %         iQ = Q;
-%         if opt.verbose, fprintf('| %6gs\n', toc); end
+%         if opt.verbose, fprintf('| %6gs\n', toc); end;
 %         
 %         % Apply full transform
 %         % --------------------
@@ -202,9 +202,9 @@ function [model, dat] = pg_from_vel(opt, dat, model, cont)
         
         % Latent precision
         % ----------------
-        if opt.verbose, fprintf('%10s | %10s ', 'Lat Prec', ''); tic; end
+        if opt.verbose, fprintf('%10s | %10s ', 'Lat Prec', ''); tic; end;
         model.Az = (opt.nz0 + opt.N) * inv(opt.nz0 * inv(opt.Az0) + model.Sz + model.zz);
-        if opt.verbose, fprintf('| %6gs\n', toc); end
+        if opt.verbose, fprintf('| %6gs\n', toc); end;
         
         % -----------
         % Lower bound
@@ -228,12 +228,12 @@ function [model, dat] = pg_from_vel(opt, dat, model, cont)
         %    Residual precision
         % -----------------------------------------------------------------
         
-        if opt.verbose, fprintf('%10s ', 'Res Prec'); tic; end
+        if opt.verbose, fprintf('%10s ', 'Res Prec'); tic; end;
         model.lam = opt.nl0/opt.lam0 + (trace(model.Sz*model.ww) + model.cumres)/(prod(opt.lat)*3);
         model.lam = (opt.nl0 + opt.N)/model.lam;
         model.lami = [model.lami emit];
         model.lams = [model.lams model.lam];
-        if opt.verbose, fprintf('| %10.3f | %6gs\n', model.lam, toc); end
+        if opt.verbose, fprintf('| %10.3f | %6gs\n', model.lam, toc); end;
         
         % -----------
         % Lower bound
@@ -532,12 +532,12 @@ function dat = batchMomentum(dat, opt)
     end
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Momentum'); end
+    if opt.verbose, before = plotBatchBegin('Momentum'); end;
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
     
         % Compute subjects log-likelihood
         % -------------------------------
@@ -546,7 +546,7 @@ function dat = batchMomentum(dat, opt)
         end
         
     end
-    if opt.verbose, plotBatchEnd; end
+    if opt.verbose, plotBatchEnd; end;
 
 end
 
@@ -586,12 +586,12 @@ function [dat, model] = batchLLV(dat, model, opt)
     model.lb.v.val = 0;
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('LL Vel'); end
+    if opt.verbose, before = plotBatchBegin('LL Vel'); end;
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
     
         % Compute subjects log-likelihood
         % -------------------------------
@@ -608,7 +608,7 @@ function [dat, model] = batchLLV(dat, model, opt)
         end
         
     end
-    if opt.verbose, plotBatchEnd; end
+    if opt.verbose, plotBatchEnd; end;
 
 end
 
@@ -656,12 +656,12 @@ function [dat, model] = batchLatent(dat, model, opt)
     model.Z  = zeros(opt.K, opt.N);
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Latent'); end
+    if opt.verbose, before = plotBatchBegin('Latent'); end;
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
     
         % Compute subjects log-likelihood
         % -------------------------------
@@ -681,7 +681,7 @@ function [dat, model] = batchLatent(dat, model, opt)
         end
         
     end
-    if opt.verbose, plotBatchEnd; end
+    if opt.verbose, plotBatchEnd; end;
 
 end
 
@@ -727,12 +727,12 @@ function [dat, model] = batchLatentRotate(dat, model, opt, T, iT)
     model.Z  = zeros(opt.K, opt.N);
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Rotate'); end
+    if opt.verbose, before = plotBatchBegin('Rotate'); end;
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
     
         % Compute subjects log-likelihood
         % -------------------------------
@@ -752,7 +752,7 @@ function [dat, model] = batchLatentRotate(dat, model, opt, T, iT)
         end
         
     end
-    if opt.verbose, plotBatchEnd; end
+    if opt.verbose, plotBatchEnd; end;
 
 end
 
@@ -785,12 +785,12 @@ function [dat, model] = batchLatentKL(dat, model, opt)
     model.lb.z.val = 0;
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('KL Latent'); end
+    if opt.verbose, before = plotBatchBegin('KL Latent'); end;
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
     
         % Compute subjects log-likelihood
         % -------------------------------
@@ -806,7 +806,7 @@ function [dat, model] = batchLatentKL(dat, model, opt)
         end
         
     end
-    if opt.verbose, plotBatchEnd; end
+    if opt.verbose, plotBatchEnd; end;
 
 end
 
@@ -850,12 +850,12 @@ function [dat, model] = batchLatentInit(dat, model, opt)
     model.Z  = zeros(opt.K, opt.N);
     
     % --- Batch processing
-    if opt.verbose, before = plotBatchBegin('Init'); end
+    if opt.verbose, before = plotBatchBegin('Init'); end;
     for i=1:ceil(opt.N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(opt.N, i*batch);
 
-        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end
+        if opt.verbose, before = plotBatch(i, batch, opt.N, 50, before); end;
     
         % Compute subjects log-likelihood
         % -------------------------------
@@ -875,7 +875,7 @@ function [dat, model] = batchLatentInit(dat, model, opt)
         end
         
     end
-    if opt.verbose, plotBatchEnd; end
+    if opt.verbose, plotBatchEnd; end;
 
 end
 
