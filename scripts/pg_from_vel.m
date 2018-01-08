@@ -94,6 +94,10 @@ function [model, dat] = pg_from_vel(opt, dat, model, cont)
         opt.Az0 = opt.Az0(1:opt.K,1:opt.K);
     end
     
+    % Store logdet for efficiency
+    [~, opt.logdet] = spm_shoot_greens('kernel', double(opt.lat), double([opt.vs opt.prm]));
+    opt.logdet = opt.logdet(1);
+    
     % ---------------------------------------------------------------------
     %    Initialise all variables
     % ---------------------------------------------------------------------
@@ -170,58 +174,63 @@ function [model, dat] = pg_from_vel(opt, dat, model, cont)
         plotAll(model, opt);
         % -----------
         
-%         % Orthogonalisation matrix
-%         % ------------------------
-%         if opt.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
-%         [U, iU] = orthogonalisationMatrix(model.zz + model.Sz, model.ww);
-%         if opt.verbose, fprintf('| %6gs\n', toc); end
-%         
-%         % Rescaling
-%         % ---------
-%         if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
-%         zz = U*model.zz*U';
-%         Sz = U*model.Sz*U';
-%         ww = iU'*model.ww*iU;
-%         [Q, iQ] = gnScalePG_vel(Sz, zz, ww, opt.nz0, opt.N);
-% %         Q  = eye(opt.K);
-% %         iQ = Q;
-%         if opt.verbose, fprintf('| %6gs\n', toc); end
-%         
-%         % Apply full transform
-%         % --------------------
-%         Q  = Q*U;
-%         iQ = iU*iQ;
-%         [dat, model] = batchLatentRotate(dat, model, opt, Q);
-%         for z=1:size(model.w, 3)
-%             w1 = reshape(model.w(:,:,z,:,:), [], opt.K);
-%             w1 = w1 * iQ;
-%             w1 = reshape(w1, [opt.lat(1:2) 1 3 opt.K]);
-%             model.w(:,:,z,:,:) = w1;
-%         end
-%         model.ww = iQ' * model.ww * iQ;
+        % Orthogonalise
+        % -------------
+        if opt.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
+        [U, iU] = orthogonalisationMatrix(model.zz + model.Sz, model.ww);
+        if opt.verbose, fprintf('| %6.3fs\n', toc); end
+
+        % Rescale
+        % -------
+        if opt.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
+        [Q, iQ] = gnScalePG(iU'*model.ww*iU, ...
+                            U*model.zz*U', ...
+                            U*model.Sz*U', ...
+                            opt.nz0, opt.N);
+        if opt.verbose, fprintf('| %6.3fs\n', toc); end
+        Q  = Q*U;
+        iQ = iU*iQ;
+        
+        % Rotate
+        % ------
+        % > Rotate W
+        for z=1:size(model.w,3)
+            w1  = single(model.w(:,:,z,:,:));
+            dim = [size(w1) 1 1 1];
+            w1  = reshape(w1, [], opt.K) * iQ;
+            model.w(:,:,z,:,:) = reshape(w1, dim);
+        end
+        model.ww(:,:) = iQ' * numeric(model.ww) * iQ;
+        % > Rotate subjects
+        [dat, model] = batchLatentRotate(dat, model, opt, Q);
         
         % Latent precision
         % ----------------
-        if opt.verbose, fprintf('%10s | %10s ', 'Lat Prec', ''); tic; end
-        model.Az = (opt.nz0 + opt.N) * inv(opt.nz0 * inv(opt.Az0) + model.Sz + model.zz);
-        if opt.verbose, fprintf('| %6gs\n', toc); end
-        
+        model.Az = spm_prob('Wishart', 'up', ...
+                            opt.N, 0, model.zz + model.Sz, ...
+                            eye(opt.K), opt.nz0);
+
         % -----------
         % Lower bound
         if opt.lb.track
-            model.lb.v.list = [model.lb.v.list model.lb.v.val];
-            model.lb.v.it   = [model.lb.v.it   emit + 0.5];
+            model.lb.w.val  = llPriorSubspace(model.w, model.ww, opt.logdet);
+            model.lb.w.list = [model.lb.w.list model.lb.w.val];
+            model.lb.w.it   = [model.lb.w.it   emit];
+            if opt.nz0
+                model.lb.a.val = -spm_prob('Wishart', 'kl', ...
+                                           model.Az,   opt.nz0+opt.N, ...
+                                           eye(opt.K), opt.nz0, ...
+                                           'normal');
+                model.lb.a.list = [model.lb.a.list model.lb.a.val];
+                model.lb.a.it   = [model.lb.a.it   emit];
+            end
             model.lb.z.list = [model.lb.z.list model.lb.z.val];
             model.lb.z.it   = [model.lb.z.it   emit];
-            model.lb.a.val  = -klWishart(opt.nz0 + opt.N, model.Az, ...
-                                         opt.nz0, opt.Az0, ...
-                                         'expectation');
-            model.lb.a.list = [model.lb.a.list model.lb.a.val];
-            model.lb.a.it   = [model.lb.a.it   emit];
-            model           = updateLowerBound(model);
+            model = updateLowerBound(model);
         end
         plotAll(model, opt);
         % -----------
+        
         
         if true
         % -----------------------------------------------------------------
@@ -238,12 +247,13 @@ function [model, dat] = pg_from_vel(opt, dat, model, cont)
         % -----------
         % Lower bound
         if opt.lb.track
-            [dat, model] = batchLLV(dat, model, opt);
+            [dat, model]    = batchLLV(dat, model, opt);
             model.lb.v.list = [model.lb.v.list model.lb.v.val];
             model.lb.v.it   = [model.lb.v.it   emit + 2/3];
-            model.lb.l.val  = -klGamma((opt.nl0 + opt.N), model.lam, ...
-                                       opt.nl0, opt.lam0, ...
-                                       'precision', prod(opt.lat)*3);
+            model.lb.l.val  = -spm_prob('Gamma',   'kl', ...
+                                        model.lam, opt.nl0 + opt.N, ...
+                                        opt.lam0,  opt.nl0, ...
+                                        prod(opt.lat)*3, 'normal');
             model.lb.l.list = [model.lb.l.list model.lb.l.val];
             model.lb.l.it   = [model.lb.l.it   emit];
             model           = updateLowerBound(model, true); % COMPUTE GAIN
@@ -362,13 +372,12 @@ function plotAll(model, opt)
         colors = ['b', 'g', 'r', 'c', 'm', 'k'];
         
         % PG 1/2/3
-        [X,Y] = ndgrid(1:opt.lat(1), 1:opt.lat(2));
-        Z = ceil(opt.lat(3)/2);
         for k=1:3
-            U = reshape(model.w(:,:,Z,1,k), [opt.lat(1) opt.lat(2)]);
-            V = reshape(model.w(:,:,Z,1,k), [opt.lat(1) opt.lat(2)]);
             subplot(nh,nw,i)
-            quiver(X,Y,U,V)
+            pg = defToColor(model.w(:,:,ceil(size(model.w,3)/2),:,k));
+            dim = [size(pg) 1 1];
+            image(reshape(pg, [dim(1:2) dim(4)]));
+            daspect(1./opt.vs);
             axis off
             title(sprintf('PG %d', k))
             i = i + 1;
@@ -688,7 +697,7 @@ end
 
 % =========================================================================
 
-function dat = oneStepLatentRotate(dat, model, opt, T, iT)
+function dat = oneStepLatentRotate(dat, model, opt, T)
 % Update mean and covariance of the latent coordinates
 % + KL divergence
 
@@ -705,11 +714,7 @@ function dat = oneStepLatentRotate(dat, model, opt, T, iT)
     
 end
 
-function [dat, model] = batchLatentRotate(dat, model, opt, T, iT)
-
-    if nargin < 5
-        iT = inv(T);
-    end
+function [dat, model] = batchLatentRotate(dat, model, opt, T)
 
     % --- Detect parallelisation scheme
     if opt.par > 0
@@ -737,7 +742,7 @@ function [dat, model] = batchLatentRotate(dat, model, opt, T, iT)
         % Compute subjects log-likelihood
         % -------------------------------
         parfor (n=n1:ne, double(opt.par))
-            dat(n) = oneStepLatentRotate(dat(n), model, opt, T, iT);
+            dat(n) = oneStepLatentRotate(dat(n), model, opt, T);
         end
         
         for n=n1:ne

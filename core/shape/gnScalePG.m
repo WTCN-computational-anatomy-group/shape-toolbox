@@ -14,7 +14,7 @@ function [Q, iQ, q] = gnScalePG(WW, ZZ, SZ, n0, N, q0)
     EZZ = ZZ + SZ;
     K = size(EZZ, 1);
 
-    if nargin < 5 || isempty(q0)
+    if nargin < 6 || isempty(q0)
         q0    = zeros(K,1)-0.5*log(N);
     end
 
