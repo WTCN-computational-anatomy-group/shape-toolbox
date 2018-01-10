@@ -1068,23 +1068,51 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
         % --------------------------------------------------
         dat(n1:ne) = distribute('oneStepGradHessVelocity', dat(n1:ne), model, opt);
         
-        for n=n1:ne
-            
-            % Add individual contributions
-            % ----------------------------
-            gv = numeric(dat(n).gv);
-            hv = numeric(dat(n).hv);
-            for k=1:opt.K
+%         for n=n1:ne
+%             
+%             % Add individual contributions
+%             % ----------------------------
+%             gv = numeric(dat(n).gv);
+%             hv = numeric(dat(n).hv);
+%             for k=1:opt.K
+%                 bx = dat(n).bb.x;
+%                 by = dat(n).bb.y;
+%                 bz = dat(n).bb.z;
+%                 model.gw(bx,by,bz,:,k) = model.gw(bx,by,bz,:,k) + gv * single(dat(n).z(k));
+%                 model.hw(bx,by,bz,:,k) = model.hw(bx,by,bz,:,k) + hv * single(dat(n).z(k))^2;
+%             end
+%             clear gv hv
+%             
+%             % Clear individual grad/hess
+%             % --------------------------
+%             dat(n).gv = rmarray(dat(n).gv);
+%             dat(n).hv = rmarray(dat(n).hv);
+%         end
+        
+        
+        % Add individual contributions
+        % ----------------------------
+        for k=1:opt.K
+            gw = model.gw(:,:,:,:,k);
+            hw = model.hw(:,:,:,:,k);
+            for n=n1:ne
+                gv = numeric(dat(n).gv);
+                hv = numeric(dat(n).hv);
                 bx = dat(n).bb.x;
                 by = dat(n).bb.y;
                 bz = dat(n).bb.z;
-                model.gw(bx,by,bz,:,k) = model.gw(bx,by,bz,:,k) + gv * single(dat(n).z(k));
-                model.hw(bx,by,bz,:,k) = model.hw(bx,by,bz,:,k) + hv * single(dat(n).z(k))^2;
+                gw(bx,by,bz,:) = gw(bx,by,bz,:) + gv * single(dat(n).z(k));
+                hw(bx,by,bz,:) = hw(bx,by,bz,:) + hv * single(dat(n).z(k))^2;
+                clear gv hv
             end
-            clear gv hv
-            
-            % Clear individual grad/hess
-            % --------------------------
+            model.gw(:,:,:,:,k) = gw;
+            model.hw(:,:,:,:,k) = hw;
+            clear gw hw
+        end
+        
+        % Clear individual grad/hess
+        % --------------------------
+        for n=n1:ne
             dat(n).gv = rmarray(dat(n).gv);
             dat(n).hv = rmarray(dat(n).hv);
         end
