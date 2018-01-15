@@ -27,6 +27,32 @@ function mu = updateMuML(model, dat, varargin)
 %
 %__________________________________________________________________________
 
+    % Deal with both old and new factoring
+    if ~isfield(dat, 'pf') && isstruct(dat(1).f)
+        tmp = dat;
+        dat = struct('pf', cell(numel(dat),1));
+        for n=1:numel(dat)
+            dat(n).pf = tmp(n).f.pf;
+        end
+        [dat.c] = deal([]);
+        for n=1:numel(dat)
+            dat(n).c = tmp(n).f.c;
+        end
+        if isfield(tmp(1).f, 'bb')
+            [dat.bb] = deal([]);
+            for n=1:numel(dat)
+                dat(n).bb = tmp(n).f.bb;
+            end
+        end
+        if isfield(tmp(1).f, 'sigma2')
+            [dat.sigma2] = deal([]);
+            for n=1:numel(dat)
+                dat(n).sigma2 = tmp(n).f.sigma2;
+            end
+        end
+        clear tpm
+    end
+
     switch lower(model.name)
         case {'normal', 'gaussian', 'l2'}
             if isfield(dat, 'sigma2') && isfield(dat, 'bb')

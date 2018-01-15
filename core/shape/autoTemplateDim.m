@@ -27,7 +27,7 @@ function [lat, Mmu, vs] = autoTemplateDim(dat, vs)
     if isempty(vs)
         vs = [0 0 0];
         for i=1:numel(dat)
-            vs = vs + sqrt(sum(dat(i).Mf(1:3,1:3).^2));
+            vs = vs + sqrt(sum(dat(i).f.M(1:3,1:3).^2));
         end
         vs = vs/numel(dat);
     end
@@ -42,19 +42,19 @@ function [lat, Mmu, vs] = autoTemplateDim(dat, vs)
     for i=1:numel(dat)
         corners = ones(4, 8);
         corners(1:3,1) = [1 1 1]';
-        corners(1:3,2) = [1 1 size(dat(i).f, 3)]';
-        corners(1:3,3) = [1 size(dat(i).f, 2) 1]';
-        corners(1:3,4) = [size(dat(i).f, 1) 1 1]';
-        corners(1:3,5) = [1 size(dat(i).f, 2) size(dat(i).f, 3)]';
-        corners(1:3,6) = [size(dat(i).f, 1) 1 size(dat(i).f, 3)]';
-        corners(1:3,7) = [size(dat(i).f, 1) size(dat(i).f, 2) 1]';
-        corners(1:3,8) = [size(dat(i).f, 1) size(dat(i).f, 2) size(dat(i).f, 3)]';
+        corners(1:3,2) = [1 1 size(dat(i).f.f, 3)]';
+        corners(1:3,3) = [1 size(dat(i).f.f, 2) 1]';
+        corners(1:3,4) = [size(dat(i).f.f, 1) 1 1]';
+        corners(1:3,5) = [1 size(dat(i).f.f, 2) size(dat(i).f.f, 3)]';
+        corners(1:3,6) = [size(dat(i).f.f, 1) 1 size(dat(i).f.f, 3)]';
+        corners(1:3,7) = [size(dat(i).f.f, 1) size(dat(i).f.f, 2) 1]';
+        corners(1:3,8) = [size(dat(i).f.f, 1) size(dat(i).f.f, 2) size(dat(i).f.f, 3)]';
         for j=1:8
-            pushed = Mmu \ dat(i).Mf * corners(:,j);
+            pushed = Mmu \ dat(i).f.M * corners(:,j);
             minpos = min(minpos, pushed(1:3));
             maxpos = max(maxpos, pushed(1:3));
         end
-        meantr = meantr + dat(i).Mf(1:3,4);
+        meantr = meantr + dat(i).f.M(1:3,4);
     end
     meantr = meantr / numel(dat);
     Mmu(1:3,4) = meantr;

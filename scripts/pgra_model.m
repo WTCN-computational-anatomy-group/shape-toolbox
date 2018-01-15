@@ -1,6 +1,9 @@
 function [model, dat] = pgra_model(opt, dat, model, cont)
 % _________________________________________________________________________
 %
+%     PGRA model (2017) - Principal Geodesic + Residual + Affine
+% _________________________________________________________________________
+%
 % FORMAT [model, dat, opt] = pgra_model(opt, (dat), (model))
 %
 % Optimises a "principal geodesic" model on a collection of images.

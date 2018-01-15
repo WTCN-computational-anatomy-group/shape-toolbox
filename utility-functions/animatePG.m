@@ -5,6 +5,8 @@ function frames = animatePG(model, opt, pg, fname, nsigma, dir, x)
 % pg     - Principal geodesic along which to shoot (1, 2, ..., K)
 % fname  - Filename of the output video (.avi, .gif) [do not write video]
 % nsigma - Shooting range in terms of number of standard deviation [3]
+% dir    - Slice direction (1 = sagittal, 2 = coronal, [3] = axial)
+% x      - Slice location [sagittal: 1/3, axial/coronal: middle]
 % frames - Structure array of Matlab frames. 
 %          They can be given to the movie function.
 
@@ -21,7 +23,32 @@ function frames = animatePG(model, opt, pg, fname, nsigma, dir, x)
         end
     end
     
-    cov  = inv(model.Az);
+    % Deal with all model/opt versions
+    if isstruct(model.z)
+        A   = model.z.A;
+        w   = model.pg.w;
+        vs  = opt.tpl.vs;
+        prm = opt.pg.prm;
+        iscat = opt.tpl.cat && checkarray(model.tpl.a);
+        if iscat && checkarray(model.tpl.a)
+            mu = model.tpl.a;
+        else
+            mu = model.tpl.mu;
+        end
+    else
+        A   = model.Az;
+        w   = model.w;
+        vs  = opt.vs;
+        prm = opt.prm;
+        iscat = opt.tpm;
+        if iscat && checkarray(model.a)
+            mu = model.a;
+        else
+            mu = model.mu;
+        end
+    end
+    
+    cov  = inv(A);
     sd   = sqrt(cov(pg,pg));
     nf   = 11; % Number of frames to compute (should be a parameter really)
     allz = linspace(-nsigma*sd, nsigma*sd, nf);
@@ -33,18 +60,21 @@ function frames = animatePG(model, opt, pg, fname, nsigma, dir, x)
     fig = figure;
     for z=allz
         fprintf('z: %f\n', z);
-        v = model.w(:,:,:,:,pg) * z;
-        iphi = exponentiateVelocity(v, 'iphi', 'vs', opt.vs, 'prm', opt.prm);
-        mu = warp(iphi, model.mu);
-        mu = colorimage(mu, x, dir);
-        image(mu);
+        v = w(:,:,:,:,pg) * z;
+        iphi = exponentiateVelocity(v, 'iphi', 'vs', vs, 'prm', prm);
+        mu1 = warp(iphi, mu);
+        if iscat
+            mu1 = reconstructProbaTemplate(mu1);
+        end
+        mu1 = colorimage(mu1, x, dir);
+        image(mu1);
         switch dir
             case 1
-                daspect([1/opt.vs(2) 1/opt.vs(3) 1]);
+                daspect([1/vs(2) 1/vs(3) 1]);
             case 2
-                daspect([1/opt.vs(1) 1/opt.vs(3) 1]);
+                daspect([1/vs(1) 1/vs(3) 1]);
             case 3
-                daspect([1/opt.vs(1) 1/opt.vs(2) 1]);
+                daspect([1/vs(1) 1/vs(2) 1]);
         end
         axis off
         drawnow
