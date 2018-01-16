@@ -427,8 +427,18 @@ function dat = oneInitVelocity(dat, model, opt, mode)
         % Log-likelihood of a multivariate normal distribution
         % mean = W*z, precision = l*L
         K = prod(opt.tpl.lat)*3;
-        dat.v.lb.reg   = single(dat.v.v(:))' * single(dat.v.m(:));
-        dat.v.lb.uncty = trace(dat.z.S*model.pg.ww);
+        if opt.pg.provided
+            wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
+                                     'loop', loop, 'par', par);
+            r = numeric(dat.v.v) - wz;
+            clear wz
+            m = spm_diffeo('vel2mom', r, double([opt.tpl.vs opt.pg.prm]));
+            dat.v.lb.reg = r(:)' * m(:);
+            clear r m
+        else
+            dat.v.lb.reg   = single(dat.v.v(:))' * single(dat.v.m(:));
+        end
+        dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
         dat.v.lb.val   = -0.5*( K*log(2*pi/model.v.l) - opt.pg.ld ...
                                 + model.v.l * dat.v.lb.reg ...
                                 + model.v.l * dat.v.lb.uncty );
@@ -465,10 +475,21 @@ function dat = oneInitVelocity(dat, model, opt, mode)
             dat.v.v(:,:,:,:) = v;
             m = spm_diffeo('vel2mom', v, double([opt.tpl.vs opt.pg.prm]));
             dat.v.m(:,:,:,:) = m;
-            dat.v.lb.reg = v(:)' * m(:);
-            clear v m
+            if opt.pg.provided
+                clear m
+                wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
+                                         'loop', loop, 'par', par);
+                r = v - wz;
+                clear v wz
+                m = spm_diffeo('vel2mom', r, double([opt.tpl.vs opt.pg.prm]));
+                dat.v.lb.reg = r(:)' * m(:);
+                clear r m
+            else
+                dat.v.lb.reg = v(:)' * m(:);
+                clear v m
+            end
         end
-        dat.v.lb.uncty = trace(dat.z.S*model.pg.ww);
+        dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
         
         % Hessian
         % -------
@@ -872,10 +893,10 @@ function [dat, model] = batchFitAffine(dat, model, opt)
 
     % Init gradient/hessian
     % ---------------------
-    model.llm  = 0;
-    model.q.q  = zeros(opt.q.M, 1);
-    model.q.qq = zeros(opt.q.M);
-    model.q.S  = zeros(opt.q.M);
+    model.lb.m.val = 0;
+    model.q.q      = zeros(opt.q.M, 1);
+    model.q.qq     = zeros(opt.q.M);
+    model.q.S      = zeros(opt.q.M);
     
     N   = numel(dat);
     Nok = 0;
@@ -1020,17 +1041,6 @@ function dat = oneFitVelocity(dat, model, opt)
     % If v is observed
     % ----------------
     if dat.v.observed
-        wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
-                                 'loop', loop, 'par', par);
-        r = numeric(dat.v.v) - wz;
-        clear wz
-        m = spm_diffeo('vel2mom', r, double([opt.tpl.vs opt.pg.prm]));
-        dat.v.lb.reg = r(:)' * m(:);
-        clear r m
-        K = prod(opt.tpl.lat) * 3;
-        dat.v.lb.val = -0.5*( K*log(2*pi/model.v.l) - opt.pg.ld ...
-                              + model.v.l * dat.v.lb.reg ...
-                              + model.v.l * dat.v.lb.uncty );
         return
     end
     
@@ -1308,6 +1318,20 @@ function dat = oneLB(dat, model, opt, which)
         
     end
     
+    if strcmpi(which, 'precisionq')
+        
+        if ~opt.f.observed
+            return
+        end
+        rind = opt.q.rind;
+        dat.q.lb.val = -0.5*( trace((dat.q.qq(rind,rind) + dat.q.S(rind,rind))*model.q.A) ...
+                              - spm_matcomp('LogDet', model.q.A) ...
+                              - spm_matcomp('LogDet', dat.q.S(rind,rind)) ...
+                              - opt.q.Mr );
+        return
+        
+    end
+    
     if strcmpi(which, 'orthogonalise')
         
         % Update after orthogonalisation
@@ -1365,6 +1389,7 @@ function [dat, model] = batchLB(which, dat, model, opt)
     % ---------------------
     model.lb.m.val  = 0;
     model.lb.z.val  = 0;
+    model.lb.q.val  = 0;
     model.lb.v1.val = 0;
     model.lb.v2.val = 0;
     model.v.tr      = 0;
@@ -1385,7 +1410,6 @@ function [dat, model] = batchLB(which, dat, model, opt)
         % --------------------------------------------------
         dat(n1:ne) = distribute('oneLB', dat(n1:ne), model, opt, which);
         
-        
         for n=n1:ne
             
             % Add individual contributions
@@ -1399,6 +1423,7 @@ function [dat, model] = batchLB(which, dat, model, opt)
                 model.lb.m.val  = model.lb.m.val  + dat(n).f.lb.val;
                 model.lb.v1.val = model.lb.v1.val + dat(n).v.lb.val;
                 model.v.tr      = model.v.tr      + dat(n).v.lb.tr;
+                model.lb.q.val  = model.lb.q.val + dat(n).q.lb.val;
             end
             
         end
@@ -1407,6 +1432,7 @@ function [dat, model] = batchLB(which, dat, model, opt)
     if opt.ui.verbose, plotBatchEnd; end
 
     % Model specific parts
+    % --------------------
     switch lower(which)
         case {'subspace', 'orthogonalise'}
             model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
@@ -1415,6 +1441,13 @@ function [dat, model] = batchLB(which, dat, model, opt)
                 model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
                                            model.z.A,   opt.z.n0+opt.v.N+opt.f.N, ...
                                            opt.z.A0,    opt.z.n0, ...
+                                           'normal');
+            end
+        case 'precisionq'
+            if opt.q.n0 && opt.q.Mr
+                model.lb.Aq.val = -spm_prob('Wishart', 'kl', ...
+                                           model.q.A,   opt.q.n0+opt.f.N, ...
+                                           opt.q.A0,    opt.q.n0, ...
                                            'normal');
             end
         case 'lambda'

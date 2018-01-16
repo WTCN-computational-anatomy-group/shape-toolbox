@@ -74,8 +74,11 @@ function [model, dat, opt] = pgva_model(varargin)
 % PROCESSING
 % ----------
 % optimise.pg.w  - Optimise subspace [true] or keep if fixed (false)
+% optimise.z.z   - Optimise latent coordinates [true]
 % optimise.z.A   - Optimise latent precision [true]
+% optimise.q.q   - Optimise affine coordinates [true]
 % optimise.q.A   - Optimise affine precision [true]
+% optimise.v.v   - Optimise velocity fields [true]
 % optimise.v.l   - Optimise residual precision [true]
 % optimise.tpl.a - Optimise template [true]
 % iter.em      - Maximum number of EM iterations [1000]
@@ -164,40 +167,44 @@ function [model, dat, opt] = pgva_model(varargin)
     path = fileparts(which('pgva_model'));
     addpath(fullfile(path, 'pgva'));
     
+    % ---------------------------------------------------------------------
+    %    Initialisation
+    % ---------------------------------------------------------------------
     if ~cont
-        % -----------------------------------------------------------------
-        %    Default parameters + prepare structures & file arrays
+        
+        % Default parameters + prepare structures & file arrays
         % -----------------------------------------------------------------
         [opt,dat,model] = pgva_model_input(input,opt);    % Read observed
         opt             = pgva_model_default(opt);        % Read options
         [opt,dat,model] = pgva_model_data(opt,dat,model); % Set arrays
 
-        % -----------------------------------------------------------------
-        %    Post-set parameters
+        % Post-set parameters
         % -----------------------------------------------------------------
         spm_diffeo('boundary', opt.pg.bnd);
         [~, opt.pg.ld] = spm_shoot_greens('kernel', double(opt.tpl.lat), double([opt.tpl.vs opt.pg.prm]), opt.pg.bnd);
         opt.pg.ld = opt.pg.ld(1);
         
-        % -----------------------------------------------------------------
-        %    Initialise all variables
+        % Initialise all arrays (= model variables)
         % -----------------------------------------------------------------
         if opt.ui.verbose
             fprintf(['%10s | %10s | ' repmat('=',1,50) ' |\n'], 'EM', 'Init');
         end
         [dat, model] = pgva_model_init(dat, model, opt);
+        
+        % Some more stuff regarding processing
+        % -----------------------------------------------------------------
+        model           = updateLowerBound(model, 'gain');
+        model.emit      = 1;
+        model.q.active  = true;
+        model.v.active  = true;
+        model.pg.active = true;
     end
     plotAll(model, opt);
-    
-    model.q.active  = false;
-    model.v.active  = true;
-    model.pg.active = true;
-    model = updateLowerBound(model, 'gain');
     
     % ---------------------------------------------------------------------
     %    EM iterations
     % ---------------------------------------------------------------------
-    for emit = 1:opt.iter.em
+    for emit = model.emit:opt.iter.em
     
         % -----------------------------------------------------------------
         %    General tracking
@@ -208,13 +215,13 @@ function [model, dat, opt] = pgva_model(varargin)
         end
         
         if model.lb.lb.gain < opt.lb.threshold
-            if ~model.q.active
+            if opt.optimise.q.q && ~model.q.active
                 model.q.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'Affine');
-            elseif ~model.v.active
+            elseif opt.optimise.v.v && ~model.v.active
                 model.v.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'Velocity');
-            elseif ~model.pg.active
+            elseif (opt.optimise.pg.w || opt.optimise.z.z) && ~model.pg.active
                 model.pg.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'PG');
             else
@@ -227,218 +234,246 @@ function [model, dat, opt] = pgva_model(varargin)
         % -----------------------------------------------------------------
         %    Affine
         % -----------------------------------------------------------------
-        
-        if model.q.active && opt.f.N
+        if opt.optimise.q.q && model.q.active && opt.f.N
         
             % Update parameters
             % -----------------
             [dat, model] = pgva_batch('FitAffine', dat, model, opt);
 
-            % Update prior
-            % ------------
-            rind = opt.q.rind;
-            model.q.A = spm_prob('Wishart', 'up', ...
-                                 opt.f.N, 0, model.q.qq(rind,rind) + model.q.S(rind,rind), ...
-                                 opt.q.A0, opt.q.n0);
-
             % -----------
             % Lower bound
             model.lb.q.list = [model.lb.q.list model.lb.q.val];
             model.lb.q.it   = [model.lb.q.it   emit];
-            if opt.q.n0
-                model.lb.Aq.val = -spm_prob('Wishart', 'kl', ...
-                                       model.Aq,         opt.nq0+opt.f.N, ...
-                                       eye(numel(rind)), opt.nq0, ...
-                                       'normal');
-                model.lb.Aq.list = [model.lb.Aq.list model.lb.Aq.val];
-                model.lb.Aq.it   = [model.lb.Aq.it   emit];
-            end
             model = updateLowerBound(model);
             plotAll(model, opt);
             % -----------
+            
+            % Update prior
+            % ------------
+            if opt.optimise.q.A && opt.q.Mr
+                rind = opt.q.rind;
+                model.q.A = spm_prob('Wishart', 'up', ...
+                                     opt.f.N, 0, model.q.qq(rind,rind) + model.q.S(rind,rind), ...
+                                     opt.q.A0, opt.q.n0);
+
+                % -----------
+                % Lower bound
+                [dat, model]    = pgva_batch('LB', 'PrecisionQ', dat, model, opt);
+                model.lb.q.list = [model.lb.q.list model.lb.q.val];
+                model.lb.q.it   = [model.lb.q.it   emit + 0.5];
+                if opt.q.n0
+                    model.lb.Aq.val = -spm_prob('Wishart', 'kl', ...
+                                           model.Aq,         opt.nq0+opt.f.N, ...
+                                           eye(numel(rind)), opt.nq0, ...
+                                           'normal');
+                    model.lb.Aq.list = [model.lb.Aq.list model.lb.Aq.val];
+                    model.lb.Aq.it   = [model.lb.Aq.it   emit];
+                end
+                model = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
+            end
             
         end
         
         % -----------------------------------------------------------------
         %    Velocity field
         % -----------------------------------------------------------------
-        
         if model.v.active
-        
+            
             % Update subjects
             % ---------------
-            [dat, model] = pgva_batch('FitVelocity', dat, model, opt);
+            if opt.optimise.v.v && opt.f.N
+                [dat, model] = pgva_batch('FitVelocity', dat, model, opt);
 
-            % -----------
-            % Lower bound
-            if opt.f.N
-                model.lb.m.list = [model.lb.m.list model.lb.m.val];
-                model.lb.m.it   = [model.lb.m.it emit];
-                model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
-                model.lb.v1.it   = [model.lb.v1.it emit];
+                % -----------
+                % Lower bound
+                if opt.f.N
+                    model.lb.m.list = [model.lb.m.list model.lb.m.val];
+                    model.lb.m.it   = [model.lb.m.it emit];
+                    model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
+                    model.lb.v1.it   = [model.lb.v1.it emit];
+                end
+                model = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
             end
-            if opt.v.N
-                model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
-                model.lb.v2.it   = [model.lb.v2.it emit];
-            end
-            model = updateLowerBound(model);
-            plotAll(model, opt);
-            % -----------
             
             % Update precision
             % ----------------
-            K = 3*prod(opt.tpl.lat);
-            model.v.l = opt.v.n0/opt.v.l0 + (1/K)*(model.v.uncty + model.v.tr + model.v.reg);
-            model.v.l = (opt.f.N+opt.v.N+opt.v.n0)/model.v.l;
-            if opt.ui.verbose, fprintf('%10s | %10g\n', 'Lambda', model.v.l); end
-            
-            % -----------
-            % Lower bound
-            [dat, model]    = pgva_batch('LB', 'Lambda', dat, model, opt);
-            if opt.f.N
-                model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
-                model.lb.v1.it   = [model.lb.v1.it emit+1/4];
+            if opt.optimise.v.l
+                K = 3*prod(opt.tpl.lat);
+                model.v.l = opt.v.n0/opt.v.l0 + (1/K)*(model.v.uncty + model.v.tr + model.v.reg);
+                model.v.l = (opt.f.N+opt.v.N+opt.v.n0)/model.v.l;
+                if opt.ui.verbose, fprintf('%10s | %10g\n', 'Lambda', model.v.l); end
+
+                % -----------
+                % Lower bound
+                [dat, model]    = pgva_batch('LB', 'Lambda', dat, model, opt);
+                if opt.f.N
+                    model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
+                    model.lb.v1.it   = [model.lb.v1.it emit+1/4];
+                end
+                if opt.v.N
+                    model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
+                    model.lb.v2.it   = [model.lb.v2.it emit+1/4];
+                end
+                if opt.v.n0
+                    model.lb.l.list = [model.lb.l.list model.lb.l.val];
+                    model.lb.l.it   = [model.lb.l.it   emit];
+                end
+                model = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
             end
-            if opt.v.N
-                model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
-                model.lb.v2.it   = [model.lb.v2.it emit+1/4];
-            end
-            if opt.v.n0
-                model.lb.l.list = [model.lb.l.list model.lb.l.val];
-                model.lb.l.it   = [model.lb.l.it   emit];
-            end
-            model = updateLowerBound(model);
-            plotAll(model, opt);
-            % -----------
             
         end
         
+        % -----------------------------------------------------------------
+        %    Principal Geodesic Analysis
+        % -----------------------------------------------------------------
         if model.pg.active
-        
-            % -------------------------------------------------------------
-            %    Principal subspace
-            % -------------------------------------------------------------
 
-            if opt.ui.verbose, fprintf('%10s | %10s ', 'PG', ''); tic; end
-            M = model.z.S + model.z.zz + eye(opt.pg.K) / model.v.l;
-            M = spm_matcomp('Inv', M);
-            P = model.z.Z' * M;
-            for k=1:opt.pg.K
-                w1 = zeros([opt.tpl.lat 3], 'single');
-                for n=1:numel(dat)
-                    w1 = w1 + numeric(dat(n).v.v) * P(n,k);
+            % Principal subspace
+            % -------------------------------------------------------------
+            if opt.optimise.pg.w
+                
+                if opt.ui.verbose, fprintf('%10s | %10s ', 'PG', ''); tic; end
+                M = model.z.S + model.z.zz + eye(opt.pg.K) / model.v.l;
+                M = spm_matcomp('Inv', M);
+                P = model.z.Z' * M;
+                for k=1:opt.pg.K
+                    w1 = zeros([opt.tpl.lat 3], 'single');
+                    for n=1:numel(dat)
+                        w1 = w1 + numeric(dat(n).v.v) * P(n,k);
+                    end
+                    model.pg.w(:,:,:,:,k) = w1;
                 end
-                model.pg.w(:,:,:,:,k) = w1;
-            end
-            clear M P
-            model.pg.ww = precisionZ(model.pg.w, opt.tpl.vs, opt.pg.prm);
-            if opt.ui.verbose, fprintf('| %6gs\n', toc); end
+                clear M P
+                model.pg.ww = precisionZ(model.pg.w, opt.tpl.vs, opt.pg.prm);
+                if opt.ui.verbose, fprintf('| %6gs\n', toc); end
 
-            % -----------
-            % Lower bound
-            [dat, model]    = pgva_batch('LB', 'Subspace', dat, model, opt);
-            model.lb.w.list = [model.lb.w.list model.lb.w.val];
-            model.lb.w.it   = [model.lb.w.it   emit];
-            if opt.f.N
-                model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
-                model.lb.v1.it   = [model.lb.v1.it emit+2/4];
+                % -----------
+                % Lower bound
+                [dat, model]    = pgva_batch('LB', 'Subspace', dat, model, opt);
+                model.lb.w.list = [model.lb.w.list model.lb.w.val];
+                model.lb.w.it   = [model.lb.w.it   emit];
+                if opt.f.N
+                    model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
+                    model.lb.v1.it   = [model.lb.v1.it emit+2/4];
+                end
+                if opt.v.N
+                    model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
+                    model.lb.v2.it   = [model.lb.v2.it emit+2/4];
+                end
+                model = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
+                
             end
-            if opt.v.N
-                model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
-                model.lb.v2.it   = [model.lb.v2.it emit+2/4];
-            end
-            model = updateLowerBound(model);
-            plotAll(model, opt);
-            % -----------
 
+            % Latent coordinates
             % -------------------------------------------------------------
-            %    Latent coordinates
+            if opt.optimise.z.z
+                % Coordinates (variational update)
+                % --------------------------------
+                [dat, model] = pgva_batch('FitLatent', dat, model, opt);
+
+                % -----------
+                % Lower bound
+                [dat, model]    = pgva_batch('LB', 'Latent', dat, model, opt);
+                model.lb.z.list = [model.lb.z.list model.lb.z.val];
+                model.lb.z.it   = [model.lb.z.it   emit];
+                if opt.f.N
+                    model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
+                    model.lb.v1.it   = [model.lb.v1.it emit+3/4];
+                end
+                if opt.v.N
+                    model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
+                    model.lb.v2.it   = [model.lb.v2.it emit+3/4];
+                end
+                model = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
+            end
+
+            % Orthogonalisation
             % -------------------------------------------------------------
-
-            % Coordinates (variational update)
-            % --------------------------------
-            [dat, model] = pgva_batch('FitLatent', dat, model, opt);
-
-            % -----------
-            % Lower bound
-            [dat, model]    = pgva_batch('LB', 'Latent', dat, model, opt);
-            model.lb.z.list = [model.lb.z.list model.lb.z.val];
-            model.lb.z.it   = [model.lb.z.it   emit];
-            if opt.f.N
-                model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
-                model.lb.v1.it   = [model.lb.v1.it emit+3/4];
-            end
-            if opt.v.N
-                model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
-                model.lb.v2.it   = [model.lb.v2.it emit+3/4];
-            end
-            model = updateLowerBound(model);
-            plotAll(model, opt);
-            % -----------
-
-            % Orthogonalise
-            % -------------
-            if opt.ui.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
-            [U, iU] = orthogonalisationMatrix(spm_matcomp('LoadDiag', model.z.zz), spm_matcomp('LoadDiag', model.pg.ww));
-            if opt.ui.verbose, fprintf('| %6.3fs\n', toc); end
-
-            % Rescale
-            % -------
-            if opt.ui.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
-            [Q, iQ] = pgva_scale_pg(iU' * model.pg.ww * iU, ...
-                                U   * model.z.zz  * U', ...
-                                U   * model.z.S   * U', ...
-                                model.v.l, opt.z.A0, opt.z.n0, opt.f.N+opt.v.N);
-            if opt.ui.verbose, fprintf('| %6.3fs\n', toc); end
-            Q  = Q  * U;
-            iQ = iU * iQ;
-
-            % Rotate
-            % ------
-            [dat, model] = pgva_batch('RotateSubspace', Q, iQ, dat, model, opt);
+            if opt.optimise.z.z && opt.optimise.pg.w && opt.optimise.z.A
             
+                % Orthogonalise
+                % -------------
+                if opt.ui.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
+                [U, iU] = orthogonalisationMatrix(spm_matcomp('LoadDiag', model.z.zz), spm_matcomp('LoadDiag', model.pg.ww));
+                if opt.ui.verbose, fprintf('| %6.3fs\n', toc); end
+
+                % Rescale
+                % -------
+                if opt.ui.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
+                [Q, iQ] = pgva_scale_pg(iU' * model.pg.ww * iU, ...
+                                    U   * model.z.zz  * U', ...
+                                    U   * model.z.S   * U', ...
+                                    model.v.l, opt.z.A0, opt.z.n0, opt.f.N+opt.v.N);
+                if opt.ui.verbose, fprintf('| %6.3fs\n', toc); end
+                Q  = Q  * U;
+                iQ = iU * iQ;
+
+                % Rotate
+                % ------
+                [dat, model] = pgva_batch('RotateSubspace', Q, iQ, dat, model, opt);
+           
+                % Latent precision
+                % ----------------
+                model.z.A = spm_prob('Wishart', 'up', ...
+                                     opt.v.N+opt.f.N, 0, model.z.zz + model.z.S, ...
+                                     opt.z.A0, opt.z.n0);
+
+                % -----------
+                % Lower bound
+                [dat, model]    = pgva_batch('LB', 'PrecisionZ', dat, model, opt);
+                [dat, model]    = pgva_batch('LB', 'Orthogonalise', dat, model, opt);
+                model.lb.w.list = [model.lb.w.list model.lb.w.val];
+                model.lb.w.it   = [model.lb.w.it   emit];
+                if opt.z.n0
+                    model.lb.Az.list = [model.lb.Az.list model.lb.Az.val];
+                    model.lb.Az.it   = [model.lb.Az.it   emit];
+                end
+                if opt.f.N
+                    model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
+                    model.lb.v1.it   = [model.lb.v1.it emit+3/4];
+                end
+                if opt.v.N
+                    model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
+                    model.lb.v2.it   = [model.lb.v2.it emit+3/4];
+                end
+                model.lb.z.list = [model.lb.z.list model.lb.z.val];
+                model.lb.z.it   = [model.lb.z.it   emit];
+                model = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
+                
+
             % Latent precision
-            % ----------------
-            model.z.A = spm_prob('Wishart', 'up', ...
-                                 opt.v.N+opt.f.N, 0, model.z.zz + model.z.S, ...
-                                 opt.z.A0, opt.z.n0);
-%                              
-%             % -----------
-%             % Lower bound
-%             [dat, model] = pgva_batch('LB', 'PrecisionZ', dat, model, opt);
-%             if opt.z.n0
-%                 model.lb.Az.list = [model.lb.Az.list model.lb.Az.val];
-%                 model.lb.Az.it   = [model.lb.Az.it   emit];
-%             end
-%             model.lb.z.list = [model.lb.z.list model.lb.z.val];
-%             model.lb.z.it   = [model.lb.z.it   emit];
-%             model = updateLowerBound(model);
-%             plotAll(model, opt);
-%             % -----------
-                             
-            % -----------
-            % Lower bound
-            [dat, model]    = pgva_batch('LB', 'PrecisionZ', dat, model, opt);
-            [dat, model]    = pgva_batch('LB', 'Orthogonalise', dat, model, opt);
-            model.lb.w.list = [model.lb.w.list model.lb.w.val];
-            model.lb.w.it   = [model.lb.w.it   emit];
-            if opt.z.n0
-                model.lb.Az.list = [model.lb.Az.list model.lb.Az.val];
-                model.lb.Az.it   = [model.lb.Az.it   emit];
+            % -------------------------------------------------------------
+            elseif opt.optimise.z.A
+                
+                model.z.A = spm_prob('Wishart', 'up', ...
+                                     opt.v.N+opt.f.N, 0, model.z.zz + model.z.S, ...
+                                     opt.z.A0, opt.z.n0);
+
+                % -----------
+                % Lower bound
+                [dat, model]    = pgva_batch('LB', 'PrecisionZ', dat, model, opt);
+                if opt.z.n0
+                    model.lb.Az.list = [model.lb.Az.list model.lb.Az.val];
+                    model.lb.Az.it   = [model.lb.Az.it   emit];
+                end
+                model.lb.z.list = [model.lb.z.list model.lb.z.val];
+                model.lb.z.it   = [model.lb.z.it   emit];
+                model = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
             end
-            if opt.f.N
-                model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
-                model.lb.v1.it   = [model.lb.v1.it emit+3/4];
-            end
-            if opt.v.N
-                model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
-                model.lb.v2.it   = [model.lb.v2.it emit+3/4];
-            end
-            model.lb.z.list = [model.lb.z.list model.lb.z.val];
-            model.lb.z.it   = [model.lb.z.it   emit];
-            model = updateLowerBound(model);
-            plotAll(model, opt);
-            % -----------
             
         end
         
@@ -486,9 +521,13 @@ function [model, dat, opt] = pgva_model(varargin)
         end
         
         % -----------------------------------------------------------------
-        %    Save current state
+        %    Lower bound gain
         % -----------------------------------------------------------------
         model = updateLowerBound(model, 'gain');
+        
+        % -----------------------------------------------------------------
+        %    Save current state
+        % -----------------------------------------------------------------
         if ~isempty(opt.fnames.result)
             ftrack = opt.ui.ftrack;
             opt.ui.ftrack = nan;
@@ -654,5 +693,3 @@ function plotAll(model, opt)
     end
 
 end
-
-% =========================================================================

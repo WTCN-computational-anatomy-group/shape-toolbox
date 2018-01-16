@@ -291,17 +291,26 @@ function opt = pgva_model_default(opt)
     if ~isfield(opt.optimise.q, 'A')
         opt.optimise.q.A = true;
     end
+    if ~isfield(opt.optimise.q, 'q')
+        opt.optimise.q.q = true;
+    end
     if ~isfield(opt.optimise, 'z')
         opt.optimise.z = struct;
     end
     if ~isfield(opt.optimise.z, 'A')
         opt.optimise.z.A = true;
     end
+    if ~isfield(opt.optimise.z, 'z')
+        opt.optimise.z.z = true;
+    end
     if ~isfield(opt.optimise, 'v')
         opt.optimise.v = struct;
     end
     if ~isfield(opt.optimise.v, 'l')
         opt.optimise.v.l = true;
+    end
+    if ~isfield(opt.optimise.v, 'v')
+        opt.optimise.v.v = true;
     end
     if ~isfield(opt.optimise, 'tpl')
         opt.optimise.tpl = struct;
