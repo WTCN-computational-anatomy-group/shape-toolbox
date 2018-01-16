@@ -1,27 +1,66 @@
-function frames = animatePG(model, opt, pg, fname, nsigma, dir, x)
-% FORMAT (frames) = animatePG(model, opt, pg, (fname), (nsigma))
-% model  - Model obtained from pgra_model
-% opt    - Options obtained from pgra_model
+function frames = animatePG(varargin)
+% _________________________________________________________________________
+%
+% FORMAT (frames) = animatePG((dat), model, opt, (pg), (fname), ...)
+%
+% -------------------------------------------------------------------------
+%
+% DATA/MODEL (obtained from pgra_model/pgva_model)
+% ----------
+% dat    - Data of one subject
+% model  - Model
+% opt    - Option
+%
+% OPTIONAL
+% --------
 % pg     - Principal geodesic along which to shoot (1, 2, ..., K)
 % fname  - Filename of the output video (.avi, .gif) [do not write video]
-% nsigma - Shooting range in terms of number of standard deviation [3]
-% dir    - Slice direction (1 = sagittal, 2 = coronal, [3] = axial)
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% sigma - Shooting range in terms of number of standard deviation [3]
+% slice  - Slice direction (1 = sagittal, 2 = coronal, [3] = axial)
 % x      - Slice location [sagittal: 1/3, axial/coronal: middle]
+% n      - Number of frames generated [21]
+%
+% OUTPUT
+% ------
 % frames - Structure array of Matlab frames. 
 %          They can be given to the movie function.
+% _________________________________________________________________________
 
-    if nargin < 7
-        x = nan;
-        if nargin < 6
-            dir = 3;
-            if nargin < 5
-                nsigma = 3;
-                if nargin < 4
-                    fname = '';
-                end
-            end
-        end
+    % Detect case
+    % -----------
+    if nargin < 3 || ~isstruct(varargin{3})
+        shoot_subject = false;
+        model = varargin{1};
+        opt   = varargin{2};
+        varargin = varargin(3:end);
+    else
+        shoot_subject = true;
+        dat   = varargin{1};
+        model = varargin{2};
+        opt   = varargin{3};
+        varargin = varargin(4:end);
     end
+
+    % Parse arguments
+    % ---------------
+    p = inputParser;
+    p.FunctionName = 'animatePG';
+    p.addOptional('pg',    1,    @(X) isscalar(X) && isnumeric(X));
+    p.addOptional('fname', '',   @ischar);
+    p.addParameter('sigma', 3,   @(X) isscalar(X) && isnumeric(X));
+    p.addParameter('slice', 3,   @(X) isscalar(X) && isnumeric(X));
+    p.addParameter('x',     nan, @(X) isscalar(X) && isnumeric(X));
+    p.addParameter('n',     21,  @(X) isscalar(X) && isnumeric(X));
+    p.parse(varargin{:});
+    pg    = p.Results.pg;
+    fname = p.Results.fname;
+    sigma = p.Results.sigma;
+    slice = p.Results.slice;
+    x     = p.Results.x;
+    n     = p.Results.n;
     
     % Deal with all model/opt versions
     if isstruct(model.z)
@@ -50,25 +89,36 @@ function frames = animatePG(model, opt, pg, fname, nsigma, dir, x)
     
     cov  = inv(A);
     sd   = sqrt(cov(pg,pg));
-    nf   = 11; % Number of frames to compute (should be a parameter really)
-    allz = linspace(-nsigma*sd, nsigma*sd, nf);
+    allz = linspace(-sigma*sd, sigma*sd, n);
     
     loops = numel(allz);
     frames(loops) = struct('cdata',[],'colormap',[]);
     i = 1;
     fprintf('Build and record frames\n');
     fig = figure;
+    if shoot_subject
+        true_z   = dat.z.z;
+        mean = reconstructVelocity('latent', true_z, 'subspace', w);
+        r    = numeric(dat.v.v) - mean;
+        clear mean
+    end
     for z=allz
         fprintf('z: %f\n', z);
-        v = w(:,:,:,:,pg) * z;
+        if shoot_subject
+            z1 = true_z;
+            z1(pg) = z;
+            v  = reconstructVelocity('latent', z1, 'subspace', w, 'residual', r);
+        else
+            v = w(:,:,:,:,pg) * z;
+        end
         iphi = exponentiateVelocity(v, 'iphi', 'vs', vs, 'prm', prm);
         mu1 = warp(iphi, mu);
         if iscat
             mu1 = reconstructProbaTemplate(mu1);
         end
-        mu1 = colorimage(mu1, x, dir);
+        mu1 = colorimage(mu1, x, slice);
         image(mu1);
-        switch dir
+        switch slice
             case 1
                 daspect([1/vs(2) 1/vs(3) 1]);
             case 2
@@ -89,7 +139,7 @@ function frames = animatePG(model, opt, pg, fname, nsigma, dir, x)
         vid = VideoWriter(fname);
         open(vid);
     end
-    for i=[ceil(nf/2):nf nf:-1:1 1:ceil(nf/2)]
+    for i=[ceil(n/2):n n:-1:1 1:ceil(n/2)]
         fprintf('z: %f\n', allz(i));
         if endsWith(fname, 'gif')
             [imind, cm] = rgb2ind(frame2im(frames(i)), 256);
@@ -108,20 +158,20 @@ function frames = animatePG(model, opt, pg, fname, nsigma, dir, x)
 
 end
 
-function mu = colorimage(mu, z, dir)
+function mu = colorimage(mu, z, slice)
     if nargin < 3
-        dir = 3;
+        slice = 3;
     end
     dim = [size(mu) 1 1];
     if nargin < 2 || ~isfinite(z)
-        switch dir
+        switch slice
             case {2,3}
-                z = ceil(dim(dir)/2);
+                z = ceil(dim(slice)/2);
             case 1
-                z = ceil(dim(dir)/3);
+                z = ceil(dim(slice)/3);
         end
     end
-    switch dir
+    switch slice
         case 1
             mu = catToColor(reshape(mu(z,:,:,:), [dim(2) dim(3) dim(4)]));
         case 2
