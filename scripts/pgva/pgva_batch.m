@@ -1178,6 +1178,16 @@ function dat = oneFitVelocity(dat, model, opt)
         dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs model.v.l * opt.pg.prm]));
         dat.v.lb.tr = dat.v.lb.tr(1);
         dat.v.lb.tr = dat.v.lb.tr / model.v.l;
+        
+        % LogDet(P)
+        % ---------
+        % Approximation where all off-diagonal elements of L are zero
+        h(:,:,:,1) = h(:,:,:,1) * model.v.l * opt.pg.ker(1);
+        h(:,:,:,2) = h(:,:,:,2) * model.v.l * opt.pg.ker(2);
+        h(:,:,:,3) = h(:,:,:,3) * model.v.l * opt.pg.ker(3);
+        h = spm_matcomp('Pointwise3', h, 'd');
+        h(h <= 0) = nan;
+        dat.v.lb.ld = sum(log(h(:)), 'omitnan');
         clear h
         
         % KL divergence
@@ -1186,11 +1196,10 @@ function dat = oneFitVelocity(dat, model, opt)
         dat.v.lb.val = -0.5*( model.v.l * dat.v.lb.tr ...
                               - K*log(model.v.l) ...
                               - opt.pg.ld ...
+                              + dat.v.lb.ld ...
                               + model.v.l * dat.v.lb.reg ...
                               + model.v.l * dat.v.lb.uncty ...
                               - K );
-        % NOTE: it's missing the term -logdet(H + l*L), but i do not know
-        % how to compute it.
     
     end % < penalise previous failure
     
@@ -1230,7 +1239,7 @@ function [dat, model] = batchFitVelocity(dat, model, opt)
     end
     
     % --- Batch processing
-    if opt.ui.verbose, before = plotBatchBegin('Fit Res'); end
+    if opt.ui.verbose, before = plotBatchBegin('Fit Vel'); end
     for i=1:ceil(N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(N, i*batch);
@@ -1363,15 +1372,16 @@ function dat = oneLB(dat, model, opt, which)
     % cases latent/subspace/orthogonalise/lambda
     K = prod(opt.tpl.lat) * 3;
     if dat.v.observed
-        dat.v.lb.val = -0.5*( K*log(2*pi/model.v.l) - opt.pg.ld ...
+        dat.v.lb.val = -0.5*( K*log(2*pi/model.v.l) ...
+                              - opt.pg.ld ...
                               + model.v.l * dat.v.lb.reg ...
                               + model.v.l * dat.v.lb.uncty );
     else
-        dat.v.lb.val = -0.5*( - K - K*log(model.v.l) - opt.pg.ld ...
+        dat.v.lb.val = -0.5*( - K - K*log(model.v.l) ...
+                              - opt.pg.ld + dat.v.lb.ld ...
                               + model.v.l * dat.v.lb.reg ...
                               + model.v.l * dat.v.lb.uncty ...
                               + model.v.l * dat.v.lb.tr );
-        % Missing logdet((H + L)\L) because it is too hard to compute
     end
 
 end

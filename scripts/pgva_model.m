@@ -180,9 +180,13 @@ function [model, dat, opt] = pgva_model(varargin)
 
         % Post-set parameters
         % -----------------------------------------------------------------
+        % We store some values to avoid unneeded computation
         spm_diffeo('boundary', opt.pg.bnd);
         [~, opt.pg.ld] = spm_shoot_greens('kernel', double(opt.tpl.lat), double([opt.tpl.vs opt.pg.prm]), opt.pg.bnd);
         opt.pg.ld = opt.pg.ld(1);
+        ker = spm_diffeo('kernel', double(opt.tpl.lat), double([opt.tpl.vs opt.pg.prm]));
+        opt.pg.ker = [ker(1,1,1,1,1) ker(1,1,1,2,2) ker(1,1,1,3,3)];
+        clear ker
         
         % Initialise all arrays (= model variables)
         % -----------------------------------------------------------------
@@ -411,9 +415,10 @@ function [model, dat, opt] = pgva_model(varargin)
                 % -------
                 if opt.ui.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
                 [Q, iQ] = pgva_scale_pg(iU' * model.pg.ww * iU, ...
-                                    U   * model.z.zz  * U', ...
-                                    U   * model.z.S   * U', ...
-                                    model.v.l, opt.z.A0, opt.z.n0, opt.f.N+opt.v.N);
+                                        U   * model.z.zz  * U', ...
+                                        U   * model.z.S   * U', ...
+                                        model.v.l, opt.z.A0, ...
+                                        opt.z.n0, opt.f.N+opt.v.N);
                 if opt.ui.verbose, fprintf('| %6.3fs\n', toc); end
                 Q  = Q  * U;
                 iQ = iU * iQ;
@@ -430,7 +435,6 @@ function [model, dat, opt] = pgva_model(varargin)
 
                 % -----------
                 % Lower bound
-                [dat, model]    = pgva_batch('LB', 'PrecisionZ', dat, model, opt);
                 [dat, model]    = pgva_batch('LB', 'Orthogonalise', dat, model, opt);
                 model.lb.w.list = [model.lb.w.list model.lb.w.val];
                 model.lb.w.it   = [model.lb.w.it   emit];
@@ -440,11 +444,11 @@ function [model, dat, opt] = pgva_model(varargin)
                 end
                 if opt.f.N
                     model.lb.v1.list = [model.lb.v1.list model.lb.v1.val];
-                    model.lb.v1.it   = [model.lb.v1.it emit+3/4];
+                    model.lb.v1.it   = [model.lb.v1.it   emit+3/4];
                 end
                 if opt.v.N
                     model.lb.v2.list = [model.lb.v2.list model.lb.v2.val];
-                    model.lb.v2.it   = [model.lb.v2.it emit+3/4];
+                    model.lb.v2.it   = [model.lb.v2.it   emit+3/4];
                 end
                 model.lb.z.list = [model.lb.z.list model.lb.z.val];
                 model.lb.z.it   = [model.lb.z.it   emit];
