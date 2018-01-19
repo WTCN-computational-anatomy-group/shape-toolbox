@@ -39,7 +39,7 @@ function [opt, dat, model] = pgra_model_data(opt, dat, model)
         if ~isfield(opt, 'vs')
             opt.vs = [];
         end
-        [opt.lat, model.Mmu, opt.vs] = autoTemplateDim(dat, opt.vs);
+        [opt.lat, model.Mmu, opt.vs] = autoTemplateDim2(dat, opt.vs);
     end
     if ~isfield(opt, 'vs')
         opt.vs = [1 1 1];

@@ -125,7 +125,7 @@ function varargout = pgva_batch(id, varargin)
 
 end
 
-% -------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 %    Helper
 % -------------------------------------------------------------------------
 
@@ -148,11 +148,11 @@ function plotBatchEnd
     fprintf(' | %6.3fs\n', toc);
 end
 
-% -------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 %    Momentum
 % -------------------------------------------------------------------------
 
-function dat = oneMomentum(dat, ~, opt)
+function dat = oneMomentum(dat, opt)
 
     if ~dat.v.observed
         return
@@ -182,13 +182,13 @@ function dat = batchMomentum(dat, opt)
 
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
-        dat(n1:ne) = distribute('OneMomentum', dat(n1:ne), struct, opt);
+        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'OneMomentum', 'inplace', dat(n1:ne), opt);
         
     end
     if opt.ui.verbose, plotBatchEnd; end
 end
 
-% -------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 %    Init Push
 % -------------------------------------------------------------------------
 
@@ -240,13 +240,13 @@ function dat = batchInitPush(dat, model, opt)
 
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
-        dat(n1:ne) = distribute('OneInitPush', dat(n1:ne), model, opt);
+        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'OneInitPush', 'inplace', dat(n1:ne), model, opt);
         
     end
     if opt.ui.verbose, plotBatchEnd; end
 end
 
-% -------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 %    Init Pull
 % -------------------------------------------------------------------------
 
@@ -325,7 +325,7 @@ function [dat, model] = batchInitPull(dat, model, opt)
 
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
-        dat(n1:ne) = distribute('OneInitPull', dat(n1:ne), model, opt);
+        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'OneInitPull', 'inplace', dat(n1:ne), model, opt);
         
         for n=n1:ne
             if dat(n).f.observed
@@ -336,7 +336,7 @@ function [dat, model] = batchInitPull(dat, model, opt)
     if opt.ui.verbose, plotBatchEnd; end
 end
 
-% -------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 %    Init Affine
 % -------------------------------------------------------------------------
 
@@ -395,7 +395,7 @@ function [dat, model] = batchInitAffine(mode, dat, model, opt)
 
 end
 
-% -------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 %    Init Velocity
 % -------------------------------------------------------------------------
 
@@ -430,8 +430,13 @@ function dat = oneInitVelocity(dat, model, opt, mode)
         if opt.pg.provided
             wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
                                      'loop', loop, 'par', par);
-            r = numeric(dat.v.v) - wz;
-            clear wz
+            v = numeric(dat.v.v); 
+            if opt.pg.pgprior
+                m = numeric(dat.v.m);
+                dat.v.lb.pgreg = v(:)' * m(:);
+            end
+            r = v - wz;
+            clear v wz
             m = spm_diffeo('vel2mom', r, double([opt.tpl.vs opt.pg.prm]));
             dat.v.lb.reg = r(:)' * m(:);
             clear r m
@@ -442,6 +447,9 @@ function dat = oneInitVelocity(dat, model, opt, mode)
         dat.v.lb.val   = -0.5*( K*log(2*pi/model.v.l) - opt.pg.ld ...
                                 + model.v.l * dat.v.lb.reg ...
                                 + model.v.l * dat.v.lb.uncty );
+        if opt.pg.pgprior
+            dat.v.lb.val = dat.v.lb.val - 0.5 * dat.v.lb.pgreg;
+        end
         dat.v.lb.type  = 'll';
     
     % -----------------------
@@ -470,11 +478,17 @@ function dat = oneInitVelocity(dat, model, opt, mode)
             dat.v.v(:)   = 0;
             dat.v.m(:)   = 0;
             dat.v.lb.reg = 0;
+            if opt.pg.pgprior
+                dat.v.lb.pgreg = 0;
+            end
         else
             v = create([opt.tpl.lat 3], 'single');
             dat.v.v(:,:,:,:) = v;
             m = spm_diffeo('vel2mom', v, double([opt.tpl.vs opt.pg.prm]));
             dat.v.m(:,:,:,:) = m;
+            if opt.pg.pgprior
+                dat.v.lb.pgreg = v(:)' * m(:);
+            end
             if opt.pg.provided
                 clear m
                 wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
@@ -518,6 +532,9 @@ function dat = oneInitVelocity(dat, model, opt, mode)
                               + model.v.l * dat.v.lb.reg ...
                               + model.v.l * dat.v.lb.uncty ...
                               - K );
+        if opt.pg.pgprior
+            dat.v.lb.val = dat.v.lb.val - 0.5 * dat.v.lb.pgreg;
+        end
         dat.v.lb.type = 'kl';
         % NOTE: it's missing the term -logdet(H + l*L), but i do not know
         % how to compute it.
@@ -539,6 +556,9 @@ function [dat, model] = batchInitVelocity(mode, dat, model, opt)
     % -------------------
     model.lb.v1.val = 0;
     model.lb.v2.val = 0;
+    model.v.uncty   = 0;
+    model.v.reg     = 0;
+    model.v.tr      = 0;
     
     % --- Batch processing
     N = numel(dat);
@@ -549,15 +569,18 @@ function [dat, model] = batchInitVelocity(mode, dat, model, opt)
 
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
-        dat(n1:ne) = distribute('OneInitVelocity', dat(n1:ne), model, opt, mode);
+        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'OneInitVelocity', 'inplace', dat(n1:ne), model, opt, mode);
         
         for n=n1:ne
             
             % Add individual contributions
             % ----------------------------
+            model.v.uncty   = model.v.uncty + dat(n).v.lb.uncty;
+            model.v.reg     = model.v.reg   + dat(n).v.lb.reg;
             if dat(n).v.observed
                 model.lb.v2.val = model.lb.v2.val + dat(n).v.lb.val;
             else
+                model.v.tr      = model.v.tr      + dat(n).v.lb.tr;
                 model.lb.v1.val = model.lb.v1.val + dat(n).v.lb.val;
             end
         end
@@ -566,7 +589,7 @@ function [dat, model] = batchInitVelocity(mode, dat, model, opt)
     if opt.ui.verbose, plotBatchEnd; end
 end
 
-% -------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 %    Init Latent
 % -------------------------------------------------------------------------
 
@@ -675,7 +698,7 @@ function [dat, model] = batchInitLatent(mode, dat, model, opt)
 
 end
 
-% -------------------------------------------------------------------------
+%% ------------------------------------------------------------------------
 %    Rotate
 % -------------------------------------------------------------------------
 
@@ -713,13 +736,13 @@ function [dat, model] = batchRotateSubspace(R, iR, dat, model, opt)
     if opt.ui.verbose, plotBatchEnd; end
 end
 
-% -------------------------------------------------------------------------
+%% ========================================================================
 %    E-step
-% -------------------------------------------------------------------------
+% =========================================================================
 
-% ------
-% Affine
-% ------
+%% ------------------------------------------------------------------------
+% Fit Affine
+% -------------------------------------------------------------------------
 
 function dat = oneFitAffine(dat, model, opt)
 
@@ -916,7 +939,8 @@ function [dat, model] = batchFitAffine(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        dat(n1:ne) = distribute('oneFitAffine', dat(n1:ne), model, opt);
+%         dat(n1:ne) = distribute('oneFitAffine', dat(n1:ne), model, opt);
+        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'oneFitAffine', 'inplace', dat(n1:ne), model, opt);
         
         for n=n1:ne
             
@@ -942,9 +966,10 @@ function [dat, model] = batchFitAffine(dat, model, opt)
 
 end
 
-% ------------------
-% Latent coordinates
-% ------------------
+
+%% ------------------------------------------------------------------------
+% Fit Latent coordinates
+% -------------------------------------------------------------------------
 
 function dat = oneFitLatent(dat, model, opt)
     
@@ -1002,7 +1027,7 @@ function [dat, model] = batchFitLatent(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        dat(n1:ne) = distribute('oneFitLatent', dat(n1:ne), model, opt);
+        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'oneFitLatent', 'inplace', dat(n1:ne), model, opt);
         
         for n=n1:ne
             
@@ -1020,9 +1045,10 @@ function [dat, model] = batchFitLatent(dat, model, opt)
     if opt.ui.verbose, plotBatchEnd; end
 end
 
-% --------------
-% Velocity field
-% --------------
+
+%% ------------------------------------------------------------------------
+% Fit Velocity field
+% -------------------------------------------------------------------------
 
 function dat = oneFitVelocity(dat, model, opt)
 
@@ -1087,11 +1113,18 @@ function dat = oneFitVelocity(dat, model, opt)
             r = v - wz;
             clear wz
             g = g + ghPriorVel(r, opt.tpl.vs, model.v.l * opt.pg.prm, opt.pg.bnd);
+            if opt.pg.pgprior
+                g = g + numeric(dat.v.m);
+            end
 
             % Compute search direction
             % ------------------------
+            lam = model.v.l;
+            if opt.pg.pgprior
+                lam = lam + 1;
+            end
             dv = -spm_diffeo('fmg', single(h), single(g), ...
-                double([opt.tpl.vs model.v.l * opt.pg.prm 2 2]));
+                double([opt.tpl.vs lam * opt.pg.prm 2 2]));
             clear g
 
             % Line search
@@ -1099,6 +1132,7 @@ function dat = oneFitVelocity(dat, model, opt)
             result = lsVelocity2(...
                 noisemodel, dv, r, dat.f.lb.val, model.tpl.mu, dat.f.f, ...
                 'v0', v, 'lam', model.v.l, 'prm', opt.pg.prm, ...
+                'pgprior', opt.pg.pgprior, ...
                 'itgr', opt.iter.itg, 'bnd', opt.pg.bnd, ...
                 'A', A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
                 'match', 'push', ...
@@ -1248,7 +1282,7 @@ function [dat, model] = batchFitVelocity(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        dat(n1:ne) = distribute('oneFitVelocity', dat(n1:ne), model, opt);
+        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'oneFitVelocity', 'inplace', dat(n1:ne), model, opt);
         
         
         for n=n1:ne
@@ -1279,7 +1313,8 @@ function [dat, model] = batchFitVelocity(dat, model, opt)
 
 end
 
-% -------------------------------------------------------------------------
+
+%% ------------------------------------------------------------------------
 %    Update Lower Bound
 % -------------------------------------------------------------------------
 
@@ -1418,7 +1453,7 @@ function [dat, model] = batchLB(which, dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        dat(n1:ne) = distribute('oneLB', dat(n1:ne), model, opt, which);
+        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'oneLB', 'inplace', dat(n1:ne), model, opt, which);
         
         for n=n1:ne
             
@@ -1444,7 +1479,15 @@ function [dat, model] = batchLB(which, dat, model, opt)
     % Model specific parts
     % --------------------
     switch lower(which)
-        case {'subspace', 'orthogonalise'}
+        case 'orthogonalise'
+            model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+            if opt.z.n0
+                model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
+                                           model.z.A,   opt.z.n0+opt.v.N+opt.f.N, ...
+                                           opt.z.A0,    opt.z.n0, ...
+                                           'normal');
+            end
+        case 'subspace'
             model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
         case 'precisionz'
             if opt.z.n0
@@ -1469,177 +1512,3 @@ function [dat, model] = batchLB(which, dat, model, opt)
             end
     end
 end
-
-
-% =========================================================================
-
-function dat = distribute(func, dat, model, opt, varargin)
-
-    % --- Convert function name to function handle
-    if ischar(func)
-        funcname = func;
-        func = @(varargin) pgva_batch(funcname, varargin{:});
-        funcstr = ['@(varargin) pgva_batch(''' funcname ''', varargin{:})']; 
-    else
-        funcstr = func2str(func);
-    end
-
-    % --- No distribution
-    if ~strcmpi(opt.split.loop, 'subject')
-        if ~isempty(varargin)
-            for n=1:numel(dat)
-                dat(n) = func(dat(n), model, opt, varargin{:});
-            end
-        else
-            for n=1:numel(dat)
-                dat(n) = func(dat(n), model, opt);
-            end
-        end
-        
-    % --- Distribute on cluster
-    elseif isfield(opt, 'cluster') && opt.cluster
-        % - Prepare
-        opt.split.loop    = '';
-        opt.split.par     = false;
-        opt.ui.verbose = true;
-        if ~isfield(opt, 'translate_path')
-            translate_path = opt.translate_path;
-        else
-            translate_path = {};
-        end
-        if translate_path
-            [dat, model] = translatePath(dat, model, translate_path{1}, translate_path{2});
-            output_dir = strrep(opt.directory, translate_path{1}, translate_path{2});
-        else
-            output_dir = opt.directory;
-        end
-        client_tmpdir = fullfile(opt.directory, 'tmp');
-        server_tmpdir = fullfile(output_dir, 'tmp');
-        if ~exist(client_tmpdir, 'dir')
-            mkdir(client_tmpdir);
-        end
-        client_model = fullfile(client_tmpdir, 'model.mat');
-        server_model = fullfile(server_tmpdir, 'model.mat');
-        save(client_model, 'model', 'opt', 'varargin');
-        
-        % - Distribute jobs
-        for n=1:numel(dat)
-            client_subjtmpdir = fullfile(client_tmpdir, str(n));
-            server_subjtmpdir = fullfile(server_tmpdir, str(n));
-            if ~exist(client_subjtmpdir, 'dir')
-                mkdir(client_subjtmpdir);
-            end
-            client_dat = fullfile(client_subjtmpdir, 'dat.mat');
-            server_dat = fullfile(server_subjtmpdir, 'dat.mat');
-            foo.dat = dat(n);
-            save(client_dat, '-struct', 'foo', 'dat');
-            job = [...
-                '#$ /bin/sh \n' ...
-                '#$ -N job' str(n) '\n'...
-                '/share/apps/matlab '...
-                '-nojvm -nodesktop -nosplash -singleCompThread ' ...
-                '-r ' ...
-                'addpath(''/data/' opt.cluster.username '/spm''); ' ...
-                'addpath(''/data/' opt.cluster.username '/spm/toolbox/Longitudinal''); '
-                'addpath(''/data/' opt.cluster.username '/spm/toolbox/Shoot''); ' ...
-                'addpath(''/data/' opt.cluster.username '/auxiliary-functions''); ' ...
-                'addpath(genpath(''/data/' opt.cluster.username '/shape-toolbox'')); ' ...
-                'load(''' server_model '''); ' ...
-                'load(''' server_dat '''); ' ...
-                'func = ' funcstr '; ' ...
-                'dat = func(dat, model, opt, varargin{:}); ' ...
-                'save(''' server_dat ''', dat); ' ...
-                ];
-            client_job = fullfile(client_subjtmpdir, 'job.sh');
-            server_job = fullfile(server_subjtmpdir, 'job.sh');
-            dlmwrite(client_job, job, 'dlm', '');
-            system(['ssh ' opt.cluster.username '@' opt.cluster.ip ...
-                    ' ''qsub -l vf=2G -l h_vmem=2G ' server_job '''']);
-        end
-        
-        % - Wait job (will only be submitted when all other are finished)
-        client_job = fullfile(client_tmpdir, 'waitjob.sh');
-        server_job = fullfile(server_tmpdir, 'waitjob.sh');
-        dlmwrite(client_job, '', 'dlm', '');
-        endjob = ['ssh ' opt.cluster.username '@' opt.cluster.ip ...
-                  '''qsub -l vf=10K -l h_vmem=10K '];
-%         endjob = [endjob '-hold_jid '];
-        endjob = [endjob '-sync -W depend=afterany'];
-        for n=1:numel(dat)
-            endjob = [endjob ':job' str(n)];
-        end
-%         endjob = endjob(1:end-1);
-        endjob = [endjob server_job ''''];
-        system(endjob);
-        
-        % - Read output data
-        failed = 0;
-        for n=1:numel(dat)
-            [~, res] = system(['ssh ' opt.cluster.username '@' opt.cluster.ip ...
-                                ' qacct -j job' str(n)]);
-            exit_status = str2double(regexp(res, '^\s*exit_status\s*:\s*(\d+)'));
-            if exit_status > 0
-                failed = failed + 1;
-            end
-            client_dat = fullfile(client_subjtmpdir, 'dat.mat');
-            result = load(client_dat, 'dat');
-            dat(n) = result.dat;
-        end
-        if failed > 0
-            error('Distribution failure: %d/%d jobs terminated unexplectedly.', failed, numel(dat));
-        end
-        dat = translatePath(dat, struct, translate_path{2}, translate_path{1});
-      
-    % --- Distribute locally  
-    else
-        if ~isempty(varargin)
-            if opt.split.par
-                parfor (n=1:numel(dat), double(opt.split.par))
-                    dat(n) = func(dat(n), model, opt, varargin{:});
-                end
-            else
-                for n=1:numel(dat)
-                    dat(n) = func(dat(n), model, opt, varargin{:});
-                end
-            end
-        else
-            if opt.split.par
-                parfor (n=1:numel(dat), double(opt.split.par))
-                    dat(n) = func(dat(n), model, opt);
-                end
-            else
-                for n=1:numel(dat)
-                    dat(n) = func(dat(n), model, opt);
-                end
-            end
-        end
-    end
-        
-end
-
-% =========================================================================
-
-function [dat, model] = translatePath(dat, model, onclient, onserver)
-
-    datfields = fieldnames(dat);
-    for n=1:numel(N)
-       for i=1:numel(datfields)
-           f = datfields{i};
-           if isa(dat(n).(f), 'file_array')
-               dat(n).(f).fname = strrep(dat(n).(f).fname, onclient, onserver);
-           end
-       end
-    end
-    
-   if ~isempty(model)
-       modelfields = fieldnames(model);
-       for i=1:numel(modelfields)
-           f = modelfields{i};
-           if isa(model.(f), 'file_array')
-               model.(f).fname = strrep(model.(f).fname, onclient, onserver);
-           end
-       end
-   end
-   
-end
-        

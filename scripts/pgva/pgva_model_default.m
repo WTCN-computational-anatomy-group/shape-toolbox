@@ -4,9 +4,9 @@ function opt = pgva_model_default(opt)
 % Set default options for the principal geodesic model
 
     if nargin < 1
-        opt = struct;
-        opt.v.N = 0;
-        opt.f.N = 0;
+        opt           = struct;
+        opt.v.N       = 0;
+        opt.f.N       = 0;
         opt.model.dim = 3;
         opt.model.nc  = 1;
     end
@@ -52,6 +52,12 @@ function opt = pgva_model_default(opt)
         % Number of principal components
         opt.pg.K = max(32, opt.v.N + opt.f.N);
     end
+    if opt.pg.K > opt.v.N + opt.f.N
+        % Check not too many PGs
+        warning(['No point learning more than %d principal components. ' ...
+                 'Fixing it.'], opt.v.N + opt.f.N)
+        opt.pg.K = opt.v.N + opt.f.N;
+    end
     if ~isfield(opt.pg, 'prm')
         % Parameters of the differential operator
         % 1) Absolute displacement
@@ -68,6 +74,9 @@ function opt = pgva_model_default(opt)
         % 2 = Dirichlet (null derivatives on borders)
         % 3 = Sliding   (rotation invariant)
         opt.pg.bnd = 0;
+    end
+    if ~isfield(opt.pg, 'pgprior')
+        opt.pg.pgprior = false;
     end
     
     % ---------------------------------------------------------------------
@@ -221,6 +230,14 @@ function opt = pgva_model_default(opt)
     end
     
     % ---------------------------------------------------------------------
+    % Distributed processing
+    % ---------------------------------------------------------------------
+    if ~isfield(opt, 'dist')
+        opt.dist = struct;
+    end
+    opt.dist = distribute_default(opt.dist);
+    
+    % ---------------------------------------------------------------------
     % Split processing
     % ---------------------------------------------------------------------
     
@@ -240,7 +257,9 @@ function opt = pgva_model_default(opt)
     end
     if ~isfield(opt.split, 'batch')
         % Batch size when distributing subjects
-        if opt.split.par > 0 && isfinite(opt.split.par)
+        if opt.split.par > 0 && opt.dist.server.setup
+            opt.split.batch = opt.f.N + opt.v.N;
+        elseif opt.split.par > 0 && isfinite(opt.split.par)
             opt.split.batch = opt.split.par;
         elseif opt.split.par == 0
             opt.split.batch = 1;
@@ -250,6 +269,7 @@ function opt = pgva_model_default(opt)
             clear myCluster
         end
     end
+    opt.dist.workers = opt.split.par;
     
     % ---------------------------------------------------------------------
     % User interaction
@@ -333,12 +353,6 @@ function opt = pgva_model_default(opt)
         warning(['Wishart prior: q.n0 must be greater or equal to %d. ' ...
                  'Fixing it.'], opt.q.Mr)
         opt.nq0 = opt.q.Mr;
-    end
-    % --- Number of PCs
-    if opt.pg.K > opt.v.N + opt.f.N
-        warning(['No point learnign more than %d principal components. ' ...
-                 'Fixing it.'], opt.v.N + opt.f.N)
-        opt.pg.K = opt.v.N + opt.f.N;
     end
         
     

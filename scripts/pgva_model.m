@@ -197,7 +197,6 @@ function [model, dat, opt] = pgva_model(varargin)
         
         % Some more stuff regarding processing
         % -----------------------------------------------------------------
-        model           = updateLowerBound(model, 'gain');
         model.emit      = 1;
         model.q.active  = true;
         model.v.active  = true;
@@ -533,6 +532,7 @@ function [model, dat, opt] = pgva_model(varargin)
         %    Save current state
         % -----------------------------------------------------------------
         if ~isempty(opt.fnames.result)
+            createAllNifti(dat, model, opt);
             ftrack = opt.ui.ftrack;
             opt.ui.ftrack = nan;
             save(fullfile(opt.dir.model, opt.fnames.result), ...
@@ -551,13 +551,19 @@ function plotAll(model, opt)
 % nice.
     
     if opt.ui.verbose
-        figure(opt.ui.ftrack);
-        clf(opt.ui.ftrack);
+        try
+            figure(opt.ui.ftrack);
+            clf(opt.ui.ftrack);
+        catch
+            figure(gcf);
+            clf(gcf);
+        end
         
         nw = 3;
         nh = 5;
         i  = 0;
         colors = ['b', 'g', 'r', 'c', 'm', 'k'];
+        npg = nw;
         
         % --- Line 1
         
@@ -567,13 +573,28 @@ function plotAll(model, opt)
             subplot(nh, nw, i)
             tpl = catToColor(model.tpl.mu(:,:,ceil(size(model.tpl.mu,3)/2),:));
             dim = [size(tpl) 1 1];
-            image(reshape(tpl, [dim(1:2) dim(4)]));
-            daspect(1./opt.tpl.vs);
+            tpl = permute(reshape(tpl, [dim(1:2) dim(4)]), [2 1 3]);
+            asp = 1./[opt.tpl.vs(2) opt.tpl.vs(1) 1];
+            image(tpl(end:-1:1,:,:));
+            daspect(asp);
             axis off
-            title('template')
-            npg = nw - 1;
-        else
-            npg = nw;
+            npg = npg - 1;
+            if size(model.tpl.mu, 3) > 1
+                title('template (axial)')
+                i = i + 1;
+                subplot(nh, nw, i)
+                tpl = catToColor(model.tpl.mu(:,ceil(size(model.tpl.mu,2)/2),:,:));
+                dim = [size(tpl) 1 1];
+                tpl = permute(reshape(tpl, [dim(1) dim(3) dim(4)]), [2 1 3]);
+                asp = 1./[opt.tpl.vs(3) opt.tpl.vs(1) 1];
+                image(tpl(end:-1:1,:,:));
+                daspect(asp);
+                axis off
+                title('template (coronal)')
+                npg = npg - 1;
+            else
+                title('template')
+            end
         end 
         % PG
         for k=1:npg
@@ -581,8 +602,10 @@ function plotAll(model, opt)
             subplot(nh,nw,i)
             pg = defToColor(model.pg.w(:,:,ceil(size(model.pg.w,3)/2),:,k));
             dim = [size(pg) 1 1];
-            image(reshape(pg, [dim(1:2) dim(4)]));
-            daspect(1./opt.tpl.vs);
+            pg = permute(reshape(pg, [dim(1:2) dim(4)]), [2 1 3]);
+            asp = 1./[opt.tpl.vs(2) opt.tpl.vs(1) 1];
+            image(pg(end:-1:1,:,:));
+            daspect(asp);
             axis off
             title(sprintf('PG %d', k))
         end

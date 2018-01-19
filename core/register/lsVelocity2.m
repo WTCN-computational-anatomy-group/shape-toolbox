@@ -87,6 +87,7 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     p.addParameter('v0',   [],      @checkarray);
     p.addParameter('lam',  1,       @isscalar);
     p.addParameter('prm',  dft_prm, @(X) length(X) == 5);
+    p.addParameter('pgprior', false,@(X) isscalar(X) && islogical(X));
     p.addParameter('vs',   [],      @isnumeric);
     p.addParameter('itgr', nan,     @isscalar);
     p.addParameter('bnd',  0,       @(X) isscalar(X) && isnumeric(X));
@@ -120,6 +121,7 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     vs      = p.Results.vs;
     itgr    = p.Results.itgr;
     bnd     = p.Results.bnd;
+    pgprior = p.Results.pgprior;
     
     reg0    = p.Results.reg0;
     A       = p.Results.A;
@@ -179,6 +181,9 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     end
     if isnan(reg0)
         reg0 = llPriorVelocity(r0, 'fast', 'vs', vs, 'prm', lam*prm, 'bnd', bnd, 'debug', debug);
+        if pgprior
+            reg0 = reg0 + llPriorVelocity(v0, 'fast', 'vs', vs, 'prm', prm, 'bnd', bnd, 'debug', debug);
+        end
     end 
     
     % --- Initialise line search
@@ -218,6 +223,9 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
         end
         r = r0 + dv / armijo;
         reg = llPriorVelocity(r,  'fast', 'vs', vs, 'prm', lam*prm, 'bnd', bnd, 'debug', debug);
+        if pgprior
+            reg = reg + llPriorVelocity(v,  'fast', 'vs', vs, 'prm', prm, 'bnd', bnd, 'debug', debug);
+        end
         ll  = match + reg;
         
         if verbose, printInfo(i, ll0, match, reg); end

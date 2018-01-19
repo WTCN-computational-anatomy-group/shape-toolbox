@@ -1,4 +1,3 @@
-
 function model = updateLowerBound(model, gain)
 % FORMAT model = updateLowerBound(model, ('gain'))
 % model - Model structure

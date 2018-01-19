@@ -171,7 +171,8 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     
     % Matching term
     % -------------
-    [dat, model] = pgva_batch('InitPull', dat, model, opt);
+%     [dat, model] = pgva_batch('InitPull', dat, model, opt);
+    [dat, model] = pgva_batch('LB', 'Matching', dat, model, opt);
     if opt.f.N
         model.lb.m.list = model.lb.m.val;
         model.lb.m.it   = 0;
@@ -181,5 +182,6 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     
     % Lower Bound
     % -----------
-    model = updateLowerBound(model, true);
+    model = updateLowerBound(model);         % Accumulate lower bound parts
+    model = updateLowerBound(model, 'gain'); % Initialise gain
 end
