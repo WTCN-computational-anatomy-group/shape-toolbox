@@ -421,7 +421,7 @@ function opt = pgra_registration(opt)
             clear gq hq
         end
         
-        opt.dat.hq = loadDiag(opt.dat.hq); % Additional regularisation for robustness
+        opt.dat.hq = spm_matcomp('LoadDiag', opt.dat.hq); % Additional regularisation for robustness
         
         opt.dat.lllq = llLaplace(opt.dat.hq, 'debug', opt.debug);
         
@@ -475,7 +475,7 @@ function opt = pgra_registration(opt)
         opt.dat.hz = opt.dat.hz + hz;
         clear gz hz
         
-        opt.dat.hz = loadDiag(opt.dat.hz); % Additional regularisation for robustness
+        opt.dat.hz = spm_matcomp('LoadDiag', opt.dat.hz); % Additional regularisation for robustness
         
         opt.dat.lllz = llLaplace(opt.dat.hz, 'debug', opt.debug);
         
@@ -602,7 +602,7 @@ function opt = pgra_registration(opt)
             clear gq hq
         end
         
-        opt.dat.hq = loadDiag(opt.dat.hq); % Additional regularisation for robustness
+        opt.dat.hq = spm_matcomp('LoadDiag', opt.dat.hq); % Additional regularisation for robustness
         
         opt.dat.lllq = llLaplace(opt.dat.hq, 'debug', opt.debug);
     end
@@ -617,7 +617,7 @@ function opt = pgra_registration(opt)
         opt.dat.hz = opt.dat.hz + hz;
         clear gz hz
         
-        opt.dat.hz = loadDiag(opt.dat.hz); % Additional regularisation for robustness
+        opt.dat.hz = spm_matcomp('LoadDiag', opt.dat.hz); % Additional regularisation for robustness
         
         opt.dat.lllz = llLaplace(opt.dat.hz, 'debug', opt.debug);
     end

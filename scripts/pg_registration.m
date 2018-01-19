@@ -333,7 +333,7 @@ function opt = pg_registration(opt)
         opt.dat.h = opt.dat.h + h;
         clear g h
         
-        opt.dat.h = loadDiag(opt.dat.h); % Additional regularisation for robustness
+        opt.dat.h = spm_matcomp('LoadDiag', opt.dat.h); % Additional regularisation for robustness
         
         % Update full model likelihood (with Laplace approximation)
         % ---------------------------------------------------------

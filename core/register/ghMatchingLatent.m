@@ -854,7 +854,7 @@ function [g, h] = onMemory(model, mu, f, c, gmu, w, varargin)
 
 
     % --- Multiply PCs with template gradients
-    w = -pointwise(single(numeric(gmu)), single(numeric(w)));
+    w = -spm_matcomp('Pointwise', single(numeric(gmu)), single(numeric(w)));
     clear gmu
     % => size(w) = [nx ny nz nclasses nlatent]
 
@@ -935,7 +935,7 @@ function [g, h] = vel2latGradHessMatching(w, g, h1, htype)
             case {'symtensor'}
                 % H = sum_{j,k} [ w_j' * h1_{j,k} * w_k ]
                 % ^ where j, k are classes/modalities
-                ind = symIndices(size(h1, 4));
+                ind = spm_matcomp('SymIndices', size(h1, 4));
                 w = reshape(w, [prod(dim_lattice) dim_classes dim_latent]);
                 for j=1:dim_classes
                     for k=1:dim_classes

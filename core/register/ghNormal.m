@@ -585,7 +585,7 @@ function [g, h] = onMemory(mu, f, c, s, gmu)
         h = bsxfun(@times, s, c);
         if ~isempty(gmu)
             nvec = size(gmu, 5);
-            [ind, k] = symIndices(nvec, 'n');
+            [ind, k] = spm_matcomp('SymIndices', nvec, 'n');
             hh = h;
             h = zeros([lat k], 'like', h);
             for d=1:nvec

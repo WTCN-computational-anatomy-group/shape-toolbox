@@ -40,8 +40,8 @@ function ipsi = reconstructIPsi(A, iphi, varargin)
     end
     
     % --- Reconstruct
-    id   = warps('identity', lat);
-    ipsi = warps('compose', iphi, Mmu \ (A \ Mf), id);
+    id   = spm_warps('identity', lat);
+    ipsi = spm_warps('compose', iphi, Mmu \ (A \ Mf), id);
     
     % --- Write on disk
     if ~isempty(p.Results.output)

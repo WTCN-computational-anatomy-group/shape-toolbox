@@ -16,8 +16,8 @@ function [T, iT] = orthogonalisationMatrix(ezz, ww)
     Dz         = diag(sqrt(diag(Dz2) + eps));
     Dw         = diag(sqrt(diag(Dw2) + eps));
     [U, D, V]  = svd(Dw * Vw' * Vz * Dz');
-    Dz         = loadDiag(Dz);
-    Dw         = loadDiag(Dw);
+    Dz         = spm_matcomp('LoadDiag', Dz);
+    Dw         = spm_matcomp('LoadDiag', Dw);
     T          = D * V' * (Dz \ Vz');
     iT         = Vw * (Dw \ U);
     

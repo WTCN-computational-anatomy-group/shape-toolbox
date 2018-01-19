@@ -782,7 +782,7 @@ function dat = oneFitAffine(dat, model, opt)
             phi  = dat.v.phi;
             jac  = dat.v.jac;
         else
-            iphi = warps('identity', opt.lat);
+            iphi = spm_warps('identity', opt.lat);
             phi  = [];
             jac  = [];
         end
@@ -822,7 +822,7 @@ function dat = oneFitAffine(dat, model, opt)
                 rind = [];
             end
 
-            dat.q.h = loadDiag(dat.q.h); % Additional regularisation for robustness)
+            dat.q.h = spm_matcomp('LoadDiag', dat.q.h); % Additional regularisation for robustness)
 
             % Compute search direction
             % ------------------------
@@ -884,7 +884,7 @@ function dat = oneFitAffine(dat, model, opt)
                     clear hq
                 end
 
-                dat.q.h = loadDiag(dat.q.h); % Additional regularisation for robustness
+                dat.q.h = spm_matcomp('LoadDiag', dat.q.h); % Additional regularisation for robustness
             end
             dat.q.S = inv(dat.q.h);
         else

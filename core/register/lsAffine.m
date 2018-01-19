@@ -98,7 +98,7 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
     dim  = [size(mu) 1 1];
     lat = dim(1:3);
     if isempty(iphi)
-        iphi = warps('identity', lat);
+        iphi = spm_warps('identity', lat);
     end
     
     % --- Load some data (in case it is on disk)

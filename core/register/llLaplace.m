@@ -43,24 +43,22 @@ function ll = llLaplace(varargin)
         % --- Square matrix case
         if length(size(H)) == 2 && size(H, 1) == size(H, 2)
             N  = size(H, 1);
-            ll = N * log(2*pi) + logDet(H);
+            ll = N * log(2*pi) + spm_matcomp('LogDet', H);
             ll = -0.5 * ll;
 
         % --- Symmetric tensor case
         elseif length(size(H)) == 4
             dim = [size(H) 1 1];
-            [~, N] = symIndices(dim(4));
+            [~, N] = spm_matcomp('SymIndices', dim(4));
             N  = N * prod(dim(1:3));
-%             ll = N * log(2*pi) + logDetSymTensor(H);
-            ll = N * log(2*pi) + sumall(log(pointwise3(H, 'd')+eps('single')));
+            ll = N * log(2*pi) + sumall(log(spm_matcomp('Pointwise3', H, 'd')+eps('single')));
             ll = -0.5 * ll;
 
         % --- Full tensor case
         elseif length(size(H)) == 5 && size(H, 4) == size(H, 5)
             dim = [size(H) 1 1];
             N   = prod(dim(1:4));
-%             ll  = N * log(2*pi) + logDetTensor(H);
-            ll  = N * log(2*pi) + sumall(log(pointwise3(H, 'd')));
+            ll  = N * log(2*pi) + sumall(log(spm_matcomp('Pointwise3', H, 'd')));
             ll  = -0.5 * ll;
 
         else

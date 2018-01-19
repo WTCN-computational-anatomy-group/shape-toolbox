@@ -488,14 +488,14 @@ function [g, h] = onMemory(mu, f, c, gmu, hessian)
     if ~hessian
         g  = bsxfun(@times, c, mu) - f;
         if ~isempty(gmu)
-            g = -pointwise(gmu, g, 't');
+            g = -spm_matcomp('Pointwise', gmu, g, 't');
         end
         g(~isfinite(g)) = 0;
     else
         g = [];
     end
     if nargout > 1 || hessian
-        [ind, length] = symIndices(nc, 'n');
+        [ind, length] = spm_matcomp('SymIndices', nc, 'n');
         h = zeros([lat length], 'single');
         % Diagonals of the tensors
         for k=1:nc
@@ -509,7 +509,7 @@ function [g, h] = onMemory(mu, f, c, gmu, hessian)
         end
         if ~isempty(gmu)
             nvec = size(gmu, 5);
-            [indv, length] = symIndices(nvec, 'n');
+            [indv, length] = spm_matcomp('SymIndices', nvec, 'n');
             hh = h;
             h = zeros([lat length], 'like', h);
             for d=1:nvec

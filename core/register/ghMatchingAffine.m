@@ -109,7 +109,7 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
     jac = single(numeric(jac));
     phi = single(numeric(phi));
     if isempty(phi)
-        id = warps('identity', dim(1:3));
+        id = spm_warps('identity', dim(1:3));
     elseif isempty(jac)
         jac = spm_diffeo('def2jac', phi);
     end
@@ -130,28 +130,28 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
     for i=1:nq
         dXi = Mmu \ A \ B(:,:,i) * A * Mmu;
         if ~isempty(phi)
-            dXi = warps('transform', dXi, phi);
+            dXi = spm_warps('transform', dXi, phi);
             dXi = dXi(bb.x,bb.y,bb.z,:);
-            dXi = pointwise3(jac, dXi, 'i');
+            dXi = spm_matcomp('Pointwise3', jac, dXi, 'i');
         else
-            dXi = warps('transform', dXi, id);
+            dXi = spm_warps('transform', dXi, id);
             dXi = dXi(bb.x,bb.y,bb.z,:);
         end
         if do_gradient
-            g(i) = sumall(pointwise3(gv, dXi));
+            g(i) = sumall(spm_matcomp('Pointwise3', gv, dXi));
         end
         if do_hessian
             for j=1:i
                 dXj = Mmu \ A \ B(:,:,j) * A * Mmu;
                 if ~isempty(phi)
-                    dXj = warps('compose', dXj, phi);
+                    dXj = spm_warps('compose', dXj, phi);
                     dXj = dXj(bb.x,bb.y,bb.z,:);
-                    dXj = pointwise3(jac, dXj, 'i');
+                    dXj = spm_matcomp('Pointwise3', jac, dXj, 'i');
                 else
-                    dXj = warps('compose', dXj, id);
+                    dXj = spm_warps('compose', dXj, id);
                     dXj = dXj(bb.x,bb.y,bb.z,:);
                 end
-                h(i,j) = h(i,j) + sumall(pointwise3(dXi, pointwise3(hv, dXj)));
+                h(i,j) = h(i,j) + sumall(spm_matcomp('Pointwise3', dXi, spm_matcomp('Pointwise3', hv, dXj)));
             end
         end
     end
@@ -171,14 +171,14 @@ function [g, h] = ghMatchingAffine(model, mu, f, c, gmu, A, B, varargin)
                 if any(any(Bij))
                     dXij =  Mmu \ A \ Bij * A * Mmu;
                     if ~isempty(phi)
-                        dXij = warps('compose', dXij, phi);
+                        dXij = spm_warps('compose', dXij, phi);
                         dXij = dXij(bb.x,bb.y,bb.z,:);
-                        dXij = pointwise3(jac, dXij, 'i');
+                        dXij = spm_matcomp('Pointwise3', jac, dXij, 'i');
                     else
-                        dXij = warps('compose', dXij, id);
+                        dXij = spm_warps('compose', dXij, id);
                         dXij = dXij(bb.x,bb.y,bb.z,:);
                     end
-                    h(i,j) = h(i,j) + sumall(pointwise3(gv, dXij));
+                    h(i,j) = h(i,j) + sumall(spm_matcomp('Pointwise3', gv, dXij));
                 end
             end
         end

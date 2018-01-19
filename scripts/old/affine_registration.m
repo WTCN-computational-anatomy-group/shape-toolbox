@@ -251,7 +251,7 @@ function opt = affine_registration(opt)
     % --------------------------------------
     latmu = [size(opt.dat.mu) 1];
     latmu= latmu(1:3);
-    opt.dat.ipsi = reconstructIPsi(opt.dat.A, warps('identity', latmu), ...
+    opt.dat.ipsi = reconstructIPsi(opt.dat.A, spm_warps('identity', latmu), ...
         'Mf', opt.dat.Mf, 'Mmu', opt.dat.Mmu, ...
         'output', opt.dat.ipsi, 'debug', opt.debug);
     
@@ -299,7 +299,7 @@ function opt = affine_registration(opt)
             clear g h
         end
         
-        opt.dat.h = loadDiag(opt.dat.h); % Additional regularisation for robustness
+        opt.dat.h = spm_matcomp('LoadDiag', opt.dat.h); % Additional regularisation for robustness
         
         % Update full model likelihood (with Laplace approximation)
         % ---------------------------------------------------------
@@ -354,7 +354,7 @@ function opt = affine_registration(opt)
             clear g h
         end
         
-        opt.dat.h = loadDiag(opt.dat.h); % Additional regularisation for robustness
+        opt.dat.h = spm_matcomp('LoadDiag', opt.dat.h); % Additional regularisation for robustness
     end
     opt.dat.lllq = llLaplace(opt.dat.h, 'debug', opt.debug);
     

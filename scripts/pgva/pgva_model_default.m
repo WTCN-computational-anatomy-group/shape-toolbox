@@ -269,7 +269,7 @@ function opt = pgva_model_default(opt)
             clear myCluster
         end
     end
-    opt.dist.workers = opt.split.par;
+    opt.dist.client.workers = opt.split.par;
     
     % ---------------------------------------------------------------------
     % User interaction

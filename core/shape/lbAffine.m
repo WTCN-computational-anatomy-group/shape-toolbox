@@ -16,12 +16,12 @@ function lb = lbAffine(dat, model, opt)
     rind = opt.affine_rind;
     for n=1:opt.N
         if any(any(dat(n).Sq ~= 0))
-            lb = lb + proba('LogDet', dat(n).Sq(rind,rind));
+            lb = lb + spm_matcomp('LogDet', dat(n).Sq(rind,rind));
         end
     end
     
     lb = lb + opt.N * M - trace(model.qq(rind,rind) * model.Aq);
-    lb = lb + opt.N * proba('ELogDetWishart', model.Aq/(opt.nq0+opt.N), opt.nq0+opt.N);
+    lb = lb + opt.N * spm_prob('Wishart', 'Elogdet', model.Aq, opt.nq0+opt.N, 'normal');
     lb = lb + opt.N * size(model.Aq,1) - trace(model.Sq(rind,rind) * model.Aq);
     
     lb = 0.5 * lb;

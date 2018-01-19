@@ -44,7 +44,7 @@ function gmu = templateGrad(mu, varargin)
     dim = dim(1:4);
     lat = dim(1:3);  % Template lattice dimension
     nc  = dim(4);    % Number of classes/modalities
-    id  = single(warps('identity', lat)); % Identity transform
+    id  = single(spm_warps('identity', lat)); % Identity transform
 
     % --- Reserve space for the complete gradient images
     if ~isempty(output)

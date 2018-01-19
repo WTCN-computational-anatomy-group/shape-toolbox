@@ -27,7 +27,7 @@ function A = precisionZWishart(n0, ezz, N, md)
     
     % Stable inverse, as no ARD-style pruning is used
     [V,D] = eig(A);
-    D     = loadDiag(D);
+    D     = spm_matcomp('LoadDiag', D);
     A     = real(V * (D \ V') );
     
     if strcmpi(md, 'mean')

@@ -40,7 +40,7 @@ function ll = llPriorAffine(q, regq, varargin)
     if ~strcmpi(fast, 'fast')
         Q = size(regq,1);    % Number of affine parameters with prior
         ll = ll + Q * log(2 * pi) ...
-                - logDet(regq);
+                - spm_matcomp('LogDet', regq);
     end
     
     % --- Common factor

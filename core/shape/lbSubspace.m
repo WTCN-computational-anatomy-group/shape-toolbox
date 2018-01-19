@@ -25,14 +25,14 @@ function ll = lbSubspace(EW, EWW, vs, prm, H, reg)
         for k=1:K
             w1 = single(numeric(EW(:,:,:,:,k)));
             h1 = single(numeric(H(:,:,:,:,k)));
-            Hw = pointwise3(h1, w1);
+            Hw = spm_matcomp('Pointwise3', h1, w1);
             Hw = Hw + reg(k,k)*spm_diffeo('vel2mom', w1, double([vs prm]));
             ll = ll + 0.5 * w1(:)'*Hw(:);
             ll = ll - 0.5 * proba('LogDetDiffeo', lat, vs, double(reg(k,k)*prm));
             if size(h1, 3) == 1
                 h1(:,:,:,3) = 1;   % 2D case
             end
-            dt = pointwise3(h1, 'd');
+            dt = spm_matcomp('Pointwise3', h1, 'd');
             msk = dt > 0;
             ll = ll - 0.5 * sumall(log(dt(msk)));
         end
