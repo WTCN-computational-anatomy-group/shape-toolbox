@@ -18,7 +18,9 @@ function ll = llPriorSubspace(W, WW, vs, prm, bnd)
         if nargin < 5
             bnd = 0;
         end
-        ld = proba('LogDetDiffeo', lat, vs, prm, bnd);
+        
+        [~, ld] = spm_shoot_greens('kernel', double(lat), double([vs prm]), bnd);
+        ld = ld(1);
     else
         ld = vs;
     end

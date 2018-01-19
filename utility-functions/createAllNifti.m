@@ -1,67 +1,110 @@
 function createAllNifti(dat, model, opt)
 
-    % ---
-    % DAT
-    % ---
-    fields = fieldnames(dat);
-    for i=1:numel(fields)
-        field = fields{i};
-        if ~strcmpi(field, 'f')
-            switch field
-                case 'v',    descrip = sprintf('Initial velocity (%f %f %f %f %f)', opt.prm);
-                case 'r',    descrip = sprintf('Residual velocity (%f %f %f %f %f)', model.lambda*opt.prm);
-                case 'iphi', descrip = 'Inverse diffeomorphism';
-                case 'phi',  descrip = 'Direct diffeomophism';
-                case 'jac',  descrip = 'Direct Jacobian';
-                case 'ipsi', descrip = 'Inverse transform';
-                case 'psi',  descrip = 'Direct transform';
-                case 'wmu',  descrip = 'Warped template';
-                case 'pf',   descrip = 'Pushed image';
-                case 'c',    descrip = 'Count image';
-                otherwise,   descrip = 'Shape toolbox internal';
+    if isfield(opt, 'prm')
+        prm = opt.prm;
+    elseif isfield(opt, 'pg') && isfield(opt.pg, 'prm')
+        prm = opt.pg.prm;
+    else
+        prm = [0 0 0 0 0];
+    end
+    
+    if isfield(model, 'Mmu')
+        Mmu = model.Mmu;
+    elseif isfield(model, 'M')
+        Mmu = model.M;
+    else
+        Mmu = eye(4);
+    end
+                
+    createDat(dat, prm);
+    createModel(model, prm, Mmu);
+
+end
+
+function createDat(dat, prm, Mf)
+
+    for n=1:numel(dat)
+        if nargin < 3
+            if isfield(dat(n), 'Mf')
+                Mf = dat(n).Mf;
+            elseif isfield(dat(n), 'f') && isfield(dat(n).f, 'M')
+                Mf = dat(n).f.M;
+            else
+                Mf = eye(4);
             end
-            for n=1:numel(dat)
-                if isa(dat(n).(field), 'file_array') && checkarray(dat(n).(field))
-                    nii         = nifti;
-                    nii.mat0    = dat(n).Mf;
-                    nii.mat     = dat(n).Mf;
-                    nii.descrip = descrip;
-                    nii.dat     = dat(n).(field);
-                    if numel(nii.dat.dim) > 3
-                        nii.dat.dim = [nii.dat.dim(1:3) 1 nii.dat.dim(4:end)];
+        end
+        fields = fieldnames(dat(n));
+        for i=1:numel(fields)
+            field = fields{i};
+            if isstruct(dat(n).(field))
+                createDat(dat(n).(field), prm, Mf);
+            else
+                if ~strcmpi(field, 'f')
+                    switch field
+                        case 'v',    descrip = sprintf('Initial velocity (%f %f %f %f %f)', prm);
+                        case 'r',    descrip = sprintf('Residual velocity (%f %f %f %f %f)', prm);
+                        case 'iphi', descrip = 'Inverse diffeomorphism';
+                        case 'phi',  descrip = 'Direct diffeomophism';
+                        case 'jac',  descrip = 'Direct Jacobian';
+                        case 'ipsi', descrip = 'Inverse transform';
+                        case 'psi',  descrip = 'Direct transform';
+                        case 'wmu',  descrip = 'Warped template';
+                        case 'pf',   descrip = 'Pushed image';
+                        case 'c',    descrip = 'Count image';
+                        otherwise,   descrip = 'Shape toolbox internal';
                     end
-                    create(nii);
+                    if isa(dat(n).(field), 'file_array') ...
+                            && checkarray(dat(n).(field)) ...
+                            && ~strcmpi(dat(n).(field).permission, 'ro')
+                        nii         = nifti;
+                        nii.mat0    = Mf;
+                        nii.mat     = Mf;
+                        nii.descrip = descrip;
+                        nii.dat     = dat(n).(field);
+                        if numel(nii.dat.dim) > 3
+                            nii.dat.dim = [nii.dat.dim(1:3) 1 nii.dat.dim(4:end)];
+                        end
+                        create(nii);
+                    end
                 end
             end
         end
     end
+    
+end
 
-    % -----
-    % MODEL
-    % -----
+function createModel(model, prm, Mmu)
+
     fields = fieldnames(model);
-    for i=1:numel(fields)
+    for i=1:numel(fields) 
         field = fields{i};
-        switch field
-            case 'w',    descrip = sprintf('Principal geodesic (%f %f %f %f %f)', opt.prm);
-            case 'a',    descrip = 'Log-template';
-            case 'mu',   descrip = 'Template';
-            case 'gmu',  descrip = 'Template gradients';
-            case 'dw',   descrip = 'PG search direction';
-            case 'gw',   descrip = 'PG gradient';
-            case 'hw',   descrip = 'PG hessian';
-            otherwise,   descrip = 'Shape toolbox internal';
-        end
-        if isa(model.(field), 'file_array') && checkarray(model.(field))
-            nii         = nifti;
-            nii.mat0    = model.Mmu;
-            nii.mat     = model.Mmu;
-            nii.descrip = descrip;
-            nii.dat     = model.(field);
-            if numel(nii.dat.dim) > 3
-                nii.dat.dim = [nii.dat.dim(1:3) 1 nii.dat.dim(4:end)];
+        if isstruct(model.(field))
+            createModel(model.(field), prm, Mmu);
+        else
+            switch field
+                case 'w',    descrip = sprintf('Principal geodesic (%f %f %f %f %f)', prm);
+                case 'a',    descrip = 'Log-template';
+                case 'mu',   descrip = 'Template';
+                case 'gmu',  descrip = 'Template gradients';
+                case 'dw',   descrip = 'PG search direction';
+                case 'gw',   descrip = 'PG gradient';
+                case 'hw',   descrip = 'PG hessian';
+                otherwise,   descrip = 'Shape toolbox internal';
             end
-            create(nii);
+            if isa(model.(field), 'file_array') ...
+                    && checkarray(model.(field)) ...
+                    && ~strcmpi(model.(field).permission, 'ro')
+                nii         = nifti;
+                nii.mat0    = Mmu;
+                nii.mat     = Mmu;
+                nii.descrip = descrip;
+                nii.dat     = model.(field);
+                if numel(nii.dat.dim) > 3
+                    nii.dat.dim = [nii.dat.dim(1:3) 1 nii.dat.dim(4:end)];
+                end
+                create(nii);
+            end
         end
     end
+    
 end

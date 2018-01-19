@@ -33,7 +33,7 @@ function ll = llPriorLatent(z, regz, varargin)
     % --- Add constants w.r.t. Z
     if ~strcmpi(p.Results.fast, 'fast')
         K = size(z,1);    % Number of principal components
-        ll = ll + K * log(2 * pi) - logDet(regz);
+        ll = ll + K * log(2 * pi) - spm_matcomp('LogDet', regz);
     end
     
     % --- Common factor

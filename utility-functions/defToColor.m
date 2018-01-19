@@ -5,7 +5,6 @@ function out = defToColor(d)
 % Generate an RGB volume from a displacement (e.g. initial velocity)
 % volume.
     d = numeric(d);
-    d(:,:,:,3) = 0;
     nrm = max(max(max(sum(d.^2, 4)))); % normalising constant
 
     % Create HSV

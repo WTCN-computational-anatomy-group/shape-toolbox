@@ -71,6 +71,7 @@ function [ok, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(model, dr, r0,
     p.addParameter('nit',      6,      @isscalar);
     p.addParameter('itgr',     nan,    @isscalar);
     p.addParameter('prm',      [0.0001 0.001 0.2 0.05 0.2], @(X) length(X) == 5);
+    p.addParameter('shoot',    [0.0001 0.001 0.2 0.05 0.2], @(X) length(X) == 5);
     p.addParameter('bnd',      0, @(X) isscalar(X) && isnumeric(X));
     p.addParameter('par',      false,  @isscalar);
     p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'slice', 'component', 'none', ''})));
@@ -87,6 +88,7 @@ function [ok, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(model, dr, r0,
     nit     = p.Results.nit;
     itgr    = p.Results.itgr;
     prm     = p.Results.prm;
+    shoot   = p.Results.shoot;
     bnd     = p.Results.bnd;
     par     = p.Results.par;
     loop    = p.Results.loop;
@@ -133,7 +135,7 @@ function [ok, r, llm, llr, iphi, pf, c, bb, ipsi, v] = lsVelocity(model, dr, r0,
     for i=1:nit
         r = single(r0 + dr / armijo);
         v = single(v0 + sigma * dr / armijo);
-        iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'bnd', bnd, 'debug', debug);
+        iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', shoot, 'bnd', bnd, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
         [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug);
         llm = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);

@@ -114,7 +114,7 @@ function varargout = exponentiateVelocity(v, varargin)
     end
 end
 
-% === Specialized/Optimized exponentiators ================================
+% === Specialised/Optimised exponentiators ================================
 
 function phi = pushPhi(v, itgr, vs, prm)
     phi = spm_shoot3d(v, [vs prm], itgr);
@@ -152,7 +152,7 @@ function [iphi, ijac] = pushIPhi(v, itgr, vs, prm, bnd)
     % Inversion kernel
     F = spm_shoot_greens('kernel', double(lattice_dim), double([vs prm]), bnd);
     % Identity transform
-    id = single(transfo('idmap', lattice_dim));
+    id = single(spm_warps('identity', lattice_dim));
     % Initial momentum (m_0 = L v_0)
     m = spm_diffeo('vel2mom', single(v), double([vs prm]));
 

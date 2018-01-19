@@ -452,7 +452,7 @@ function dat = oneStepFitAffine(dat, model, opt)
             phi  = dat.phi;
             jac  = dat.jac;
         else
-            iphi = warps('identity', opt.lat);
+            iphi = spm_warps('identity', opt.lat);
             phi  = [];
             jac  = [];
         end
@@ -492,7 +492,7 @@ function dat = oneStepFitAffine(dat, model, opt)
                 rind = [];
             end
 
-            dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness)
+            dat.hq = spm_matcomp('LoadDiag', dat.hq); % Additional regularisation for robustness)
 
             % Compute search direction
             % ------------------------
@@ -554,7 +554,7 @@ function dat = oneStepFitAffine(dat, model, opt)
                     clear hq
                 end
 
-                dat.hq = loadDiag(dat.hq); % Additional regularisation for robustness
+                dat.hq = spm_matcomp('LoadDiag', dat.hq); % Additional regularisation for robustness
 
             end
             dat.Sq = inv(dat.hq);
@@ -671,7 +671,7 @@ function dat = oneStepFitLatent(dat, model, opt)
             dat.hz = dat.hz + hz;
             clear gz hz
 
-            dat.hz = loadDiag(dat.hz); % Additional regularisation for robustness
+            dat.hz = spm_matcomp('LoadDiag', dat.hz); % Additional regularisation for robustness
 
             % Compute search direction
             % ------------------------
@@ -730,7 +730,7 @@ function dat = oneStepFitLatent(dat, model, opt)
             dat.hz = dat.hz + hz;
             clear hz
 
-            dat.hz = loadDiag(dat.hz); % Additional regularisation for robustness
+            dat.hz = spm_matcomp('LoadDiag', dat.hz); % Additional regularisation for robustness
 
         end
     dat.Sz = inv(dat.hz);
@@ -946,7 +946,7 @@ function dat = oneStepFitResidual(dat, model, opt)
         else
             hr(:,:,:,3) = hr(:,:,:,3) + lam*K(1,1,1,3,3);
         end
-        ld2 = sumall(log(abs(pointwise3(hr, 'd'))));
+        ld2 = sumall(log(abs(spm_matcomp('Pointwise3', hr, 'd'))));
 
         % 2) Sum each statistic
         dat.err  = 0.5*(tr/lam + llr);
@@ -1068,23 +1068,51 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
         % --------------------------------------------------
         dat(n1:ne) = distribute('oneStepGradHessVelocity', dat(n1:ne), model, opt);
         
-        for n=n1:ne
-            
-            % Add individual contributions
-            % ----------------------------
-            gv = numeric(dat(n).gv);
-            hv = numeric(dat(n).hv);
-            for k=1:opt.K
+%         for n=n1:ne
+%             
+%             % Add individual contributions
+%             % ----------------------------
+%             gv = numeric(dat(n).gv);
+%             hv = numeric(dat(n).hv);
+%             for k=1:opt.K
+%                 bx = dat(n).bb.x;
+%                 by = dat(n).bb.y;
+%                 bz = dat(n).bb.z;
+%                 model.gw(bx,by,bz,:,k) = model.gw(bx,by,bz,:,k) + gv * single(dat(n).z(k));
+%                 model.hw(bx,by,bz,:,k) = model.hw(bx,by,bz,:,k) + hv * single(dat(n).z(k))^2;
+%             end
+%             clear gv hv
+%             
+%             % Clear individual grad/hess
+%             % --------------------------
+%             dat(n).gv = rmarray(dat(n).gv);
+%             dat(n).hv = rmarray(dat(n).hv);
+%         end
+        
+        
+        % Add individual contributions
+        % ----------------------------
+        for k=1:opt.K
+            gw = model.gw(:,:,:,:,k);
+            hw = model.hw(:,:,:,:,k);
+            for n=n1:ne
+                gv = numeric(dat(n).gv);
+                hv = numeric(dat(n).hv);
                 bx = dat(n).bb.x;
                 by = dat(n).bb.y;
                 bz = dat(n).bb.z;
-                model.gw(bx,by,bz,:,k) = model.gw(bx,by,bz,:,k) + gv * single(dat(n).z(k));
-                model.hw(bx,by,bz,:,k) = model.hw(bx,by,bz,:,k) + hv * single(dat(n).z(k))^2;
+                gw(bx,by,bz,:) = gw(bx,by,bz,:) + gv * single(dat(n).z(k));
+                hw(bx,by,bz,:) = hw(bx,by,bz,:) + hv * single(dat(n).z(k))^2;
+                clear gv hv
             end
-            clear gv hv
-            
-            % Clear individual grad/hess
-            % --------------------------
+            model.gw(:,:,:,:,k) = gw;
+            model.hw(:,:,:,:,k) = hw;
+            clear gw hw
+        end
+        
+        % Clear individual grad/hess
+        % --------------------------
+        for n=n1:ne
             dat(n).gv = rmarray(dat(n).gv);
             dat(n).hv = rmarray(dat(n).hv);
         end
@@ -1185,7 +1213,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
                 'lat', latf, 'Mf', dat.Mf, 'Mmu', model.Mmu, ...
                 'output', dat.ipsi, 'debug', opt.debug);
         elseif isfield(dat, 'A')
-            dat.ipsi = reconstructIPsi(dat.A, warps('identity', opt.lat), ...
+            dat.ipsi = reconstructIPsi(dat.A, spm_warps('identity', opt.lat), ...
                 'lat', latf, 'Mf', dat.Mf, 'Mmu', model.Mmu, ...
                 'output', dat.ipsi, 'debug', opt.debug);
             error('Only affine is not implemented yet')
@@ -1264,7 +1292,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         clear gq
     end
     if isfield(todo, 'hq')
-        dat.hq = loadDiag(dat.hq);
+        dat.hq = spm_matcomp('LoadDiag', dat.hq);
     end
     if isfield(toclean, 'A')
         dat.A = rmarray(dat.A);
@@ -1315,7 +1343,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         clear gz
     end
     if isfield(todo, 'hz')
-        dat.hz = loadDiag(dat.hz);
+        dat.hz = spm_matcomp('LoadDiag', dat.hz);
     end
     
     % --- LL latent
@@ -1374,7 +1402,7 @@ function dat = oneUpdate(dat, model, opt, todo, toclean)
         else
             hr(:,:,:,3) = hr(:,:,:,3) + lam*K(1,1,1,3,3);
         end
-        ld2 = sumall(log(abs(pointwise3(hr, 'd'))));
+        ld2 = sumall(log(abs(spm_matcomp('Pointwise3', hr, 'd'))));
         clear hr
 
         % 2) Sum each statistic

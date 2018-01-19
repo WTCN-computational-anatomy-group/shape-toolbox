@@ -23,5 +23,5 @@ function ll = lbPrecisionResidual(Elam, N, n0, Elam0, lat)
     beta   = alpha/Elam;
     beta0  = alpha0/Elam0;
     
-    ll = -klGamma(alpha, beta, alpha0, beta0);
+    ll = -spm_prob('Gamma', 'kl', alpha, beta, alpha0, beta0);
 end

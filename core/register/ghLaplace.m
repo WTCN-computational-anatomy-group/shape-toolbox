@@ -579,13 +579,13 @@ function [g, h] = onMemory(mu, f, c, b, gmu)
     g  = sign(bsxfun(@times, c, mu) - f);
     g  = bsxfun(@times, b, g);
     if ~isempty(gmu)
-        g = -pointwise(gmu, g, 't');
+        g = -spm_matcomp('Pointwise', gmu, g, 't');
     end
     if nargout > 1
         h = bsxfun(@times, b, c);
         if ~isempty(gmu)
             nvec = size(gmu, 5);
-            [ind, k] = symIndices(nvec, 'n');
+            [ind, k] = spm_matcomp('SymIndices', nvec, 'n');
             hh = h;
             h = zeros([lat k], 'like', h);
             for d=1:nvec

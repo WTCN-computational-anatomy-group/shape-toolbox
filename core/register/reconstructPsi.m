@@ -36,12 +36,12 @@ function psi = reconstructPsi(A, phi, varargin)
     
     % --- Reconstruct
     if isempty(lat)
-        psi = warps('compose', Mmu \ A \ Mf, phi);
+        psi = spm_warps('compose', Mmu \ A \ Mf, phi);
     else
         lat = [size(phi) 1];
         lat = lat(1:3);
-        id  = warps('identity', lat);
-        psi = warps('compose', Mmu \ A \ Mf, phi, id);
+        id  = spm_warps('identity', lat);
+        psi = spm_warps('compose', Mmu \ A \ Mf, phi, id);
     end
     
     % --- Write on disk

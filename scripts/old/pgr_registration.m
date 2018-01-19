@@ -360,7 +360,7 @@ function opt = pgr_registration(opt)
         opt.dat.hz = opt.dat.hz + hz;
         clear gz hz
         
-        opt.dat.hz = loadDiag(opt.dat.hz); % Additional regularisation for robustness
+        opt.dat.hz = spm_matcomp('LoadDiag', opt.dat.hz); % Additional regularisation for robustness
         
         opt.dat.lllz = llLaplace(opt.dat.hz, 'debug', opt.debug);
         
