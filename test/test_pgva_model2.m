@@ -18,11 +18,26 @@ input   = struct;
 input.f = fnames(1:N);
 
 opt = struct;
-opt.dir.model = '/Users/balbasty/Desktop/model/outputvel2';
-opt.dir.dat   = opt.dir.model;
-opt.model     = struct('name', 'categorical');
-opt.pg.K      = 9;
-opt.split.par = false;
+opt.dir.model  = '/Users/balbasty/Desktop/model/outputvel2';
+opt.dir.dat    = opt.dir.model;
+opt.model      = struct('name', 'categorical');
+opt.pg.K       = 64;
+opt.split.par  = inf;
+opt.pg.pgprior = true;
+
+% cluster
+% opt.dist.server.ip      = '';
+% opt.dist.server.login   = 'ybalba';
+% opt.dist.server.folder  = '/data/ybalba/distribute';
+% opt.dist.client.folder  = '/Users/balbasty/Desktop/FIL/data/distribute';
+% opt.dist.matlab.bin     = '/share/apps/matlab';
+% opt.dist.matlab.add     = {'/data/ybalba/matlab/shape-toolbox' ...
+%                            '/data/ybalba/matlab/utility-functions'};
+% opt.dist.spm.path       = '/data/ybalba/matlab/spm-trunk';
+% opt.dist.spm.toolboxes  = {'Shoot'};
+% opt.dist.translate      = {'/Users/balbasty/Desktop/FIL/data' '/data/ybalba'};
+% opt.dist.restrict       = 'file_array';
+
 
 %%
 [model, dat, opt] = pgva_model(input, opt);
