@@ -4,178 +4,139 @@ function [opt, dat, model] = pgra_model_data(opt, dat, model)
 % Initialise all data handling structures
 
 
-   
     % ---------------------------------------------------------------------
-    % Model
-    % ---------------------------------------------------------------------
-    
     % Compute template dimensions
-    % ---------------------------
-    
-    % That bit is quite messy, could be cleaned up.
+    % ---------------------------------------------------------------------
     
     % - Default lattice
-    if ~isfield(opt, 'vs') || ~isfield(opt, 'Mmu') || ~isfield(opt, 'lat')
-        vartocheck = {'mu', 'a', 'w'};
-        for i=1:numel(vartocheck)
-            var = vartocheck{i};
-            if isfield(model, var)
-                if ~isfield(opt, 'lat')
-                    opt.lat = [size(model.(var)) 1 1];
-                    opt.lat = opt.lat(1:3);
-                end
-                if (~isfield(opt, 'vs') || ~isfield(model, 'Mmu')) && ...
-                        isa(model.mu, 'file_array') && ...
-                        endsWith(model.(var).fname, '.nii')
-                    n = nifti(model.(var).fname);
-                    model.Mmu = n.mat0;
-                    opt.vs = sqrt(sum(model.Mmu(1:3,1:3).^2));
-                end
-                break
-            end
+    if ~isfield(opt.tpl, 'lat')
+        if ~isfield(opt.tpl, 'vs')
+            opt.tpl.vs = [];
+        end
+        [opt.tpl.lat, opt.tpl.M, opt.tpl.vs] = autoTemplateDim(dat, opt.tpl.vs);
+    end
+    if ~isfield(opt.tpl, 'vs')
+        if isfield(opt.tpl, 'M')
+            opt.tpl.vs = sqrt(sum(opt.tpl.M(1:3,1:3).^2));
+        else
+            opt.tpl.vs = [1 1 1];
         end
     end
-    if ~isfield(opt, 'lat')
-        if ~isfield(opt, 'vs')
-            opt.vs = [];
-        end
-        [opt.lat, model.Mmu, opt.vs] = autoTemplateDim2(dat, opt.vs);
+    if ~isfield(opt.tpl, 'M')
+        model.tpl.M = eye(4);
+        model.tpl.M([1 6 11]) = opt.vs;
+        model.tpl.M(1) = -opt.tpl.M(1);
     end
-    if ~isfield(opt, 'vs')
-        opt.vs = [1 1 1];
-    end
-    if ~isfield(model, 'Mmu')
-        model.Mmu = eye(4);
-        model.Mmu([1 6 11]) = opt.vs;
-        model.Mmu(1) = -model.Mmu(1);
-    end
+    model.tpl.M = opt.tpl.M;
     
     
+    % ---------------------------------------------------------------------
     % Create Data structure
-    % ---------------------
-    
-    % I am supposing that if some data is provided through the model or dat
-    % structure, we should respect its 'on/off disk' format, and not try to
-    % follow opt.ondisk.
+    % ---------------------------------------------------------------------
     
     % I am setting all dimensions to [0 0] and let the first "creator"
     % instance set the appropriate dimensions. I will also add a "cleanup"
     % function at the end which ensures the NIfTI header is correct and
     % only keeps user-defined volumes.
     
-    % --- Model
+    % Model
+    % -----
     
-    modelvar = {'a', 'mu', 'gmu', 'w', 'dw', 'gw', 'hw', ...
-                'zz', 'z', 'Sz', 'Az', 'ww', ...
-                'qq', 'q', 'Sq', 'Aq'};
-            
-    for i=1:numel(modelvar)
-        var = modelvar{i};
-        if ~isfield(model, var)
-            if isfield(opt.ondisk.model, var) ...
-                    && opt.ondisk.model.(var) ...
-                    && ~isempty(opt.fnames.model.(var))
-                model.(var) = createFA(opt.fnames.model.(var), [0 0], 'float32');
-            else
-                model.(var) = single([]);
+    level1 = fieldnames(opt.fnames.model);
+    for i=1:numel(level1)
+        lv1 = level1{i};
+        level2 = fieldnames(opt.fnames.model.(lv1));
+        for j=1:numel(level2)
+            lv2 = level2{j};
+            if ~isfield(model, lv1) || ~isfield(model.(lv1), lv2)
+                if opt.ondisk.model.(lv1).(lv2)
+                    fname = fullfile(opt.dir.model, opt.fnames.model.(lv1).(lv2));
+                    model.(lv1).(lv2) = createFA(fname, [0 0], 'float32');
+                else
+                    model.(lv1).(lv2) = single([]);
+                end
             end
         end
     end
-    if ~isfield(model, 'wpz')
-        model.wpz = opt.wpz;
+    
+    
+    % Subjects
+    % --------
+          
+    % Initialise level 1 fields
+    level1 = fieldnames(opt.fnames.dat);
+    level1 = {level1{:} 'q' 'z'}; % Add q cause it is not in fnames but is needed
+    for i=1:numel(level1)
+        lv1 = level1{i};
+        if ~isfield(dat, lv1)
+            [dat.(lv1)] = deal(struct('observed', false));
+        end
     end
     
-    % --- Subjects
-            
-    datvar = {'wmu', 'iphi', 'ipsi', 'v', 'r', 'pf', 'c', 'phi', 'jac', ...
-              'z', 'zz', 'Sz', 'q', 'qq', 'Sq', ...
-              'gv', 'hv', 'gz', 'hz', 'gq', 'hq', 'gr', 'hr'};
-    
-    for j=1:numel(datvar)
-        var = datvar{j};
-        if ~isfield(dat, var)
-            if isfield(opt.ondisk.dat, var) ...
-                    && opt.ondisk.dat.(var) ...
-                    && isfield(opt.fnames.dat, var) ...
-                    && ~isempty(opt.fnames.dat.(var))
-                for i=1:opt.N
-                    if ~isempty(opt.fnames.dat.(var){i})
-                        dat(i).(var) = createFA(opt.fnames.dat.(var){i}, [0 0], 'float32');
+    % Create only non-existant variables
+    level1 = fieldnames(opt.fnames.dat);
+    for i=1:numel(level1)
+        lv1 = level1{i};
+        level2 = fieldnames(opt.fnames.dat.(lv1));
+        for j=1:numel(level2)
+            lv2 = level2{j};
+            for n=1:numel(dat)
+                if ~isfield(dat(n).(lv1), lv2)
+                    if opt.ondisk.dat.(lv1).(lv2)
+                        if isempty(opt.dir.dat)
+                            if dat(n).f.observed
+                                [path,fname,ext] = fileparts(dat(n).f.f.fname);
+                            elseif dat(n).v.observed
+                                [path,fname,ext] = fileparts(dat(n).v.v.fname);
+                            else
+                                error('Either the image or velocity should be observed')
+                            end
+                            fname = fullfile(path, [opt.fnames.dat.(lv1).(lv2) fname ext]);
+                        else
+                            fname = fullfile(opt.dir.dat, num2str(n), opt.fnames.dat.(lv1).(lv2));
+                        end
+                        dat(n).(lv1).(lv2) = createFA(fname, [0 0], 'float32');
                     else
-                        dat(i).(var) = single([]);
+                        dat(n).(lv1).(lv2) = single([]);
                     end
                 end
-            else
-                [dat.(var)] = deal(single([]));
             end
         end
     end
-    
-    if ~isfield(dat, 'okq')
-        [dat.okq] = deal(0);
-    end
-    if ~isfield(dat, 'okz')
-        [dat.okz] = deal(0);
-    end
-    if ~isfield(dat, 'okr')
-        [dat.okr] = deal(0);
-    end
-    if ~isfield(dat, 'okq2')
-        [dat.okq2] = deal(0);
-    end
-    if ~isfield(dat, 'okz2')
-        [dat.okz2] = deal(0);
-    end
-    if ~isfield(dat, 'okr2')
-        [dat.okr2] = deal(0);
-    end
-    if ~isfield(dat, 'llm')
-        [dat.llm] = deal(double([]));
-    end
-    if ~isfield(dat, 'llr')
-        [dat.llr] = deal(double([]));
-    end
-    if ~isfield(dat, 'err')
-        [dat.err] = deal(double(0));
-    end
-    if ~isfield(dat, 'klr')
-        [dat.klr] = deal(double([]));
-    end
-    if ~isfield(dat, 'klr1')
-        [dat.klr1] = deal(double([]));
-    end
-    if ~isfield(dat, 'klr2')
-        [dat.klr2] = deal(double([]));
-    end
-    if ~isfield(dat, 'trr')
-        [dat.trr] = deal(double([]));
-    end
-    if ~isfield(dat, 'bb')
-        [dat.bb] = deal(struct);
-    end
-    
     
     % Create all output directories
     % -----------------------------
     
-    for i=1:opt.N
-        fields = fieldnames(dat(i));
-        for j=1:numel(fields)
-            if isa(dat(i).(fields{j}), 'file_array')
-                createDirectory(fileparts(dat(i).(fields{j}).fname));
+    level1 = fieldnames(dat);
+    for i=1:numel(level1)
+        lv1 = level1{i};
+        for n=1:numel(dat)
+            level2 = fieldnames(dat(n).(lv1));
+            for j=1:numel(level2)
+                lv2 = level2{j};
+                if isa(dat(n).(lv1).(lv2), 'file_array')
+                    createDirectory(fileparts(dat(n).(lv1).(lv2).fname));
+                end
             end
         end
     end
-    fields = fieldnames(model);
-    for j=1:numel(fields)
-        if isa(model.(fields{j}), 'file_array')
-            createDirectory(fileparts(model.(fields{j}).fname));
+    level1 = fieldnames(model);
+    for i=1:numel(level1)
+        lv1 = level1{i};
+        level2 = fieldnames(model.(lv1));
+        for j=1:numel(level2)
+            lv2 = level2{j};
+            if isa(model.(lv1).(lv2), 'file_array')
+                createDirectory(fileparts(model.(lv1).(lv2).fname));
+            end
         end
     end
     
 end
 
-% ===
+% =========================================================================
+% HELPERS
+% =========================================================================
 
 function createDirectory(dirpath)
     if ~exist(dirpath, 'dir')

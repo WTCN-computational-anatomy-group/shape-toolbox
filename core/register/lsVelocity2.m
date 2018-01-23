@@ -287,7 +287,7 @@ function printInfo(which, oll, llm, llr)
         if strcmpi(which, 'header')
             fprintf('R - LineSearch | Armijo  | %12s = %12s + %12s | %12s\n', 'RLL', 'LL-Match', 'RLL-Prior', 'LL-Diff');
         elseif strcmpi(which, 'initial')
-            fprintf('R - LineSearch | Initial | %12.6f = %12.6f + %12.6f \n', oll, llm, llr);
+            fprintf('R - LineSearch | Initial | %12.4f = %12.4f + %12.4f \n', oll, llm, llr);
         elseif strcmpi(which, 'failed')
             fprintf('| Failed\n');
         elseif strcmpi(which, 'success')
@@ -296,7 +296,7 @@ function printInfo(which, oll, llm, llr)
             fprintf('R - LineSearch | Complete failure\n');
         end
     else
-        fprintf('R - LineSearch | Try %3d | %12.6f = %12.6f + %12.6f | %12.6f ', which, llm+llr, llm, llr, llm+llr-oll);
+        fprintf('R - LineSearch | Try %3d | %12.4f = %12.4f + %12.4f | %12.4f ', which, llm+llr, llm, llr, llm+llr-oll);
     end
 end
         

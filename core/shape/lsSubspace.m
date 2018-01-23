@@ -23,64 +23,59 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
     p.addRequired('opt',    @isstruct);
     p.parse(dw, model, dat, opt);
     
-    if opt.debug, fprintf('* lsSubspace\n'); end
+    if opt.ui.debug, fprintf('* lsSubspace\n'); end
     
     % --- Initial point
-    w0 = model.w;
-    w0.fname = fullfile(opt.directory, 'subspace_prev.nii');
-    for k=1:size(model.w, 5)
-        w0(:,:,:,:,k) = model.w(:,:,:,:,k);
+    w0 = model.pg.w;
+    w0.fname = fullfile(fileparts(model.pg.w.fname), 'subspace_prev.nii');
+    for k=1:size(model.pg.w, 5)
+        w0(:,:,:,:,k) = model.pg.w(:,:,:,:,k);
     end
-    ww0 = model.ww;
+    ww0 = model.pg.ww;
     
     % --- Initialise line search
-    if isfield(model, 'armijo'),    armijo = model.armijo;
-    else,                           armijo = 1; end
-    llm0 = model.llm;
-    llz0 = - 0.5 * trace(model.wpz(2) * model.ww * (model.Sz + model.zz));
-    llw0 = - 0.5 * trace(model.ww);
+    if isfield(model.pg, 'armijo'),    armijo = model.pg.armijo;
+    else,                              armijo = 1; end
+    llm0 = model.lb.m.val;
+    llz0 = model.lb.z.val;
+    llw0 = model.lb.w.val;
     ll0  = llm0 + llz0 + llw0;
     ok   = false;
     
-    if opt.verbose
+    if opt.ui.verbose
         printInfo('header');
         printInfo('initial', ll0, llm0, llz0, llw0);
         opt1 = opt;
-        opt1.verbose = false;
+        opt1.ui.verbose = false;
     end
         
     % --- Line search
-    for i=1:opt.lsit
+    for i=1:opt.iter.ls
         
         % - Explore new W
-        for k=1:opt.K
-            model.w(:,:,:,:,k) = w0(:,:,:,:,k) + dw(:,:,:,:,k) / armijo;
+        for k=1:opt.pg.K
+            model.pg.w(:,:,:,:,k) = w0(:,:,:,:,k) + dw(:,:,:,:,k) / armijo;
         end
-        model.ww = precisionZ(model.w, opt.vs, opt.prm, opt.shoot.bnd);
+        model.pg.ww = precisionZ(model.pg.w, opt.tpl.vs, opt.pg.prm, opt.pg.bnd);
         
         % - Update individual matching terms
-        dat = batchProcess('Update', dat, model, opt1, ...
-            {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
-            'clean', {'ipsi', 'iphi', 'wmu'});
+        [dat, model] = pgra_batch('LB', 'Subspace', dat, model, opt1);
         
         % - Compute log-likelihood
-        llm = 0;
-        for n=1:opt.N
-            llm = llm + dat(n).llm;
-        end
-        llz = - 0.5 * trace(model.wpz(2) * model.ww * (model.Sz + model.zz));
-        llw = - 0.5 * trace(model.ww);
-        
+        llm = model.lb.m.val;
+        llz = model.lb.z.val;
+        llw = model.lb.w.val;
         ll = llm + llz + llw;
-        if opt.verbose, printInfo(armijo, ll0, llm, llz, llw); end
+        
+        if opt.ui.verbose, printInfo(armijo, ll0, llm, llz, llw); end
         
         if ll <= ll0
-            if opt.verbose, printInfo('failed'); end
+            if opt.ui.verbose, printInfo('failed'); end
             armijo = armijo * 2;
         else
-            if opt.verbose, printInfo('success'); end
+            if opt.ui.verbose, printInfo('success'); end
             if isfield(model, 'armijo')
-                model.armijo = max(0.9 * armijo, 1);
+                model.pg.armijo = max(0.9 * armijo, 1);
             end
             ok  = true;
             break
@@ -90,22 +85,17 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
     % --- Clean
     if ~ok
         printInfo('end');
-        for k=1:opt.K
-            model.w(:,:,:,:,k)  = w0(:,:,:,:,k);
+        for k=1:opt.pg.K
+            model.pg.w(:,:,:,:,k)  = w0(:,:,:,:,k);
         end
-        model.ww(:) = ww0(:);
-        dat = batchProcess('Update', dat, model, opt1, ...
-            {'v', 'ipsi', 'iphi', 'pf', 'c', 'llm'}, ...
-            'clean', {'ipsi', 'iphi'});
-        model.armijo = min(1.1 * armijo, 100);
-        model.okw = -1;
+        model.pg.ww = ww0;
+        [dat, model] = pgra_batch('LB', 'Subspace', dat, model, opt1);
+        model.pg.armijo = min(1.1 * armijo, 100);
+        model.pg.ok = -1;
     else
-        model.ll  = ll;
-        model.llm = llm;
-        model.okw = 1;
+        model.pg.ok = 1;
     end
     rmarray(w0);
-    rmarray(ww0);
     rmarray(dw);
 
 end
@@ -117,7 +107,7 @@ function printInfo(which, oll, llm, llz, llw)
             fprintf('%10s | %10s | %10s = %10s + %10s + %10s  | %10s\n', 'LS PG', 'Armijo', 'RLL', 'LL-Match', 'RLL-Z', 'RLL-W', 'LL-Diff');
             fprintf([repmat('-', 1, 100) '\n']);
         elseif strcmpi(which, 'initial')
-            fprintf('%10s | %10s | %10.6g = %10.6g + %10.6g + %10.6g \n', 'LS PG', 'Initial', oll, llm, llz, llw);
+            fprintf('%10s | %10s | %10.4g = %10.4g + %10.4g + %10.4g \n', 'LS PG', 'Initial', oll, llm, llz, llw);
         elseif strcmpi(which, 'failed')
             fprintf(' | :(\n');
         elseif strcmpi(which, 'success')
@@ -128,6 +118,6 @@ function printInfo(which, oll, llm, llz, llw)
             fprintf([repmat('_', 1, 100) '\n']);
         end
     else
-        fprintf('%10s | %10.6g | %10.6g = %10.6g + %10.6g + %10.6g  | %10.6g ', 'LS PG', which, llm+llz+llw, llm, llz, llw, llm+llz+llw-oll);
+        fprintf('%10s | %10.4g | %10.4g = %10.4g + %10.4g + %10.4g  | %10.4g ', 'LS PG', which, llm+llz+llw, llm, llz, llw, llm+llz+llw-oll);
     end
 end
