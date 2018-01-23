@@ -1,5 +1,5 @@
 
-    N = 50;
+    N = 20;
     input_dir = '/Users/balbasty/Desktop/model/input';
     files     = spm_select('List', input_dir, '\.img$');
     if ~isfinite(N)
@@ -9,25 +9,16 @@
     for n=1:N
         fnames{n} = fullfile(input_dir, deblank(files(n,:)));
     end
-    
+    input   = struct;
+    input.f = fnames;
 
     opt              = struct;
-    opt.directory    = '/Users/balbasty/Desktop/model/output';
-    opt.fnames.dat.f = fnames;
+    opt.dir.model    = '/Users/balbasty/Desktop/model/output';
+    opt.dir.dat      = opt.dir.model;
     opt.model        = struct('name', 'categorical');
-    opt.K            = 10;
-    opt.prm          = [0 0.001 0.02 0.0025 0.005];
-    opt.emit         = 1000;
-    opt.gnit         = 1;
-    opt.par          = inf;
-    opt.loop         = 'subject';
-    opt.debug        = false;
-    opt.batch        = 10;
-    opt.nz0          = 0;
-    opt.wpz0         = [1 1];
-%     opt.fwhm         = 6;
-    opt.affine_basis = affine_basis('rigid', '2d');
-    opt.rind         = [];
+    opt.pg.prm       = [0 0.001 0.02 0.0025 0.005];
+    opt.split.par    = 0;
+    opt.pg.K         = 19;
 
-    [model, dat] = pgra_model(opt);
+    [model, dat] = pgra_model(input, opt);
     

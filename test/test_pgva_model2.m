@@ -21,8 +21,9 @@ opt = struct;
 opt.dir.model  = '/Users/balbasty/Desktop/model/outputvel2';
 opt.dir.dat    = opt.dir.model;
 opt.model      = struct('name', 'categorical');
-opt.pg.K       = 64;
-opt.split.par  = inf;
+opt.pg.K       = 19;
+opt.pg.prm     = [0 0.001 0.02 0.0025 0.005];
+opt.split.par  = 0;
 opt.pg.pgprior = true;
 
 % cluster

@@ -20,6 +20,10 @@ function [model, dat, opt] = pgva_model(varargin)
 %   q    = parameters of a rigid-body (or affine) transform, to align shapes
 %   a/mu = Template (i.e., mean shape)
 %
+% In this model, we alternate between explicitely fitting velocity fields
+% (v) by Gauss-Newton optimisation and computing closed-form solutions of 
+% the principal geodesic decomposition (W and z).
+%
 % -------------------------------------------------------------------------
 %
 % MANDATORY INPUT FILES
@@ -54,6 +58,7 @@ function [model, dat, opt] = pgva_model(varargin)
 % pg.K     - Number of principal geodesics [32]
 % pg.prm   - Parameters of the geodesic operator [1e-4 1e-3 0.2 0.05 0.2]
 % pg.bnd   - Boundary conditions for the geodesic operator [1 = circulant]
+% pg.geod  - Additional geodesic prior on velocity fields [true]
 % tpl.vs   - Lattice voxel size [auto]
 % tpl.lat  - Lattice dimensions [auto]
 % tpl.prm  - Parameters of the field operator [1e-3  1e-1 0]
@@ -164,8 +169,7 @@ function [model, dat, opt] = pgva_model(varargin)
     % -----------
     % Add to path
     % -----------
-    path = fileparts(which('pgva_model'));
-    addpath(fullfile(path, 'pgva'));
+    setpath('pgva');
     
     % ---------------------------------------------------------------------
     %    Initialisation
