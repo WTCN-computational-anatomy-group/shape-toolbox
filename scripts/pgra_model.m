@@ -189,6 +189,9 @@ function [model, dat, opt] = pgra_model(varargin)
         % Copy screen output to file
         % --------------------------
         if ~isempty(opt.fnames.log)
+            if exist(fullfile(opt.dir.model, opt.fnames.log), 'file')
+                delete(fullfile(opt.dir.model, opt.fnames.log));
+            end
             diary(fullfile(opt.dir.model, opt.fnames.log));
         end
         
@@ -219,13 +222,36 @@ function [model, dat, opt] = pgra_model(varargin)
         model.pg.ok2    = 0;
         model.pg.armijo = 1;
     end
-    plotAll(model, opt);
     
     % ---------------------------------------------------------------------
     %    EM iterations
     % ---------------------------------------------------------------------
     for emit = model.emit:opt.iter.em
-    
+        
+        % -----------------------------------------------------------------
+        %    Lower bound gain
+        % -----------------------------------------------------------------
+        model = updateLowerBound(model, 'gain');
+        
+        % -----------------------------------------------------------------
+        %    Save current state
+        % -----------------------------------------------------------------
+        if ~isempty(opt.fnames.result)
+            % Ensure nifti headers are ok
+            createAllNifti(dat, model, opt);
+            % Write workspace
+            ftrack = opt.ui.ftrack;
+            opt.ui.ftrack = nan;
+            save(fullfile(opt.dir.model, opt.fnames.result), ...
+                 'model', 'dat', 'opt');
+            opt.ui.ftrack = ftrack;
+        end
+        
+        plotAll(model, opt);
+        if ~isempty(opt.fnames.fig)
+            saveas(gcf, fullfile(opt.dir.model, opt.fnames.fig));
+        end
+        
         % -----------------------------------------------------------------
         %    General tracking
         % -----------------------------------------------------------------
@@ -502,23 +528,6 @@ function [model, dat, opt] = pgra_model(varargin)
             model = updateLowerBound(model);
             plotAll(model, opt);
             % -----------
-        end
-        
-        % -----------------------------------------------------------------
-        %    Lower bound gain
-        % -----------------------------------------------------------------
-        model = updateLowerBound(model, 'gain');
-        
-        % -----------------------------------------------------------------
-        %    Save current state
-        % -----------------------------------------------------------------
-        if ~isempty(opt.fnames.result)
-            createAllNifti(dat, model, opt);
-            ftrack = opt.ui.ftrack;
-            opt.ui.ftrack = nan;
-            save(fullfile(opt.dir.model, opt.fnames.result), ...
-                 'model', 'dat', 'opt');
-            opt.ui.ftrack = ftrack;
         end
     end
     

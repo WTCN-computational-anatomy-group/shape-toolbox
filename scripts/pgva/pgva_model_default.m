@@ -484,6 +484,9 @@ function opt = pgva_model_default(opt)
     if ~isfield(opt.fnames, 'log')
         opt.fnames.log = 'pgva_model.log';
     end
+    if ~isfield(opt.fnames, 'fig')
+        opt.fnames.fig = 'pgva_model_track.png';
+    end
     
     if ~isfield(opt.fnames, 'model')
         opt.fnames.model = struct;

@@ -142,6 +142,5 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     
     % Lower Bound
     % -----------
-    model = updateLowerBound(model);         % Accumulate lower bound parts
-    model = updateLowerBound(model, 'gain'); % Initialise gain
+    model = updateLowerBound(model);  % Accumulate lower bound parts
 end
