@@ -73,6 +73,47 @@ function [opt, dat, model] = pgva_model_data(opt, dat, model)
         end
     end
     
+    % Create background class if needed
+    if any(strcmpi(opt.model.name, {'categorical', 'multinomial'}))
+        for n=1:numel(dat)
+            if dat(n).f.observed
+                switch opt.model.nc - size(dat(n).f.f, 4)
+                    case 0
+                        % nothing to do
+                    case 1
+                        % create background class
+                            if isempty(opt.dir.dat)
+                                fname = {dat(n).f.f.fname};
+                                [path,fname,ext] = fileparts(fname{1});
+                                fname = fullfile(path, ['bg_' fname ext]);
+                            else
+                                fname = fullfile(opt.dir.dat, num2str(n), 'background.nii');
+                            end
+                            createDirectory(fileparts(fname));
+                            dim = [size(dat(n).f.f) 1];
+                            fa = file_array(fname, dim(1:3), 'float32');
+                            nii      = nifti;
+                            nii.mat  = dat(n).f.M;
+                            nii.mat0 = dat(n).f.M;
+                            nii.dat  = fa;
+                            create(nii);
+                            clear fa
+                            bg = ones(size(nii.dat), 'single');
+                            for k=1:opt.model.nc-1
+                                bg = bg - single(dat(n).f.f(:,:,:,k));
+                            end
+                            nii.dat(:,:,:) = bg;
+                            nii.dat.permission = 'ro';
+                            dat(n).f.f = cat(4, dat(n).f.f, nii.dat);
+                            clear nii
+                    otherwise
+                        error(['The number of existing classes must either ' ...
+                               'be %d or %d'], opt.model.nc, opt.model.nc-1);
+                end
+            end
+        end
+    end
+    
     % Create only non-existant variables
     level1 = fieldnames(opt.fnames.dat);
     for i=1:numel(level1)
@@ -114,7 +155,8 @@ function [opt, dat, model] = pgva_model_data(opt, dat, model)
             level2 = fieldnames(dat(n).(lv1));
             for j=1:numel(level2)
                 lv2 = level2{j};
-                if isa(dat(n).(lv1).(lv2), 'file_array')
+                if isa(dat(n).(lv1).(lv2), 'file_array') ...
+                        && ~any(strcmpi({dat(n).(lv1).(lv2).permission}, 'ro'))
                     createDirectory(fileparts(dat(n).(lv1).(lv2).fname));
                 end
             end
@@ -126,7 +168,8 @@ function [opt, dat, model] = pgva_model_data(opt, dat, model)
         level2 = fieldnames(model.(lv1));
         for j=1:numel(level2)
             lv2 = level2{j};
-            if isa(model.(lv1).(lv2), 'file_array')
+            if isa(model.(lv1).(lv2), 'file_array') ...
+                    && ~any(strcmpi({model.(lv1).(lv2).permission}, 'ro'))
                 createDirectory(fileparts(model.(lv1).(lv2).fname));
             end
         end

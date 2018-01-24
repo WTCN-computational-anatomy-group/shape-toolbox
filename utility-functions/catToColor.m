@@ -28,7 +28,11 @@ function c = catToColor(f, pal)
         color = reshape(pal(k,:), [1 1 3]);
         c = c + bsxfun(@times, f(:,:,k), color);
     end
-    c = bsxfun(@rdivide, c, s);
+    if dim(3) == 1
+        c = c / max(1, max(s(:)));
+    else
+        c = bsxfun(@rdivide, c, s);
+    end
 
     if tri
         c = reshape(c, [size(c, 1) size(c, 2) 1 size(c, 3)]);

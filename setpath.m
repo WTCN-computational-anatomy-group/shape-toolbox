@@ -23,9 +23,10 @@ function setonepath(component)
     path = fileparts(which('setpath'));
     switch component
         case 'common'
+            addpath(fullfile(path, 'backward-compatibility'));
             addpath(fullfile(path, 'utility-functions'));
-            if exist(fullfile(path, '..', 'utility-functions'), 'dir')
-                addpath(fullfile(path, '..', 'utility-functions'));
+            if exist(fullfile(path, '..', 'auxiliary-functions'), 'dir')
+                addpath(fullfile(path, '..', 'auxiliary-functions'));
             end
             if exist(fullfile(path, '..', 'distributed-computing'), 'dir')
                 addpath(fullfile(path, '..', 'distributed-computing'));
