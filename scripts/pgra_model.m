@@ -186,6 +186,12 @@ function [model, dat, opt] = pgra_model(varargin)
         opt             = pgra_model_default(opt);        % Read options
         [opt,dat,model] = pgra_model_data(opt,dat,model); % Set arrays
 
+        % Copy screen output to file
+        % --------------------------
+        if ~isempty(opt.fnames.log)
+            diary(fullfile(opt.dir.model, opt.fnames.log));
+        end
+        
         % Post-set parameters
         % -----------------------------------------------------------------
         % We store some values to avoid unneeded computation
@@ -516,25 +522,6 @@ function [model, dat, opt] = pgra_model(varargin)
         end
     end
     
-    
-        
-        fprintf('\n');
-        global_end = toc(global_start);
-        fprintf('%s || PGRA model errored\n', datestr(now));
-        fprintf('%20s || ', 'Elapsed time');
-        elapsed = datevec(global_end);
-        units   = {'year' 'month' 'day' 'hour' 'minute' 'second'};
-        for i=1:numel(elapsed)
-            if elapsed > 0
-                fprintf('%d %s', elpased(i), units{i});
-                if elpased > 1
-                    fprintf('s');
-                end
-                fprintf(', ')
-            end
-        end
-        fprintf('\n');
-    
 end
 
 % =========================================================================
@@ -561,6 +548,8 @@ function goodbye(global_start)
     end
     fprintf(['| ' str_end_2 repmat(' ', 1, 80-3-length(str_end_2)) '|\n']);
     fprintf([' ' repmat('-',1,78) ' \n\n']);
+    diary off
+    
 end
 
 % =========================================================================

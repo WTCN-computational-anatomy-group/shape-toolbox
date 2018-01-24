@@ -481,6 +481,9 @@ function opt = pgva_model_default(opt)
     if ~isfield(opt.fnames, 'result')
         opt.fnames.result = 'pgva_model.mat';
     end
+    if ~isfield(opt.fnames, 'log')
+        opt.fnames.log = 'pgva_model.log';
+    end
     
     if ~isfield(opt.fnames, 'model')
         opt.fnames.model = struct;

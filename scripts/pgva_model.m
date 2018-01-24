@@ -189,6 +189,12 @@ function [model, dat, opt] = pgva_model(varargin)
         opt             = pgva_model_default(opt);        % Read options
         [opt,dat,model] = pgva_model_data(opt,dat,model); % Set arrays
 
+        % Copy screen output to file
+        % --------------------------
+        if ~isempty(opt.fnames.log)
+            diary(fullfile(opt.dir.model, opt.fnames.log));
+        end
+        
         % Post-set parameters
         % -----------------------------------------------------------------
         % We store some values to avoid unneeded computation
@@ -511,6 +517,8 @@ function goodbye(global_start)
     end
     fprintf(['| ' str_end_2 repmat(' ', 1, 80-3-length(str_end_2)) '|\n']);
     fprintf([' ' repmat('-',1,78) ' \n\n']);
+    diary off
+    
 end
 
 
