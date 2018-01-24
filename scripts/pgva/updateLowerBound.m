@@ -49,6 +49,10 @@ function model = updateLowerBound(model, gain)
         var = vars{i};
         if ~strcmpi(var, 'lb')
             model.lb.lb.val = model.lb.lb.val + model.lb.(var).val;
+            if ~isfield(model.lb.(var), 'list')
+                model.lb.(var).list = [];
+            end
+            model.lb.(var).list = [model.lb.(var).list model.lb.(var).val];
         end
     end
     model.lb.lb.curlist = [model.lb.lb.curlist model.lb.lb.val];

@@ -77,9 +77,10 @@ function mu = updateMuBernoulliML(varargin)
     fwhm   = p.Results.fwhm;
     loop   = p.Results.loop;
     par    = p.Results.par;
+    output = p.Results.output;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* updateMuBernoulliML\n'); end;
+    if debug, fprintf('* updateMuBernoulliML\n'); end
 
     if isempty(lat)
         error('For now, the lattice size MUST be provided')
@@ -93,7 +94,7 @@ function mu = updateMuBernoulliML(varargin)
     
     switch lower(loop)
         case 'none'
-            if debug, fprintf('   - No loop\n'); end;
+            if debug, fprintf('   - No loop\n'); end
             mu = loopNone(f, c, bb, lat, output, fwhm);
         case 'slice'
             if debug
@@ -142,7 +143,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
                 end
             end
             tmpf = tmpf ./ tmpc(:,:,z);
-            tmpf = max(1-eps('single'), min(eps('single'), tmpf));
+            tmpf = min(1-eps('single'), max(eps('single'), tmpf));
             tmpf(~isfinite(tmpf)) = 0.5;
             tmpf = log(tmpf) - log(1 - tmpf);
             mu(:,:,z,:) = tmpf;
@@ -160,7 +161,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
                 end
             end
             tmpf = tmpf ./ tmpc(:,:,z);
-            tmpf = max(1-eps('single'), min(eps('single'), tmpf));
+            tmpf = min(1-eps('single'), max(eps('single'), tmpf));
             tmpf(~isfinite(tmpf)) = 0.5;
             tmpf = log(tmpf) - log(1 - tmpf);
             mu(:,:,z,:) = tmpf;
@@ -178,7 +179,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
                 end
             end
             tmpf = tmpf ./ tmpc(:,:,z);
-            tmpf = max(1-eps('single'), min(eps('single'), tmpf));
+            tmpf = min(1-eps('single'), max(eps('single'), tmpf));
             tmpf(~isfinite(tmpf)) = 0.5;
             tmpf = log(tmpf) - log(1 - tmpf);
             mu(:,:,z,:) = tmpf;
@@ -190,7 +191,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
     end
 end
 
-function mu = loopNone(f, c, bb, output)
+function mu = loopNone(f, c, bb, output, fwhm)
     
     if isempty(bb)
          bb1 = struct('x', 1:lat(1), 'y', 1:lat(2), 'z', 1:lat(3));
@@ -204,12 +205,12 @@ function mu = loopNone(f, c, bb, output)
         by = bb{n}.y;
         bz = bb{n}.z;
         mu(bx,by,bz)   = mu(bx,by,bz)   + single(numeric(f{n}));
-        tmpc(bx,by,bz) = tmpc(bx,by,bz) + single(numerci(c{n}));
+        tmpc(bx,by,bz) = tmpc(bx,by,bz) + single(numeric(c{n}));
     end
     mu   = smooth_gaussian(mu, fwhm);
     tmpc = smooth_gaussian(tmpc, fwhm);
     mu = mu ./ tmpc;
-    mu = max(1-eps('single'), min(eps('single'), mu));
+    mu = min(1-eps('single'), mimaxn(eps('single'), mu));
     mu(~isfinite(mu)) = 0.5;
     mu = log(mu) - log(1 - mu);
     

@@ -1,10 +1,10 @@
-function [Q, iQ, q] = gnScalePG(WW, ZZ, SZ, n0, N, q0)
-% FORMAT [Q, iQ] = gnScalePG(ww, zz, Sz, n0, N, q0)
+function [Q, iQ, q] = gnScalePG(WW, ZZ, SZ, A0, n0, N, q0)
+% FORMAT [Q, iQ] = pgva_scale_pg(ww, zz, Sz, l, A0, n0, N, q0)
 % ww  - W'LW
 %       > Must have been orthogonalised before.
-% zz  - 
+% zz  - Z*Z'
 %       > Must have been orthogonalised before.
-% Sz  - 
+% Sz  - cov[Z]
 %       > Must have been orthogonalised before.
 % n0  - Number of degrees of freedom of the Wishart prior
 % N   - Number of observations
@@ -14,18 +14,18 @@ function [Q, iQ, q] = gnScalePG(WW, ZZ, SZ, n0, N, q0)
     EZZ = ZZ + SZ;
     K = size(EZZ, 1);
 
-    if nargin < 6 || isempty(q0)
+    if nargin < 8 || isempty(q0)
         q0    = zeros(K,1)-0.5*log(N);
     end
 
     q    = min(max(q0,-10),10);  % Heuristic to avoid bad starting estimate
     Q    = diag(exp(q));
-    A    = spm_prob('Wishart', 'up', N, 0, Q*EZZ*Q, eye(K), n0); % suffstat update
+    A    = spm_prob('Wishart', 'up', N, 0, Q*EZZ*Q, A0, n0); % suffstat update
     E    = 0.5*(trace(Q*ZZ*Q*A) + trace(WW/(Q*Q)));
-    %fprintf('\n%d %g %g %g\n', 0, 0.5*trace(Q*ZZ1*Q*A), 0.5*trace(WW1*inv(Q*Q)), E)
+%     fprintf('\n%d %g %g %g %g\n', 0, 0.5*trace(Q*ZZ*Q*A), 0.5*trace(WW*inv(Q*Q)), l*trace(SZ*(Q\(WW/Q))), E)
 
     for iter=1:100
-        A   = spm_prob('Wishart', 'up', N, 0, Q*EZZ*Q, eye(K), n0);
+        A   = spm_prob('Wishart', 'up', N, 0, Q*EZZ*Q, A0, n0);
         oE0 = E;
 
         for subit=1:10
@@ -45,9 +45,33 @@ function [Q, iQ, q] = gnScalePG(WW, ZZ, SZ, n0, N, q0)
 
             oE = E;
             E  = 0.5*(trace(Q*ZZ*Q*A) + trace(WW/(Q*Q)));
-           %fprintf('%d %g %g %g\n', iter, 0.5*trace(Q*ZZ1*Q*A), 0.5*trace(WW1*inv(Q*Q)), E)
+%             fprintf('\n%d %g %g %g %g\n', 0, 0.5*trace(Q*ZZ*Q*A), 0.5*trace(WW*inv(Q*Q)), l*trace(SZ*(Q\(WW/Q))), E)
             if (oE-E)/E < 1e-8, break; end
         end
         if abs(oE0-E)/E < 1e-7, break; end
     end
     iQ = inv(Q);
+    
+% % Code for working out the gradients and Hessians
+% q   = sym('q',[3,1],'real');
+% Q   = diag(exp(q));
+% A   = sym('a',[3,3],'real');
+% ZZ1 = sym('x',[3,3],'real');
+% y   = sym('y',[3,1],'real');
+% WW1 = diag(y);
+% %%
+% E   = trace(Q*ZZ1*Q*A) + trace(WW1*inv(Q*Q));
+% %%
+% pretty(simplify(diff(E,sym('q1')),1000))
+% pretty(simplify(diff(diff(E,sym('q1')),sym('q2')),1000))
+% pretty(simplify(diff(diff(E,sym('q1')),sym('q1')),1000))
+% %%
+% g1 =  Q*(A.*ZZ1'+A'.*ZZ1)*diag(Q);
+% g2 = -Q^2\diag(WW1)*2;
+% g  =  g1+g2;
+% H1 =  Q*(A'.*ZZ1 + A.*ZZ1')*Q +diag(g1);
+% H2 =  4*WW1*Q^(-2);
+% H  =  H1+H2;
+% %%
+% d1  = simplify(g(1)  -diff(E,sym('q1')),1000)
+% d11 = simplify(H(1,1)-diff(diff(E,sym('q1')),sym('q1')),1000)

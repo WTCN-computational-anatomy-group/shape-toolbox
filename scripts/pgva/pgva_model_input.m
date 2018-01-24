@@ -17,21 +17,31 @@ function [opt, dat, model] = pgva_model_input(input, opt)
             end
             input.f = fnames;
         end
+        % Ensure that subjects are along the second dimension
+        if size(input.f, 2) == 1
+            input.f = input.f';
+        end
         % - Build data structure
-        f = cell(1, numel(input.f));
-        M = cell(1, numel(input.f));
-        for i=1:numel(input.f)
-            if ~exist(input.f{i}, 'file')
-                warning('Image %s does not exist. We''ll remove it.', input.f{i})
-                f = f(1:end-1);
-                M = M(1:end-1);
-            else
-                n = nifti(input.f{i});
-                n.dat.permission = 'ro';
-                f{i} = n.dat;
-                M{i} = n.mat0;
-                if numel(size(f{i})) > 4 && size(f{i}, 4) == 1
-                    f{i}.dim = [f{i}.dim(1:3) f{i}.dim(5:end)];
+        f = cell(1, size(input.f, 2));
+        M = cell(1, size(input.f, 2));
+        for i=1:size(input.f, 2)        % Subjects
+            for j=1:size(input.f, 1)    % Classes/Modalities
+                if ~exist(input.f{j,i}, 'file')
+                    warning('Image %s does not exist. We''ll remove it.', input.f{j,i})
+                    f = f(1:end-1);
+                    M = M(1:end-1);
+                else
+                    n = nifti(input.f{j,i});
+                    n.dat.permission = 'ro';
+                    if numel(size(n.dat)) > 4 && size(n.dat, 4) == 1
+                        n.dat.dim = [n.dat.dim(1:3) n.dat.dim(5:end)];
+                    end
+                    if isa(f{i}, 'file_array')
+                        f{i} = cat(4, f{i}, n.dat);
+                    else
+                        f{i} = n.dat;
+                        M{i} = n.mat0;
+                    end
                 end
             end
         end
@@ -46,7 +56,9 @@ function [opt, dat, model] = pgva_model_input(input, opt)
         else
             opt.model.dim = 3;
         end
-        opt.model.nc = size(f{1}, 4);
+        if ~isfield(opt, 'model') || ~isfield(opt.model, 'nc')
+            opt.model.nc = size(f{1}, 4);
+        end
     end
     
     % ---------------------------------------------------------------------

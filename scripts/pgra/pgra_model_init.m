@@ -44,8 +44,6 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     end
     if opt.optimise.pg.w
         model.lb.w.val  = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
-        model.lb.w.list = model.lb.w.val;
-        model.lb.w.it   = 0;
         model.lb.w.type = 'll';
         model.lb.w.name = 'Subspace prior';
     end
@@ -55,8 +53,6 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     model.q.A = opt.q.A0;
     if opt.optimise.q.A
         model.lb.Aq.val  = 0;
-        model.lb.Aq.list = 0;
-        model.lb.Aq.it   = 0;
         model.lb.Aq.type = 'kl';
         model.lb.Aq.name = '-KL Affine precision';
     end
@@ -66,8 +62,6 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     model.z.A = opt.z.A0;
     if opt.optimise.z.A
         model.lb.Az.val  = 0;
-        model.lb.Az.list = 0;
-        model.lb.Az.it   = 0;
         model.lb.Az.type = 'kl';
         model.lb.Az.name = '-KL Latent precision';
     end
@@ -77,8 +71,6 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     model.r.l = opt.r.l0;
     if opt.optimise.r.l
         model.lb.l.val  = 0;
-        model.lb.l.list = 0;
-        model.lb.l.it   = 0;
         model.lb.l.type = 'kl';
         model.lb.l.name = '-KL Residual precision';
     end
@@ -126,24 +118,18 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     % Affine coordinates
     % ------------------
     [dat, model]    = pgra_batch('InitAffine', 'zero', dat, model, opt);
-    model.lb.q.list = model.lb.q.val;
-    model.lb.q.it   = 0;
     model.lb.q.type = 'kl';
     model.lb.q.name = '-KL Affine';
         
     % Latent coordinates
     % ------------------
     [dat, model] = pgra_batch('InitLatent', opt.z.init, dat, model, opt);
-    model.lb.z.list = model.lb.z.val;
-    model.lb.z.it   = 0;
     model.lb.z.type = 'kl';
     model.lb.z.name = '-KL Latent';
 
     % Velocity
     % --------
     [dat, model] = pgra_batch('InitResidual', 'zero', dat, model, opt);
-    model.lb.r.list = model.lb.r.val;
-    model.lb.r.it   = 0;
     model.lb.r.type = 'kl';
     model.lb.r.name = '-KL Residual';
     
@@ -151,8 +137,6 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     % -------------
 %     [dat, model] = pgra_batch('InitPull', dat, model, opt);
     [dat, model] = pgra_batch('LB', 'Matching', dat, model, opt);
-    model.lb.m.list = model.lb.m.val;
-    model.lb.m.it   = 0;
     model.lb.m.type = 'll';
     model.lb.m.name = 'Matching likelihood';
     

@@ -44,8 +44,6 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     end
     if opt.optimise.pg.w
         model.lb.w.val  = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
-        model.lb.w.list = model.lb.w.val;
-        model.lb.w.it   = 0;
         model.lb.w.type = 'll';
         model.lb.w.name = 'Subspace prior';
     end
@@ -56,8 +54,6 @@ function [dat, model] = pgva_model_init(dat, model, opt)
         model.q.A = opt.q.A0;
         if opt.optimise.q.A
             model.lb.Aq.val  = 0;
-            model.lb.Aq.list = 0;
-            model.lb.Aq.it   = 0;
             model.lb.Aq.type = 'kl';
             model.lb.Aq.name = '-KL Affine precision';
         end
@@ -68,8 +64,6 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     model.z.A = opt.z.A0;
     if opt.optimise.z.A
         model.lb.Az.val  = 0;
-        model.lb.Az.list = 0;
-        model.lb.Az.it   = 0;
         model.lb.Az.type = 'kl';
         model.lb.Az.name = '-KL Latent precision';
     end
@@ -79,8 +73,6 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     model.v.l = opt.v.l0;
     if opt.optimise.v.l
         model.lb.l.val  = 0;
-        model.lb.l.list = 0;
-        model.lb.l.it   = 0;
         model.lb.l.type = 'kl';
         model.lb.l.name = '-KL Residual precision';
     end
@@ -137,8 +129,6 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     % ------------------
     if opt.f.N
         [dat, model]    = pgva_batch('InitAffine', 'zero', dat, model, opt);
-        model.lb.q.list = model.lb.q.val;
-        model.lb.q.it   = 0;
         model.lb.q.type = 'kl';
         model.lb.q.name = '-KL Affine';
     end
@@ -146,8 +136,6 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     % Latent coordinates
     % ------------------
     [dat, model] = pgva_batch('InitLatent', opt.z.init, dat, model, opt);
-    model.lb.z.list = model.lb.z.val;
-    model.lb.z.it   = 0;
     model.lb.z.type = 'kl';
     model.lb.z.name = '-KL Latent';
 
@@ -156,15 +144,11 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     [dat, model] = pgva_batch('InitVelocity', 'zero', dat, model, opt);
     % v1 concerns latent velocity fields
     if opt.f.N
-        model.lb.v1.list = model.lb.v1.val;
-        model.lb.v1.it   = 0;
         model.lb.v1.type = 'kl';
         model.lb.v1.name = '-KL Velocity';
     end
     % v2 concerns observed velocity fields
     if opt.v.N
-        model.lb.v2.list = model.lb.v2.val;
-        model.lb.v2.it   = 0;
         model.lb.v2.type = 'll';
         model.lb.v2.name = 'Velocity likelihood';
     end
@@ -174,8 +158,6 @@ function [dat, model] = pgva_model_init(dat, model, opt)
 %     [dat, model] = pgva_batch('InitPull', dat, model, opt);
     [dat, model] = pgva_batch('LB', 'Matching', dat, model, opt);
     if opt.f.N
-        model.lb.m.list = model.lb.m.val;
-        model.lb.m.it   = 0;
         model.lb.m.type = 'll';
         model.lb.m.name = 'Matching likelihood';
     end

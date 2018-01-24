@@ -55,7 +55,7 @@ function createDat(dat, prm, Mf)
                     end
                     if isa(dat(n).(field), 'file_array') ...
                             && checkarray(dat(n).(field)) ...
-                            && ~strcmpi(dat(n).(field).permission, 'ro')
+                            && ~any(strcmpi({dat(n).(field).permission}, 'ro'))
                         nii         = nifti;
                         nii.mat0    = Mf;
                         nii.mat     = Mf;
@@ -93,7 +93,7 @@ function createModel(model, prm, Mmu)
             end
             if isa(model.(field), 'file_array') ...
                     && checkarray(model.(field)) ...
-                    && ~strcmpi(model.(field).permission, 'ro')
+                    && ~any(strcmpi({model.(field).permission}, 'ro'))
                 nii         = nifti;
                 nii.mat0    = Mmu;
                 nii.mat     = Mmu;
