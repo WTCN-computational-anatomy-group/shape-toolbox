@@ -1381,11 +1381,11 @@ function dat = oneLB(dat, model, opt, which)
         % Update after orthogonalisation
         % ------------------------------
         % Here, no need to recompute terms depending on Wz
-        dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
         dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
                                - spm_matcomp('LogDet', model.z.A) ...
                                - spm_matcomp('LogDet', dat.z.S) ...
                                - opt.pg.K );
+        return
         
 
     elseif any(strcmpi(which, {'latent', 'subspace'}))
