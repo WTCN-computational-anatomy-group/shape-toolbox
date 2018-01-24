@@ -186,6 +186,15 @@ function [model, dat, opt] = pgra_model(varargin)
         opt             = pgra_model_default(opt);        % Read options
         [opt,dat,model] = pgra_model_data(opt,dat,model); % Set arrays
 
+        % Copy screen output to file
+        % --------------------------
+        if ~isempty(opt.fnames.log)
+            if exist(fullfile(opt.dir.model, opt.fnames.log), 'file')
+                delete(fullfile(opt.dir.model, opt.fnames.log));
+            end
+            diary(fullfile(opt.dir.model, opt.fnames.log));
+        end
+        
         % Post-set parameters
         % -----------------------------------------------------------------
         % We store some values to avoid unneeded computation
@@ -213,13 +222,36 @@ function [model, dat, opt] = pgra_model(varargin)
         model.pg.ok2    = 0;
         model.pg.armijo = 1;
     end
-    plotAll(model, opt);
     
     % ---------------------------------------------------------------------
     %    EM iterations
     % ---------------------------------------------------------------------
     for emit = model.emit:opt.iter.em
-    
+        
+        % -----------------------------------------------------------------
+        %    Lower bound gain
+        % -----------------------------------------------------------------
+        model = updateLowerBound(model, 'gain');
+        
+        % -----------------------------------------------------------------
+        %    Save current state
+        % -----------------------------------------------------------------
+        if ~isempty(opt.fnames.result)
+            % Ensure nifti headers are ok
+            createAllNifti(dat, model, opt);
+            % Write workspace
+            ftrack = opt.ui.ftrack;
+            opt.ui.ftrack = nan;
+            save(fullfile(opt.dir.model, opt.fnames.result), ...
+                 'model', 'dat', 'opt');
+            opt.ui.ftrack = ftrack;
+        end
+        
+        plotAll(model, opt);
+        if ~isempty(opt.fnames.fig)
+            saveas(gcf, fullfile(opt.dir.model, opt.fnames.fig));
+        end
+        
         % -----------------------------------------------------------------
         %    General tracking
         % -----------------------------------------------------------------
@@ -497,43 +529,7 @@ function [model, dat, opt] = pgra_model(varargin)
             plotAll(model, opt);
             % -----------
         end
-        
-        % -----------------------------------------------------------------
-        %    Lower bound gain
-        % -----------------------------------------------------------------
-        model = updateLowerBound(model, 'gain');
-        
-        % -----------------------------------------------------------------
-        %    Save current state
-        % -----------------------------------------------------------------
-        if ~isempty(opt.fnames.result)
-            createAllNifti(dat, model, opt);
-            ftrack = opt.ui.ftrack;
-            opt.ui.ftrack = nan;
-            save(fullfile(opt.dir.model, opt.fnames.result), ...
-                 'model', 'dat', 'opt');
-            opt.ui.ftrack = ftrack;
-        end
     end
-    
-    
-        
-        fprintf('\n');
-        global_end = toc(global_start);
-        fprintf('%s || PGRA model errored\n', datestr(now));
-        fprintf('%20s || ', 'Elapsed time');
-        elapsed = datevec(global_end);
-        units   = {'year' 'month' 'day' 'hour' 'minute' 'second'};
-        for i=1:numel(elapsed)
-            if elapsed > 0
-                fprintf('%d %s', elpased(i), units{i});
-                if elpased > 1
-                    fprintf('s');
-                end
-                fprintf(', ')
-            end
-        end
-        fprintf('\n');
     
 end
 
@@ -561,6 +557,8 @@ function goodbye(global_start)
     end
     fprintf(['| ' str_end_2 repmat(' ', 1, 80-3-length(str_end_2)) '|\n']);
     fprintf([' ' repmat('-',1,78) ' \n\n']);
+    diary off
+    
 end
 
 % =========================================================================

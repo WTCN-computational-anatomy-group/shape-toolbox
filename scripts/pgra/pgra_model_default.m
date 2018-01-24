@@ -487,7 +487,13 @@ function opt = pgra_model_default(opt)
     % ---------------------------------------------------------------------
     
     if ~isfield(opt.fnames, 'result')
-        opt.fnames.result = 'pgva_model.mat';
+        opt.fnames.result = 'pgra_model.mat';
+    end
+    if ~isfield(opt.fnames, 'log')
+        opt.fnames.log = 'pgra_model.log';
+    end
+    if ~isfield(opt.fnames, 'fig')
+        opt.fnames.fig = 'pgra_model_track.png';
     end
     
     if ~isfield(opt.fnames, 'model')
