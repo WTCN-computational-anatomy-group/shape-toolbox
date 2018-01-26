@@ -1244,7 +1244,7 @@ function [dat, model] = batchFitResidual(dat, model, opt)
     end
     
     % --- Batch processing
-    if opt.ui.verbose, before = plotBatchBegin('Fit Vel'); end
+    if opt.ui.verbose, before = plotBatchBegin('Fit Res'); end
     for i=1:ceil(N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(N, i*batch);
