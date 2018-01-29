@@ -108,6 +108,11 @@ function [dat, model] = pgra_model_init(dat, model, opt)
                                      'debug',  opt.ui.debug, ...
                                      'output', model.tpl.gmu);
     end
+    if strcmpi(opt.match, 'pull')
+        [dat, model] = pgra_batch('InitPull', dat, model, opt);
+    else
+        [dat, model] = pgra_batch('LB', 'Matching', dat, model, opt);
+    end
     
     % ---------------------------------------------------------------------
     %    Individual parameters
@@ -135,8 +140,6 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     
     % Matching term
     % -------------
-%     [dat, model] = pgra_batch('InitPull', dat, model, opt);
-    [dat, model] = pgra_batch('LB', 'Matching', dat, model, opt);
     model.lb.m.type = 'll';
     model.lb.m.name = 'Matching likelihood';
     

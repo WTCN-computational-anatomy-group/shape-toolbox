@@ -86,25 +86,25 @@ function [wa, ga] = pullTemplate(phi, a, varargin)
         if compute_image
             for k=1:nc
                 [wa(:,:,:,k), ga(:,:,:,k,1), ga(:,:,:,k,2), ga(:,:,:,k,3)] ...
-                    = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [itrp bnd]);
+                    = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [1 1 1  1 1 1]);
             end
         else
             for k=1:nc
                 [~, ga(:,:,:,k,1), ga(:,:,:,k,2), ga(:,:,:,k,3)] ...
-                    = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [itrp bnd]);
+                    = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [1 1 1  1 1 1]);
             end
         end
     elseif ~par
         for k=1:nc
-            wa(:,:,:,k) = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [itrp bnd]);
+            wa(:,:,:,k) = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [1 1 1  1 1 1]);
         end
     elseif isa(f, 'file_array')
         parfor (k=1:nc, par)
-            wa(:,:,:,k) = spm_diffeo('bsplins', single(slicevol(a, k, 4)), single(numeric(phi)), [itrp bnd]);
+            wa(:,:,:,k) = spm_diffeo('bsplins', single(slicevol(a, k, 4)), single(numeric(phi)), [1 1 1  1 1 1]);
         end
     else
         parfor (k=1:nc, par)
-            wa(:,:,:,k) = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [itrp bnd]);
+            wa(:,:,:,k) = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [1 1 1  1 1 1]);
         end
     end
     

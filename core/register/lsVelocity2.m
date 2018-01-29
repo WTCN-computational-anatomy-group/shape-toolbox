@@ -35,8 +35,6 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
 % Mmu   - Template voxel-to-world mapping [eye(4)]
 %
 % match  - Mode for computing thr matching term: ['pull']/'push'
-% itrp   - Template interpolation order (if match is 'pull') [1]
-% tplbnd - Template boundary condition (if match is 'pull') [1]
 %
 % nit  - Number of line-search iterations [6]
 % loop - How to split processing [auto]
@@ -51,11 +49,13 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
 % ------
 % Structure with fields:
 %     ok    - True if a better parameter value was found
+% And if ok == true:
 %     v     - New initial velocity
 %     match - New log-likelihood (matching term)
 %     pf    - New pushed image 
 %     c     - New pushed voxel count
 %     wmu   - New pulled template
+%    ipsi   - New complete affine+diffeomorphic mapping
 %
 %--------------------------------------------------------------------------
 % 
@@ -98,8 +98,6 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     p.addParameter('Mmu',   eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     
     p.addParameter('match', 'pull', @ischar);
-    p.addParameter('itrp', 1, @(X) isscalar(X) && isnumeric(X) );
-    p.addParameter('tplbnd', 1, @(X) isscalar(X) && isnumeric(X) );
     
     p.addParameter('nit',  6,     @isscalar);
     p.addParameter('par',  false, @isscalar);
@@ -128,14 +126,11 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     Mf      = p.Results.Mf;
     Mmu     = p.Results.Mmu;
     
-    matchmode = p.Results.match;
-    itrp      = p.Results.itrp;
-    tplbnd    = p.Results.tplbnd;
-    
     nit     = p.Results.nit;
     par     = p.Results.par;
     loop    = p.Results.loop;
     
+    matchmode = p.Results.match;
     pf      = p.Results.pf;
     c       = p.Results.c;
     wa      = p.Results.wa;
@@ -255,10 +250,7 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     if verbose, printInfo('end'); end
     
     result       = struct;
-    result.ok    = ok;
-    result.match = match0;
-    result.v     = v0;
-    result.r     = r0;
+    result.ok    = false;
     if ~isa(pf, 'file_array')
         [path, name, ext] = fileparts(pf.fname);
         copyfile(pf.fname, fullfile(path, [name(1:end-4) ext]));

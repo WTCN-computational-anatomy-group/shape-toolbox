@@ -243,11 +243,13 @@ function dat = oneInitPull(dat, model, opt)
     % Matching likelihood
     % -------------------
     dat.f.lb.type = 'll';
-%     dat.f.lb.val  = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
-%                                'loop', loop, 'par', par);
-    dat.f.lb.val  = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
-                               'loop', loop, 'par', par, 'bb', dat.f.bb);
-
+    if strcmpi(opt.match, 'pull')
+        dat.f.lb.val  = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
+                                   'loop', loop, 'par', par);
+    else
+        dat.f.lb.val  = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
+                                   'loop', loop, 'par', par, 'bb', dat.f.bb);
+    end
 end
 
 function [dat, model] = batchInitPull(dat, model, opt)
@@ -911,33 +913,39 @@ function dat = oneFitLatent(dat, model, opt)
 
             % Line search
             % -----------
-            [okz, z, llm, ~, v, ~, pf, c, bb] = lsLatent(...
+            result = lsLatent(...
                 noisemodel, dz, dat.z.z, dat.v.v, dat.f.lb.val, ...
                 model.pg.w, model.tpl.mu, dat.f.f, ...
                 'regz', model.z.A + opt.pg.geod * model.pg.ww, ...
                 'A', dat.q.A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
                 'nit', opt.iter.ls, 'itgr', opt.iter.itg, ...
                 'prm', opt.pg.prm, 'bnd', opt.pg.bnd, ...
+                'match', opt.match, ...
                 'par', par, 'loop', loop, ...
-                'verbose', verbose, 'debug', opt.ui.debug);
+                'verbose', verbose, 'debug', opt.ui.debug, ...
+                'pf', dat.f.pf, 'c', dat.f.c, 'wa', dat.tpl.wa, 'wmu', dat.tpl.wmu);
 
             % Store better values
             % -------------------
-            cumok = cumok || okz;
-            compute_hessian = okz;
-            if okz
-                dat.z.z       = z;
-                dat.z.zz      = z * z';
-                dat.f.lb.val  = llm;
-                dat.v.v(:)    = v(:);
-                dat.f.pf      = prepareOnDisk(dat.f.pf, size(pf));
-                dat.f.pf(:)   = pf(:);
-                dat.f.c       = prepareOnDisk(dat.f.c, size(c));
-                dat.f.c(:)    = c(:);
-                dat.f.bb      = bb;
+            cumok = cumok || result.ok;
+            compute_hessian = result.ok;
+            if result.ok
+                dat.z.z       = result.z;
+                dat.z.zz      = result.z * result.z';
+                dat.f.lb.val  = result.llm;
+                dat.v.v       = copyarray(result.v,    dat.v.v);
+                dat.v.iphi    = copyarray(result.iphi, dat.v.iphi);
+                dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
+                dat.f.pf      = copyarray(result.pf,   dat.f.pf);
+                dat.f.c       = copyarray(result.c,    dat.f.c);
+                dat.f.bb      = result.bb;
+                if strcmpi(opt.match, 'pull')
+                    dat.tpl.wmu = copyarray(result.wmu, dat.tpl.wmu);
+                end
             else
                 break
             end
+            clear result
 
         end % < GN iterations
         if cumok
@@ -1110,11 +1118,10 @@ function dat = oneFitResidual(dat, model, opt)
                 'v0', v, 'lam', model.r.l + opt.pg.geod, 'prm', opt.pg.prm, ...
                 'itgr', opt.iter.itg, 'bnd', opt.pg.bnd, ...
                 'A', A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
-                'match', 'push', ...
+                'match', opt.match, ...
                 'nit', opt.iter.ls,  'par', par, 'loop', loop, ...
                 'verbose', verbose, 'debug', opt.ui.debug, ...
                 'pf', dat.f.pf, 'c', dat.f.c, 'wa', dat.tpl.wa, 'wmu', dat.tpl.wmu);
-%                 'match', 'pull', 'itrp', opt.tpl.itrp, 'tplbnd', opt.tpl.bnd, ...
 
             % Store better values
             % -------------------
@@ -1122,24 +1129,13 @@ function dat = oneFitResidual(dat, model, opt)
             compute_hessian = result.ok;
             if result.ok
                 dat.f.lb.val  = result.match;
-                dat.v.v       = prepareOnDisk(dat.v.v, size(result.v));
-                dat.v.v(:)    = result.v(:);
-                dat.v.r       = prepareOnDisk(dat.v.r, size(result.r));
-                dat.v.r(:)    = result.r(:);
-                if isfield(result, 'pf')
-                    dat.f.pf = result.pf;
-                end
-                if isfield(result, 'c')
-                    dat.f.c = result.c;
-                end
-                if isfield(result, 'bb')
-                    dat.f.bb = result.bb;
-                end
-                if isfield(result, 'wa')
-                    dat.tpl.wmu = result.wmu;
-                end
-                if isfield(result, 'wmu')
-                    dat.tpl.wmu = result.wmu;
+                dat.v.v       = copyarray(result.v,  dat.v.v);
+                dat.v.r       = copyarray(result.r,  dat.v.r);
+                dat.f.pf      = copyarray(result.pf, dat.f.pf);
+                dat.f.c       = copyarray(result.c,  dat.f.c);
+                dat.f.bb      = result.bb;
+                if strcmpi(opt.match, 'pull')
+                    dat.tpl.wmu   = copyarray(result.wmu, dat.tpl.wmu);
                 end
                 r = result.r;
             else
@@ -1385,12 +1381,13 @@ function dat = oneLB(dat, model, opt, which)
     switch lower(which)
         
         case 'matching'
-%             dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
-%                                       'par', par, 'loop', loop, ...
-%                                       'debug', opt.ui.debug);
-            dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
-                                      'par', par, 'loop', loop, ...
-                                      'debug', opt.ui.debug, 'bb', dat.f.bb);
+            if strcmpi(opt.match, 'pull')
+                dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
+                    'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            else
+                dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
+                    'bb', dat.f.bb, 'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            end
         
         case 'precisionz'
             dat.z.lb.val = -0.5*( trace((dat.z.zz + dat.z.S)*(model.z.A + opt.pg.geod * model.pg.ww)) ...
@@ -1431,9 +1428,13 @@ function dat = oneLB(dat, model, opt, which)
                                                       'loop', loop, 'par', par, ...
                                                       'debug', opt.ui.debug);
             clear ipsi
-            dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
-                                      'par', par, 'loop', loop, ...
-                                      'debug', opt.ui.debug, 'bb', dat.f.bb);
+            if strcmpi(opt.match, 'pull')
+                dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
+                    'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            else
+                dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
+                    'bb', dat.f.bb, 'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            end
             dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
                                    - spm_matcomp('LogDet', model.z.A) ...
                                    - spm_matcomp('LogDet', dat.z.S) ...
