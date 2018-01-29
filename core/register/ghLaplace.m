@@ -56,7 +56,6 @@ function [g, h, htype] = ghLaplace(mu, f, varargin)
     p.FunctionName = 'ghLaplace';
     p.addRequired('mu',  @checkarray);
     p.addRequired('f',   @checkarray);
-    p.addRequired('c',   @checkarray);
     p.addOptional('b',   1,  @checkarray);
     p.addOptional('gmu', []);
     p.addParameter('count',  [],     @(X) isnumeric(X) || isa(X, 'file_array'));

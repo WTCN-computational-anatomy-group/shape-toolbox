@@ -41,8 +41,15 @@ function ipsi = reconstructIPsi(A, iphi, varargin)
     lat = lat(1:3);
     
     % --- Reconstruct
-    id   = spm_warps('identity', lat);
-    ipsi = spm_warps('compose', iphi, Mmu \ (A \ Mf), id);
+    % Assume phi is encoded by splines coeffs
+    ixi  = spm_warps('affine', Mmu \ (A \ Mf), [lat 3]);
+    id   = single(spm_warps('identity', size(iphi)));
+    ipsi = single(spm_warps('identity', size(ixi)));
+    for d=1:size(ipsi, 4)
+        ipsi(:,:,:,d) = ipsi(:,:,:,d) + spm_diffeo('bsplins', ...
+            single(iphi(:,:,:,d)-id(:,:,:,d)), single(ixi), [1 1 1  1 1 1]);
+    end
+    clear ixi id iphi
     
     % --- Write on disk
     if ~isempty(p.Results.output)

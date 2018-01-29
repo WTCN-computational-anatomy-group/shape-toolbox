@@ -14,6 +14,10 @@ function opt = pgra_model_default(opt)
     %    MODEL
     % =====================================================================
     
+    if ~isfield(opt, 'match')
+        opt.match = 'pull';
+    end
+    
     % ---------------------------------------------------------------------
     % Data model
     % ---------------------------------------------------------------------
@@ -214,6 +218,12 @@ function opt = pgra_model_default(opt)
         % Number of integration steps for shooting equations
         % (NaN = try to guess something efficient)
         opt.iter.itg = nan;
+    end
+    if ~isfield(opt.iter, 'pena')
+        % Penalise GN failure by freezing variables for a given number of
+        % iterations (we use a heuristic to choose the number of frozen
+        % updates)
+        opt.iter.pena = true;
     end
     
     % ---------------------------------------------------------------------
@@ -421,7 +431,11 @@ function opt = pgra_model_default(opt)
         opt.ondisk.dat.v.iphi = false;
     end
     if ~isfield(opt.ondisk.dat.v, 'ipsi')
-        opt.ondisk.dat.v.ipsi = true;
+        if strcmpi(opt.match, 'pull')
+            opt.ondisk.dat.v.ipsi = true;
+        else
+            opt.ondisk.dat.v.ipsi = false;
+        end
     end
     if ~isfield(opt.ondisk.dat.v, 'phi')
         opt.ondisk.dat.v.phi = false;

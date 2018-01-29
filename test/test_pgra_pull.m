@@ -1,5 +1,5 @@
 
-    N = 20;
+    N = 50;
     input_dir = '/Users/balbasty/Desktop/model/input';
     files     = spm_select('List', input_dir, '\.img$');
     if ~isfinite(N)
@@ -19,6 +19,7 @@
     opt.pg.prm       = [0 0.001 0.02 0.0025 0.005];
     opt.split.par    = 0;
     opt.pg.K         = 19;
+    opt.lb.threshold = 1e-15;
     opt.optimise.pg.w = false;
     opt.optimise.z.z  = false;
     opt.optimise.z.A  = false;

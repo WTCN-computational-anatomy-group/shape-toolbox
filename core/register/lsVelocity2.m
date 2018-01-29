@@ -35,8 +35,6 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
 % Mmu   - Template voxel-to-world mapping [eye(4)]
 %
 % match  - Mode for computing thr matching term: ['pull']/'push'
-% itrp   - Template interpolation order (if match is 'pull') [1]
-% tplbnd - Template boundary condition (if match is 'pull') [1]
 %
 % nit  - Number of line-search iterations [6]
 % loop - How to split processing [auto]
@@ -46,18 +44,18 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
 % c    - file array where to store output pushed count
 % wa   - file array where to store output pulled log-template
 % wmu  - file array where to store output pulled template
-% wgmu - file array where to store output pulled grad template
 %
 % OUTPUT
 % ------
 % Structure with fields:
 %     ok    - True if a better parameter value was found
+% And if ok == true:
 %     v     - New initial velocity
 %     match - New log-likelihood (matching term)
 %     pf    - New pushed image 
 %     c     - New pushed voxel count
 %     wmu   - New pulled template
-%     wgmu  - New pulled grad template
+%    ipsi   - New complete affine+diffeomorphic mapping
 %
 %--------------------------------------------------------------------------
 % 
@@ -100,8 +98,6 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     p.addParameter('Mmu',   eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     
     p.addParameter('match', 'pull', @ischar);
-    p.addParameter('itrp', 1, @(X) isscalar(X) && isnumeric(X) );
-    p.addParameter('tplbnd', 1, @(X) isscalar(X) && isnumeric(X) );
     
     p.addParameter('nit',  6,     @isscalar);
     p.addParameter('par',  false, @isscalar);
@@ -111,7 +107,6 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     p.addParameter('c',   nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('wa',  nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('wmu', nan, @(X) isnumeric(X) || isa(X, 'file_array'));
-    p.addParameter('wgmu',nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     
     p.addParameter('verbose', false, @isscalar);
     p.addParameter('debug',   false, @isscalar);
@@ -131,19 +126,15 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     Mf      = p.Results.Mf;
     Mmu     = p.Results.Mmu;
     
-    matchmode = p.Results.match;
-    itrp      = p.Results.itrp;
-    tplbnd    = p.Results.tplbnd;
-    
     nit     = p.Results.nit;
     par     = p.Results.par;
     loop    = p.Results.loop;
     
+    matchmode = p.Results.match;
     pf      = p.Results.pf;
     c       = p.Results.c;
     wa      = p.Results.wa;
     wmu     = p.Results.wmu;
-    wgmu    = p.Results.wgmu;
     
     verbose = p.Results.verbose;
     debug   = p.Results.debug;
@@ -209,19 +200,15 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
         v    = single(v0 + dv / armijo);
         iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vs, 'prm', prm, 'bnd', bnd, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
-        clear iphi
         if strcmpi(matchmode, 'push')
             [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
             match = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
         elseif strcmpi(matchmode, 'pull')
             if cat
-                wa = warp(ipsi, mu, itrp, tplbnd, 'par', par, 'output', wa, 'debug', debug);
+                wa = pullTemplate(ipsi, mu, 'par', par, 'output', wa, 'debug', debug);
                 wmu = reconstructProbaTemplate(wa, 'output', wmu, 'loop', loop, 'par', par, 'debug', debug);
-                if ~isa(wa, 'file_array')
-                    clear wa
-                end
             else
-                wmu = warp(ipsi, mu, itrp, tplbnd, 'par', par, 'output', wmu, 'debug', debug);
+                wmu = pullTemplate(ipsi, mu, 'par', par, 'output', wmu, 'debug', debug);
             end
             match = llMatching(model, wmu, f, 'par', par, 'loop', loop, 'debug', debug);
         end
@@ -245,11 +232,12 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
             result.match = match;
             result.v = v;
             result.r = r;
+            result.iphi = iphi;
+            result.ipsi = ipsi;
             if strcmpi(matchmode, 'pull')
                 [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
-                result.wmu  = wmu;
-                result.wgmu = warp(ipsi, mu, itrp, tplbnd, 'grad', true, 'par', par, 'output', wgmu, 'debug', debug);
-                result.ipsi = ipsi;
+                result.wmu = wmu;
+                result.wa = wa;
             end
             result.pf = pf;
             result.c  = c;
@@ -261,11 +249,7 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     if verbose, printInfo('end'); end
     
     result       = struct;
-    result.ok    = ok;
-    result.match = match0;
-    result.v     = v0;
-    result.r     = r0;
-    result.wgmu  = wgmu;
+    result.ok    = false;
     if ~isa(pf, 'file_array')
         [path, name, ext] = fileparts(pf.fname);
         copyfile(pf.fname, fullfile(path, [name(1:end-4) ext]));

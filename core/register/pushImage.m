@@ -1,21 +1,39 @@
 function [pf, c, bb] = pushImage(ipsi, f, varargin)
-% FORMAT ([pf, (c), (bb)]) = pushImage(ipsi, f, (lat), ('loop', loop), ('par', par))
+% _________________________________________________________________________
 %
-% ** Required **
+% Push the image to template space
+%
+% -------------------------------------------------------------------------
+%
+% FORMAT ([pf, (c), (bb)]) = pushImage(ipsi, f, (lat), ...)
+%
+% REQUIRED
+% --------
 % ipsi - Inverse transform (warps mu to f).
 % f    - Observed image.
-% ** Optional **
+%
+% OPTIONAL
+% --------
 % lat  - Output lattice [same as input]
-% ** Keyword arguments **
-% loop - How to split processing ('none', 'component') [auto]
-% par  - If true, parallelise processing [false]
-% ** Output **
-% pf   - Pushed image in template space
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% loop   - How to split processing ('none', 'component') [auto]
+% par    - If true, parallelise processing over classes/modalities [false]
+% output - Cell of file_array to use as output [return numeric array]
+% debug  - Print debugging info [false]
+%
+% OUTPUT
+% ------
+% pf   - Pushed image in template space 
 % c    - Pushed voxel count
 % bb   - Bounding box: correspondance between lat indices and the saved
 %        volume
 %
-% Push the image to template space
+% -------------------------------------------------------------------------
+% - Interpolation is trilinear.
+% - Boundary conditions are circulant.
+% _________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;

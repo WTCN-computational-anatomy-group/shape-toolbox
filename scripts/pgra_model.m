@@ -216,8 +216,8 @@ function [model, dat, opt] = pgra_model(varargin)
         % -----------------------------------------------------------------
         model.emit      = 1;
         model.q.active  = true;
-        model.pg.active = true;
-        model.r.active  = true;
+        model.pg.active = false;
+        model.r.active  = false;
         model.pg.ok     = 1;
         model.pg.ok2    = 0;
         model.pg.armijo = 1;
@@ -261,9 +261,7 @@ function [model, dat, opt] = pgra_model(varargin)
         end
         
         if model.lb.lb.gain < opt.lb.threshold
-            if model.lb.lb.gain < 0
-                fprintf('Lower bound dropped :(\n');
-            elseif opt.optimise.q.q && ~model.q.active
+            if opt.optimise.q.q && ~model.q.active
                 model.q.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'Affine');
             elseif (opt.optimise.pg.w || opt.optimise.z.z) && ~model.pg.active
@@ -498,25 +496,26 @@ function [model, dat, opt] = pgra_model(varargin)
             if opt.ui.verbose, fprintf('%10s | %10s ', 'Template', ''); tic; end
             if opt.tpl.cat
                 model.tpl.a = updateMuML(opt.model, dat, ...
-                                         'lat',    opt.tpl.lat,   ...
-                                         'par',    opt.split.par, ...
-                                         'debug',  opt.ui.debug,  ...
-                                         'output', model.tpl.a);
+                    'lat', opt.tpl.lat, 'par', opt.split.par, ...
+                    'debug', opt.ui.debug, 'output', model.tpl.a);
+                model.tpl.gmu = templateGrad(model.tpl.a, ...
+                    opt.tpl.itrp, opt.tpl.bnd,  ...
+                    'debug',  opt.ui.debug, 'output', model.tpl.gmu);
                 model.tpl.mu = reconstructProbaTemplate(model.tpl.a, ...
-                                                        'par',    opt.split.par, ...
-                                                        'debug',  opt.ui.debug,  ...
-                                                        'output', model.tpl.mu);
+                    'par', opt.split.par, 'debug',  opt.ui.debug, ...
+                    'output', model.tpl.mu);
             else
                 model.tpl.mu = updateMuML(opt.model, dat, ...
-                                          'lat',    opt.tpl.lat,   ...
-                                          'par',    opt.split.par, ...
-                                          'debug',  opt.ui.debug,  ...
-                                          'output', model.tpl.mu);
+                    'lat', opt.tpl.lat, 'par',    opt.split.par, ...
+                    'debug',  opt.ui.debug, 'output', model.tpl.mu);
+                model.tpl.gmu = templateGrad(model.tpl.mu, ...
+                    opt.tpl.itrp, opt.tpl.bnd, ...
+                    'debug',  opt.ui.debug, 'output', model.tpl.gmu);
             end
             if opt.ui.verbose, fprintf('| %6.3s\n', toc); end
             % -----------
             % Lower bound
-            [dat, model] = pgra_batch('LB', 'Matching', dat, model, opt);
+            [dat, model] = pgra_batch('LB', 'Template', dat, model, opt);
             model = updateLowerBound(model);
             plotAll(model, opt);
             % -----------

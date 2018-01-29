@@ -56,7 +56,6 @@ function [g, h, htype] = ghNormal(mu, f, varargin)
     p.FunctionName = 'ghNormal';
     p.addRequired('mu',  @checkarray);
     p.addRequired('f',   @checkarray);
-    p.addRequired('c',   @checkarray);
     p.addOptional('s',   1,  @checkarray);
     p.addOptional('gmu', []);
     p.addParameter('count',  [],     @(X) isnumeric(X) || isa(X, 'file_array'));
