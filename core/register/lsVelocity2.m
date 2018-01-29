@@ -211,13 +211,13 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
             match = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
         elseif strcmpi(matchmode, 'pull')
             if cat
-                wa = warp(ipsi, mu, itrp, tplbnd, 'par', par, 'output', wa, 'debug', debug);
+                wa = pullTemplate(ipsi, mu, 'par', par, 'output', wa, 'debug', debug);
                 wmu = reconstructProbaTemplate(wa, 'output', wmu, 'loop', loop, 'par', par, 'debug', debug);
                 if ~isa(wa, 'file_array')
                     clear wa
                 end
             else
-                wmu = warp(ipsi, mu, itrp, tplbnd, 'par', par, 'output', wmu, 'debug', debug);
+                wmu = pullTemplate(ipsi, mu, 'par', par, 'output', wmu, 'debug', debug);
             end
             match = llMatching(model, wmu, f, 'par', par, 'loop', loop, 'debug', debug);
         end

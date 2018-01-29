@@ -1,21 +1,39 @@
 function [pf, c, bb] = pushImage(ipsi, f, varargin)
-% FORMAT ([pf, (c), (bb)]) = pushImage(ipsi, f, (lat), ('loop', loop), ('par', par))
+% _________________________________________________________________________
 %
-% ** Required **
+% Push the image to template space
+%
+% -------------------------------------------------------------------------
+%
+% FORMAT ([pf, (c), (bb)]) = pushImage(ipsi, f, (lat), ...)
+%
+% REQUIRED
+% --------
 % ipsi - Inverse transform (warps mu to f).
 % f    - Observed image.
-% ** Optional **
+%
+% OPTIONAL
+% --------
 % lat  - Output lattice [same as input]
-% ** Keyword arguments **
-% loop - How to split processing ('none', 'component') [auto]
-% par  - If true, parallelise processing [false]
-% ** Output **
-% pf   - Pushed image in template space
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% loop   - How to split processing ('none', 'component') [auto]
+% par    - If true, parallelise processing over classes/modalities [false]
+% output - Cell of file_array to use as output [return numeric array]
+% debug  - Print debugging info [false]
+%
+% OUTPUT
+% ------
+% pf   - Pushed image in template space 
 % c    - Pushed voxel count
 % bb   - Bounding box: correspondance between lat indices and the saved
 %        volume
 %
-% Push the image to template space
+% -------------------------------------------------------------------------
+% - Interpolation is trilinear.
+% - Boundary conditions are circulant.
+% _________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
@@ -34,7 +52,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     output = p.Results.output;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* pushImage\n'); end;
+    if debug, fprintf('* pushImage\n'); end
     
     % --- Optimise parallelisation and splitting schemes
     [par, loop] = autoParLoop(par, loop, isa(f, 'file_array'), 1, size(f,4));
@@ -60,7 +78,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     
     % --- No loop
     if strcmpi(loop, 'none')
-        if debug, fprintf('   - No loop\n'); end;
+        if debug, fprintf('   - No loop\n'); end
         f = single(numeric(f));
         [pf1, c1] = spm_diffeo('pushc', f, ipsi, lat);
         if nargout > 2
@@ -83,7 +101,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     else % strcmpi(loop, 'component')
         if debug
             if par, fprintf('   - Parallelise on components\n');
-            else    fprintf('   - Serialise on components\n');   end;
+            else,   fprintf('   - Serialise on components\n');   end
         end
         [pf1, c1] = spm_diffeo('pushc', single(f(:,:,:,1)), ipsi, lat);
         pf1(~isfinite(pf1)) = nan;
