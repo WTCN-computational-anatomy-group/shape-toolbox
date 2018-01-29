@@ -46,6 +46,7 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
 % c    - file array where to store output pushed count
 % wa   - file array where to store output pulled log-template
 % wmu  - file array where to store output pulled template
+% wgmu - file array where to store output pulled grad template
 %
 % OUTPUT
 % ------
@@ -56,6 +57,7 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
 %     pf    - New pushed image 
 %     c     - New pushed voxel count
 %     wmu   - New pulled template
+%     wgmu  - New pulled grad template
 %
 %--------------------------------------------------------------------------
 % 
@@ -109,6 +111,7 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     p.addParameter('c',   nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('wa',  nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('wmu', nan, @(X) isnumeric(X) || isa(X, 'file_array'));
+    p.addParameter('wgmu',nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     
     p.addParameter('verbose', false, @isscalar);
     p.addParameter('debug',   false, @isscalar);
@@ -140,6 +143,7 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     c       = p.Results.c;
     wa      = p.Results.wa;
     wmu     = p.Results.wmu;
+    wgmu    = p.Results.wgmu;
     
     verbose = p.Results.verbose;
     debug   = p.Results.debug;
@@ -243,7 +247,9 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
             result.r = r;
             if strcmpi(matchmode, 'pull')
                 [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
-                result.wmu = wmu;
+                result.wmu  = wmu;
+                result.wgmu = warp(ipsi, mu, itrp, tplbnd, 'grad', true, 'par', par, 'output', wgmu, 'debug', debug);
+                result.ipsi = ipsi;
             end
             result.pf = pf;
             result.c  = c;
@@ -259,6 +265,7 @@ function result = lsVelocity2(model, dv, r0, match0, mu, f, varargin)
     result.match = match0;
     result.v     = v0;
     result.r     = r0;
+    result.wgmu  = wgmu;
     if ~isa(pf, 'file_array')
         [path, name, ext] = fileparts(pf.fname);
         copyfile(pf.fname, fullfile(path, [name(1:end-4) ext]));

@@ -421,7 +421,7 @@ function opt = pgra_model_default(opt)
         opt.ondisk.dat.v.iphi = false;
     end
     if ~isfield(opt.ondisk.dat.v, 'ipsi')
-        opt.ondisk.dat.v.ipsi = false;
+        opt.ondisk.dat.v.ipsi = true;
     end
     if ~isfield(opt.ondisk.dat.v, 'phi')
         opt.ondisk.dat.v.phi = false;
@@ -447,6 +447,9 @@ function opt = pgra_model_default(opt)
     end
     if ~isfield(opt.ondisk.dat.tpl, 'wmu')
         opt.ondisk.dat.tpl.wmu = true;
+    end
+    if ~isfield(opt.ondisk.dat.tpl, 'wgmu')
+        opt.ondisk.dat.tpl.wgmu = true;
     end
     
     if ~isfield(opt.ondisk.dat, 'f')
@@ -619,6 +622,13 @@ function opt = pgra_model_default(opt)
             opt.fnames.dat.tpl.wmu = 'wmu_';
         else
             opt.fnames.dat.tpl.wmu = 'warped_template.nii';
+        end
+    end
+    if ~isfield(opt.fnames.dat.tpl, 'wgmu')
+        if isempty(opt.dir.dat)
+            opt.fnames.dat.tpl.wgmu = 'wgmu_';
+        else
+            opt.fnames.dat.tpl.wgmu = 'warped_grad_template.nii';
         end
     end
     

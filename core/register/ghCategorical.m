@@ -1,4 +1,4 @@
-function [g, h, htype] = ghCategorical(mu, f, c, varargin)
+function [g, h, htype] = ghCategorical(mu, f, varargin)
 %__________________________________________________________________________
 %
 % Gradient & Hessian of the **negative** log-likelihood of the Categorical 
@@ -6,13 +6,12 @@ function [g, h, htype] = ghCategorical(mu, f, c, varargin)
 %
 %--------------------------------------------------------------------------
 %
-% FORMAT [(g), (h, htype)] = ghCategorical(mu, f, c, (ga), ...)
+% FORMAT [(g), (h, htype)] = ghCategorical(mu, f, (ga), ...)
 %
 % REQUIRED
 % --------
 % mu    - Reconstructed probability template
 % f     - Observed image pushed in the template space.
-% c     - Pushed voxel count.
 % 
 % OPTIONAL
 % --------
@@ -20,6 +19,7 @@ function [g, h, htype] = ghCategorical(mu, f, c, varargin)
 %
 % KEYWORD ARGUMENTS
 % -----------------
+% count   - Pushed voxel count.
 % bb      - Bounding box (if different between template and pushed image)
 % hessian - Compute only hessian (not gradient)
 % loop    - Specify how to split data processing
@@ -59,20 +59,22 @@ function [g, h, htype] = ghCategorical(mu, f, c, varargin)
     p.addRequired('f',   @checkarray);
     p.addRequired('c',   @checkarray);
     p.addOptional('gmu', []);
+    p.addParameter('count',  [],     @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('bb',     struct, @isstruct);
     p.addParameter('hessian', false, @islogical);
     p.addParameter('loop',   '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'none', ''})));
     p.addParameter('par',    false, @isscalar);
     p.addParameter('output', []);
     p.addParameter('debug',  false, @isscalar);
-    p.parse(mu, f, c, varargin{:});
-    gmu  = p.Results.gmu;
-    bb   = p.Results.bb;
+    p.parse(mu, f, varargin{:});
+    gmu     = p.Results.gmu;
+    c       = p.Results.count;
+    bb      = p.Results.bb;
     hessian = p.Results.hessian;
-    par  = p.Results.par;
-    loop = p.Results.loop;
+    par     = p.Results.par;
+    loop    = p.Results.loop;
     
-    if p.Results.debug, fprintf('* ghCategorical\n'); end;
+    if p.Results.debug, fprintf('* ghCategorical\n'); end
     
     % --- Optimise parallelisation and splitting schemes
     [par, loop] = autoParLoop(par, loop, isa(mu, 'file_array'), size(mu, 3));
@@ -484,6 +486,9 @@ function [g, h] = onMemory(mu, f, c, gmu, hessian)
     mu = single(numeric(mu));
     f  = single(numeric(f));
     c  = single(numeric(c));
+    if isempty(c)
+        c = single(1);
+    end
     
     if ~hessian
         g  = bsxfun(@times, c, mu) - f;

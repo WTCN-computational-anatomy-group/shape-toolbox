@@ -1,4 +1,4 @@
-function [g, h, htype] = ghLaplace(mu, f, c, varargin)
+function [g, h, htype] = ghLaplace(mu, f, varargin)
 %__________________________________________________________________________
 %
 % Gradient & Hessian of the **negative** log-likelihood of the laplace 
@@ -6,13 +6,11 @@ function [g, h, htype] = ghLaplace(mu, f, c, varargin)
 %
 %--------------------------------------------------------------------------
 %
-% FORMAT [g, (h, htype)] = ghLaplace(mu, f, c, (b), (gmu),
-%                                   ('loop', loop), ('par', par))
+% FORMAT [g, (h, htype)] = ghLaplace(mu, f, (b), (gmu), ...)
 % REQUIRED
 % --------
 % mu    - Template
 % f     - Observed image pushed in the template space.
-% c     - Pushed voxel count.
 %
 % OPTIONAL
 % --------
@@ -21,6 +19,7 @@ function [g, h, htype] = ghLaplace(mu, f, c, varargin)
 %
 % KEYWORD ARGUMENTS
 % -----------------
+% count - Pushed voxel count.
 % bb    - Bounding box (if different between template and pushed image)
 % loop  - Specify how to split data processing
 %         ('component', 'slice' or 'none' [default])
@@ -60,18 +59,20 @@ function [g, h, htype] = ghLaplace(mu, f, c, varargin)
     p.addRequired('c',   @checkarray);
     p.addOptional('b',   1,  @checkarray);
     p.addOptional('gmu', []);
+    p.addParameter('count',  [],     @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('bb',     struct, @isstruct);
     p.addParameter('loop',   '',    @ischar);
     p.addParameter('par',    false, @isscalar);
     p.addParameter('output', []);
     p.addParameter('debug',  false, @isscalar);
-    p.parse(mu, f, c, varargin{:});
+    p.parse(mu, f, varargin{:});
     gmu  = p.Results.gmu;
+    c    = p.Results.count;
     bb   = p.Results.bb;
     par  = p.Results.par;
     loop = p.Results.loop;
     
-    if p.Results.debug, fprintf('* ghLaplace\n'); end;
+    if p.Results.debug, fprintf('* ghLaplace\n'); end
     
     % --- Optimise parallelisation and splitting schemes
     [par, loop] = autoParLoop(par, loop, isa(mu, 'file_array'), size(mu, 3), size(mu, 4));
@@ -545,7 +546,8 @@ function [g, h, htype] = ghLaplace(mu, f, c, varargin)
         if ~isempty(output{1})
             h = saveOnDisk(output{1}, h, 'name', 'h');
         end
-        [g, h] = deal(h, g);
+        g = [];
+        [g, h, htype] = deal(h, htype, g);
     elseif nargin > 1
         if ~isempty(output{1})
             g = saveOnDisk(output{1}, g, 'name', 'g');
@@ -574,14 +576,22 @@ function [g, h] = onMemory(mu, f, c, b, gmu)
     mu  = single(numeric(mu));
     f   = single(numeric(f));
     c   = single(numeric(c));
+    if isempty(c)
+        c = single(1);
+    end
     b   = reshape(1./b, [1 1 1 nc]);
     
-    g  = sign(bsxfun(@times, c, mu) - f);
-    g  = bsxfun(@times, b, g);
-    if ~isempty(gmu)
-        g = -spm_matcomp('Pointwise', gmu, g, 't');
+    if ~hessian
+        g  = sign(bsxfun(@times, c, mu) - f);
+        g  = bsxfun(@times, b, g);
+        if ~isempty(gmu)
+            g = -spm_matcomp('Pointwise', gmu, g, 't');
+        end
+        g(~isfinite(g)) = 0;
+    else
+        g= [];
     end
-    if nargout > 1
+    if nargout > 1 || hessian
         h = bsxfun(@times, b, c);
         if ~isempty(gmu)
             nvec = size(gmu, 5);
@@ -595,11 +605,6 @@ function [g, h] = onMemory(mu, f, c, b, gmu)
                 end
             end
         end
-    end
-    
-    % Just in case
-    g(~isfinite(g)) = 0;
-    if nargout > 1
         h(~isfinite(h)) = 0;
     end
 end

@@ -1,4 +1,4 @@
-function [g, h, htype] = ghNormal(mu, f, c, varargin)
+function [g, h, htype] = ghNormal(mu, f, varargin)
 %__________________________________________________________________________
 %
 % Gradient & Hessian of the **negative** log-likelihood of the normal 
@@ -6,12 +6,11 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
 %
 %--------------------------------------------------------------------------
 %
-% FORMAT [g, (h, htype)] = ghNormal(mu, f, c, (s), (gmu), ...)
+% FORMAT [g, (h, htype)] = ghNormal(mu, f, (s), (gmu), ...)
 % REQUIRED
 % --------
 % mu    - Template
 % f     - Observed image pushed in the template space.
-% c     - Pushed voxel count.
 %
 % OPTIONAL
 % --------
@@ -20,6 +19,7 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
 %
 % KEYWORD ARGUMENTS
 % -----------------
+% count - Pushed voxel count.
 % bb    - Bounding box (if different between template and pushed image)
 % loop  - Specify how to split data processing
 %         ('component', 'slicevol' or 'none') ['none']
@@ -59,18 +59,20 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
     p.addRequired('c',   @checkarray);
     p.addOptional('s',   1,  @checkarray);
     p.addOptional('gmu', []);
+    p.addParameter('count',  [],     @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('bb',     struct, @isstruct);
     p.addParameter('loop',   '',    @ischar);
     p.addParameter('par',    false, @isscalar);
     p.addParameter('output', []);
     p.addParameter('debug',  false, @isscalar);
-    p.parse(mu, f, c, varargin{:});
+    p.parse(mu, f, varargin{:});
     gmu  = p.Results.gmu;
+    c    = p.Results.count;
     bb   = p.Results.bb;
     par  = p.Results.par;
     loop = p.Results.loop;
     
-    if p.Results.debug, fprintf('* ghNormal\n'); end;
+    if p.Results.debug, fprintf('* ghNormal\n'); end
     
     % --- Optimise parallelisation and splitting schemes
     [par, loop] = autoParLoop(par, loop, isa(mu, 'file_array'), size(mu, 3), size(mu, 4));
@@ -545,7 +547,8 @@ function [g, h, htype] = ghNormal(mu, f, c, varargin)
         if ~isempty(output{1})
             h = saveOnDisk(output{1}, h, 'name', 'h');
         end
-        [g, h] = deal(h, g);
+        g = [];
+        [g, h, htype] = deal(h, htype, g);
     elseif nargin > 1
         if ~isempty(output{1})
             g = saveOnDisk(output{1}, g, 'name', 'g');
@@ -574,14 +577,22 @@ function [g, h] = onMemory(mu, f, c, s, gmu)
     mu  = single(numeric(mu));
     f   = single(numeric(f));
     c   = single(numeric(c));
+    if isempty(c)
+        c = single(1);
+    end
     s   = reshape(1./s, [1 1 1 nc]);
     
-    g  = (bsxfun(@times, c, mu) - f);
-    g  = bsxfun(@times, s, g);
-    if ~isempty(gmu)
-        g = -spm_matcomp('pointwise', gmu, g, 't');
+    if ~hessian
+        g  = (bsxfun(@times, c, mu) - f);
+        g  = bsxfun(@times, s, g);
+        if ~isempty(gmu)
+            g = -spm_matcomp('pointwise', gmu, g, 't');
+        end
+        g(~isfinite(g)) = 0;
+    else
+        g = [];
     end
-    if nargout > 1
+    if nargout > 1 || hessian
         h = bsxfun(@times, s, c);
         if ~isempty(gmu)
             nvec = size(gmu, 5);
@@ -595,11 +606,7 @@ function [g, h] = onMemory(mu, f, c, s, gmu)
                 end
             end
         end
-    end
-    
-    % Just in case
-    g(~isfinite(g)) = 0;
-    if nargout > 1
         h(~isfinite(h)) = 0;
     end
+    
 end

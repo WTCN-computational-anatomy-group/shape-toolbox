@@ -1,4 +1,4 @@
-function [g, h, htype] = ghBernoulli(mu, f, c, varargin)
+function [g, h, htype] = ghBernoulli(mu, f, varargin)
 %__________________________________________________________________________
 %
 % Gradient & Hessian of the **negative** log-likelihood of the Bernoulli 
@@ -6,14 +6,12 @@ function [g, h, htype] = ghBernoulli(mu, f, c, varargin)
 %
 %--------------------------------------------------------------------------
 %
-% FORMAT [g, (h, htype)] = ghBernoulli(mu, f, c, (ga),
-%                                   ('loop', loop), ('par', par))
+% FORMAT [g, (h, htype)] = ghBernoulli(mu, f, (ga), ...)
 %
 % REQUIRED
 % --------
 % mu    - Reconstructed probability template.
-% f     - Observed image pushed in the template space.
-% c     - Pushed voxel count.
+% f     - Observed image.
 %
 % OPTIONAL
 % --------
@@ -21,6 +19,7 @@ function [g, h, htype] = ghBernoulli(mu, f, c, varargin)
 %
 % KEYWORD ARGUMENTS
 % -----------------
+% count - Pushed voxel count (If grad/hess computed in template space).
 % bb    - Bounding box (if different between template and pushed image)
 % loop  - Specify how to split data processing
 %         ('component', 'slice' or 'none' [default: auto])
@@ -57,22 +56,23 @@ function [g, h, htype] = ghBernoulli(mu, f, c, varargin)
     p.FunctionName = 'ghBernoulli';
     p.addRequired('mu',  @checkarray);
     p.addRequired('f',   @checkarray);
-    p.addRequired('c',   @checkarray);
     p.addOptional('gmu', []);
+    p.addParameter('count',  [],     @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('bb',     struct, @isstruct);
     p.addParameter('hessian', false, @islogical);
     p.addParameter('loop',   '',    @ischar);
     p.addParameter('par',    false, @isscalar);
     p.addParameter('output', []);
     p.addParameter('debug',  false, @isscalar);
-    p.parse(mu, f, c, varargin{:});
+    p.parse(mu, f, varargin{:});
     gmu  = p.Results.gmu;
+    c    = p.Results.count;
     bb   = p.Results.bb;
     hessian = p.Results.hessian;
     par  = p.Results.par;
     loop = p.Results.loop;
     
-    if p.Results.debug, fprintf('* ghBernoulli\n'); end;
+    if p.Results.debug, fprintf('* ghBernoulli\n'); end
 
     % --- Optimise parallelisation and splitting schemes
     [par, loop] = autoParLoop(par, loop, isa(mu, 'file_array'), size(mu, 3), size(mu, 4));
@@ -134,7 +134,7 @@ function [g, h, htype] = ghBernoulli(mu, f, c, varargin)
     
     % --- No loop
     if strcmpi(loop, 'none')
-        if p.Results.debug, fprintf('   - No loop\n'); end;
+        if p.Results.debug, fprintf('   - No loop\n'); end
         if isempty(gmu)
             if nargout > 1
                 [g(:,:,:,:), h(:,:,:,:)] = onMemory(mu(bb.x,bb.y,bb.z,:), f, c);
@@ -488,6 +488,9 @@ function [g, h] = onMemory(mu, f, c, gmu, hessian)
     mu  = single(numeric(mu));
     f   = single(numeric(f));
     c   = single(numeric(c));
+    if isempty(c)
+        c = single(1);
+    end
     
     if ~hessian
         g  = (c .* mu) - f;

@@ -28,16 +28,17 @@ function ipsi = reconstructIPsi(A, iphi, varargin)
     Mf  = p.Results.Mf;
     Mmu = p.Results.Mmu;
     
-    if p.Results.debug, fprintf('* reconstructIPsi\n'); end;
+    if p.Results.debug, fprintf('* reconstructIPsi\n'); end
     
     % --- Load data
     A    = numeric(A);
     iphi = numeric(iphi);
     
     if isempty(lat)
-        lat = [size(iphi) 1];
-        lat = lat(1:3);
+        lat = size(iphi);
     end
+    lat = [lat 1 1 1];
+    lat = lat(1:3);
     
     % --- Reconstruct
     id   = spm_warps('identity', lat);

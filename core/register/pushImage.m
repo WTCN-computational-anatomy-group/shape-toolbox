@@ -34,7 +34,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     output = p.Results.output;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* pushImage\n'); end;
+    if debug, fprintf('* pushImage\n'); end
     
     % --- Optimise parallelisation and splitting schemes
     [par, loop] = autoParLoop(par, loop, isa(f, 'file_array'), 1, size(f,4));
@@ -56,11 +56,28 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
         output = [output {[]}];
     end
     
+    % --- Ccase where the input and output are the same file_array
+    same_in_out = false;
+    if isa(f, 'file_array') ...
+            && ~isempty(output{1}) ...
+            && isa(output{1}, 'file_array') ...
+            && strcmpi(f.fname, output{1}.fname)
+        % copy input
+        same_in_out = true;
+        pf = output{1};
+        [path, fname, ext] = fileparts(pf.fname);
+        f.fname = fullfile(path, [fname '_copy' ext]);
+        for k=1:size(pf, 4)
+            f(:,:,:,k,:) = pf(:,:,:,k,:);
+        end
+    end
+        
+    
     ipsi = single(numeric(ipsi));
     
     % --- No loop
     if strcmpi(loop, 'none')
-        if debug, fprintf('   - No loop\n'); end;
+        if debug, fprintf('   - No loop\n'); end
         f = single(numeric(f));
         [pf1, c1] = spm_diffeo('pushc', f, ipsi, lat);
         if nargout > 2
@@ -83,7 +100,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     else % strcmpi(loop, 'component')
         if debug
             if par, fprintf('   - Parallelise on components\n');
-            else    fprintf('   - Serialise on components\n');   end;
+            else,   fprintf('   - Serialise on components\n');   end
         end
         [pf1, c1] = spm_diffeo('pushc', single(f(:,:,:,1)), ipsi, lat);
         pf1(~isfinite(pf1)) = nan;
@@ -102,12 +119,25 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
         pf(:,:,:,1) = pf1(bb.x,bb.y,bb.z);
         c(:,:,:)    = c1(bb.x,bb.y,bb.z);
         clear c1
-        parfor (k=2:nc, par)
-            pf1 = spm_diffeo('pushc', single(f(:,:,:,k)), ipsi, lat);
-            pf1(~isfinite(pf1)) = nan;
-            pf(:,:,:,k) = pf1(bb.x,bb.y,bb.z);
+        if isa(f, 'file_array')
+            for k=2:nc
+                pf1 = spm_diffeo('pushc', single(slicevol(f, k, 4)), ipsi, lat);
+                pf1(~isfinite(pf1)) = nan;
+                pf(:,:,:,k) = pf1(bb.x,bb.y,bb.z);
+            end
+        else
+            parfor (k=2:nc, par)
+                pf1 = spm_diffeo('pushc', single(f(:,:,:,k)), ipsi, lat);
+                pf1(~isfinite(pf1)) = nan;
+                pf(:,:,:,k) = pf1(bb.x,bb.y,bb.z);
+            end
         end
         clear pf1
+    end
+    
+    % --- Remove input copy if needed
+    if same_in_out
+        delete(f.fname);
     end
         
     % --- Write on disk

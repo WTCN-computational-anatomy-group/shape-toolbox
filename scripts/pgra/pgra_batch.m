@@ -163,7 +163,7 @@ function dat = oneInitPush(dat, model, opt)
     % Warp
     % ----
     iphi = spm_warps('identity', opt.tpl.lat);
-    ipsi = reconstructIPsi(eye(4), iphi, 'lat', opt.tpl.lat, ...
+    ipsi = reconstructIPsi(eye(4), iphi, 'lat', size(dat.f.f), ...
                            'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
                            'debug', opt.ui.debug);
     clear iphi
@@ -171,7 +171,8 @@ function dat = oneInitPush(dat, model, opt)
                                               'output', {dat.f.pf, dat.f.c}, ...
                                               'loop', loop, 'par', par, ...
                                               'debug', opt.ui.debug);
-    clear ipsi
+    dat.v.ipsi = prepareOnDisk(dat.v.ipsi, size(ipsi));
+    dat.v.ipsi(:) = ipsi(:);
 
 end
 
@@ -223,33 +224,28 @@ function dat = oneInitPull(dat, model, opt)
     
     % Warp
     % ----
-    iphi = spm_warps('identity', opt.tpl.lat);
-    ipsi = reconstructIPsi(eye(4), iphi, 'lat', opt.tpl.lat, ...
-                           'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
-                           'debug', opt.ui.debug);
-    clear iphi
     if opt.tpl.cat
-        dat.tpl.wa = warp(ipsi, model.tpl.a, opt.tpl.itrp, opt.tpl.bnd, ...
-                          'par', par, 'output', dat.tpl.wa);
+        [dat.tpl.wa, dat.tpl.wgmu] = warp(dat.v.ipsi, model.tpl.a, ...
+                                          opt.tpl.itrp, opt.tpl.bnd, ...
+                                          'par', par, 'output', {dat.tpl.wa,dat.tpl.wgmu}, ...
+                                          'debug', opt.ui.debug);
         dat.tpl.wmu = reconstructProbaTemplate(dat.tpl.wa, ...
                                                'output', dat.tpl.wmu, ...
                                                'loop', loop, 'par', par, ...
                                                'debug', opt.ui.debug);
         dat.tpl.wa = rmarray(dat.tpl.wa);
     else
-        dat.tpl.wmu = warp(ipsi, model.tpl.mu, opt.tpl.itrp, opt.tpl.bnd, ...
-                           'par', par, 'output', dat.tpl.wmu, ...
-                           'debug', opt.ui.debug);
+        [dat.tpl.wmu, dat.tpl.wgmu] = warp(dat.v.ipsi, model.tpl.mu, ...
+                                           opt.tpl.itrp, opt.tpl.bnd, ...
+                                           'par', par, 'output', {dat.tpl.wmu,dat.tpl.wgmu}, ...
+                                           'debug', opt.ui.debug);
     end
-    clear ipsi
     
     % Matching likelihood
     % -------------------
     dat.f.lb.type = 'll';
-%     dat.f.lb.val  = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
-%                                'loop', loop, 'par', par);
-    dat.f.lb.val  = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
-                               'loop', loop, 'par', par, 'bb', dat.f.bb);
+    dat.f.lb.val  = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
+                               'loop', loop, 'par', par);
 
 end
 
@@ -404,14 +400,16 @@ function dat = oneInitResidual(dat, model, opt, mode)
 
     % Hessian
     % -------
-    bx = dat.f.bb.x;
-    by = dat.f.bb.y;
-    bz = dat.f.bb.z;
-    h = zeros([opt.tpl.lat 6], 'single');
-    h(bx,by,bz,:) = ghMatchingVel(noisemodel, ...
-        model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, ...
-        'bb', dat.f.bb, 'hessian', true, ...
+    h = ghMatchingVel(noisemodel, ...
+        dat.tpl.wmu, dat.f.f, dat.tpl.wgmu, ...
+        'hessian', true, ...
         'loop', loop, 'par', par, 'debug', opt.ui.debug);
+%     latf = [size(dat.f.f) 1];
+%     id  = spm_warps('identity', latf(1:3));
+%     ixi = spm_warps('compose', model.tpl.M \ (dat.q.A \ dat.f.M), id);
+%     clear id
+    h = pushImage(dat.v.ipsi, h, 'lat', opt.tpl.lat);
+%     clear ixi
 
     % Trace
     % -----
@@ -435,6 +433,8 @@ function dat = oneInitResidual(dat, model, opt, mode)
     % KL divergence between multivariate normal distributions
     % posterior: mean = r,    precision = H + (l+w)*L
     % prior:     mean = 0 ,   precision = (l+w)*L
+    dat.v.lb.tr = 0;
+    dat.v.lb.ld = 0;
     K = prod(opt.tpl.lat)*3;
     dat.v.lb.val = -0.5*( - K - K*log(model.r.l + opt.pg.geod) ...
                           - opt.pg.ld + dat.v.lb.ld ...
@@ -787,8 +787,7 @@ function dat = oneFitAffine(dat, model, opt)
     % useful anymore. This will cause less disk and broadband usage.
     dat.q.g    = rmarray(dat.q.g);
     dat.q.h    = rmarray(dat.q.h);
-    dat.v.iphi = rmarray(dat.v.ipsi);
-    dat.v.ipsi = rmarray(dat.v.iphi);
+    dat.v.iphi = rmarray(dat.v.iphi);
     dat.v.phi  = rmarray(dat.v.phi);
     dat.v.jac  = rmarray(dat.v.jac);
 end
@@ -1086,16 +1085,18 @@ function dat = oneFitResidual(dat, model, opt)
             
             % Compute gradient/hessian
             % ------------------------
-            g = zeros([opt.tpl.lat 3], 'single'); 
-            h = zeros([opt.tpl.lat 6], 'single'); 
-            bx = dat.f.bb.x;
-            by = dat.f.bb.y;
-            bz = dat.f.bb.z;
 
-            [g(bx,by,bz,:), h(bx,by,bz,:)] = ghMatchingVel(...
+            [g, h] = ghMatchingVel(...
                 noisemodel, ...
-                model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, ...
-                'bb', dat.f.bb, 'loop', loop, 'par', par, 'debug', opt.ui.debug);
+                dat.tpl.wmu, dat.f.f, dat.tpl.wgmu, ...
+                'loop', loop, 'par', par, 'debug', opt.ui.debug);    
+%             latf = [size(dat.f.f) 1];
+%             id  = spm_warps('identity', latf(1:3));
+%             ixi = spm_warps('compose', model.tpl.M \ (dat.q.A \ dat.f.M), id);
+%             clear id
+            g = pushImage(dat.v.ipsi, g, 'lat', opt.tpl.lat);
+            h = pushImage(dat.v.ipsi, h, 'lat', opt.tpl.lat);
+%             clear ixi
             v = numeric(dat.v.v);
             r = numeric(dat.v.r);
             g = g + ghPriorVel(r, opt.tpl.vs, (model.r.l + opt.pg.geod) * opt.pg.prm, opt.pg.bnd);
@@ -1109,15 +1110,17 @@ function dat = oneFitResidual(dat, model, opt)
             % Line search
             % -----------
             result = lsVelocity2(...
-                noisemodel, dv, r, dat.f.lb.val, model.tpl.mu, dat.f.f, ...
+                noisemodel, dv, r, dat.f.lb.val, model.tpl.a, dat.f.f, ...
                 'v0', v, 'lam', model.r.l + opt.pg.geod, 'prm', opt.pg.prm, ...
                 'itgr', opt.iter.itg, 'bnd', opt.pg.bnd, ...
                 'A', A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
-                'match', 'push', ...
+                'match', 'pull', 'itrp', opt.tpl.itrp, 'tplbnd', opt.tpl.bnd, ...
                 'nit', opt.iter.ls,  'par', par, 'loop', loop, ...
                 'verbose', verbose, 'debug', opt.ui.debug, ...
-                'pf', dat.f.pf, 'c', dat.f.c, 'wa', dat.tpl.wa, 'wmu', dat.tpl.wmu);
-%                 'match', 'pull', 'itrp', opt.tpl.itrp, 'tplbnd', opt.tpl.bnd, ...
+                'pf', dat.f.pf, 'c', dat.f.c, ...
+                'wa', dat.tpl.wa, 'wmu', dat.tpl.wmu, 'wgmu', dat.tpl.wgmu);
+            
+%                 'match', 'push', ...
 
             % Store better values
             % -------------------
@@ -1129,6 +1132,8 @@ function dat = oneFitResidual(dat, model, opt)
                 dat.v.v(:)    = result.v(:);
                 dat.v.r       = prepareOnDisk(dat.v.r, size(result.r));
                 dat.v.r(:)    = result.r(:);
+                dat.v.ipsi    = prepareOnDisk(dat.v.ipsi, size(result.ipsi));
+                dat.v.ipsi(:) = result.ipsi(:);
                 if isfield(result, 'pf')
                     dat.f.pf = result.pf;
                 end
@@ -1144,7 +1149,11 @@ function dat = oneFitResidual(dat, model, opt)
                 if isfield(result, 'wmu')
                     dat.tpl.wmu = result.wmu;
                 end
+                if isfield(result, 'wgmu')
+                    dat.tpl.wgmu = result.wgmu;
+                end
                 r = result.r;
+                ipsi = result.ipsi;
             else
                 break
             end
@@ -1176,14 +1185,17 @@ function dat = oneFitResidual(dat, model, opt)
         % Trace(P\L) part
         % ---------------
         if compute_hessian
-            bx = dat.f.bb.x;
-            by = dat.f.bb.y;
-            bz = dat.f.bb.z;
-            h  = zeros([opt.tpl.lat 6], 'single'); 
-            h(bx,by,bz,:) = ghMatchingVel(noisemodel, ...
-                model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, ...
-                'bb', dat.f.bb, 'hessian', true, ...
+            h = ghMatchingVel(noisemodel, ...
+                dat.tpl.wmu, dat.f.f, dat.tpl.wgmu, ...
+                'hessian', true, ...
                 'loop', loop, 'par', par, 'debug', opt.ui.debug);
+%             latf = [size(dat.f.f) 1];
+%             id  = spm_warps('identity', latf(1:3));
+%             ixi = spm_warps('compose', model.tpl.M \ (dat.q.A \ dat.f.M), id);
+%             clear id
+            h = pushImage(ipsi, h, 'lat', opt.tpl.lat);
+            clear ipsi
+%             clear ixi
         end
         dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.r.l + opt.pg.geod) * opt.pg.prm]));
         dat.v.lb.tr = dat.v.lb.tr(1);
@@ -1202,6 +1214,8 @@ function dat = oneFitResidual(dat, model, opt)
         
         % KL divergence
         % -------------
+        dat.v.lb.tr = 0;
+        dat.v.lb.ld = 0;
         K = prod(opt.tpl.lat) * 3;
         dat.v.lb.val = -0.5*( - K - K*log(model.r.l + opt.pg.geod) ...
                               - opt.pg.ld + dat.v.lb.ld ...
@@ -1214,7 +1228,6 @@ function dat = oneFitResidual(dat, model, opt)
     % --------
     % Just in case
     dat.v.iphi = rmarray(dat.v.iphi);
-    dat.v.ipsi = rmarray(dat.v.ipsi);
     dat.tpl.wa = rmarray(dat.tpl.wa);
 end
 
@@ -1292,8 +1305,15 @@ function dat = oneGradHessVelocity(dat, model, opt)
     end
     
     [dat.v.g, dat.v.h] = ghMatchingVel(noisemodel, ...
-        model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, ...
-        'bb', dat.f.bb, 'output', {dat.v.g, dat.v.h});
+        dat.tpl.wmu, dat.f.f, dat.tpl.wgmu, ...
+        'output', {dat.v.g, dat.v.h});
+%     latf = [size(dat.f.f) 1];
+%     id  = spm_warps('identity', latf(1:3));
+%     ixi = spm_warps('compose', model.tpl.M \ (dat.q.A \ dat.f.M), id);
+%     clear id
+    dat.v.g = pushImage(dat.v.ipsi, dat.v.g, 'lat', opt.tpl.lat, 'output', dat.v.g);
+    dat.v.h = pushImage(dat.v.ipsi, dat.v.h, 'lat', opt.tpl.lat, 'output', dat.v.h);
+%     clear ixi
 end
 
 % --------
@@ -1388,12 +1408,25 @@ function dat = oneLB(dat, model, opt, which)
     switch lower(which)
         
         case 'matching'
-%             dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
-%                                       'par', par, 'loop', loop, ...
-%                                       'debug', opt.ui.debug);
-            dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
+            if opt.tpl.cat
+                [dat.tpl.wa, dat.tpl.wgmu] = warp(dat.v.ipsi, model.tpl.a, ...
+                                                  opt.tpl.itrp, opt.tpl.bnd, ...
+                                                  'par', par, 'output', {dat.tpl.wa,dat.tpl.wgmu}, ...
+                                                  'debug', opt.ui.debug);
+                dat.tpl.wmu = reconstructProbaTemplate(dat.tpl.wa, ...
+                                                       'output', dat.tpl.wmu, ...
+                                                       'loop', loop, 'par', par, ...
+                                                       'debug', opt.ui.debug);
+                dat.tpl.wa = rmarray(dat.tpl.wa);
+            else
+                [dat.tpl.wmu, dat.tpl.wgmu] = warp(dat.v.ipsi, model.tpl.mu, ...
+                                                   opt.tpl.itrp, opt.tpl.bnd, ...
+                                                   'par', par, 'output', {dat.tpl.wmu,dat.tpl.wgmu}, ...
+                                                   'debug', opt.ui.debug);
+            end
+            dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
                                       'par', par, 'loop', loop, ...
-                                      'debug', opt.ui.debug, 'bb', dat.f.bb);
+                                      'debug', opt.ui.debug);
         
         case 'precisionz'
             dat.z.lb.val = -0.5*( trace((dat.z.zz + dat.z.S)*(model.z.A + opt.pg.geod * model.pg.ww)) ...
@@ -1425,23 +1458,23 @@ function dat = oneLB(dat, model, opt, which)
                                         'prm', opt.pg.prm, 'bnd', opt.pg.bnd);
             dat.v.v(:) = v(:);
             clear v
-            ipsi = reconstructIPsi(dat.q.A, iphi, 'lat', opt.tpl.lat, ...
-                                   'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
-                                   'debug', opt.ui.debug);
-            clear iphi
+            ipsi = reconstructIPsi(dat.q.A, iphi, 'lat', size(dat.f.f), 'Mf', dat.f.M, 'Mmu', model.tpl.Mmu);
+            dat.v.ipsi(:) = ipsi(:);
             [dat.f.pf, dat.f.c, dat.f.bb] = pushImage(ipsi, dat.f.f, opt.tpl.lat, ...
                                                       'output', {dat.f.pf, dat.f.c}, ...
                                                       'loop', loop, 'par', par, ...
                                                       'debug', opt.ui.debug);
             clear ipsi
-            dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
+            dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
                                       'par', par, 'loop', loop, ...
-                                      'debug', opt.ui.debug, 'bb', dat.f.bb);
+                                      'debug', opt.ui.debug);
             dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
                                    - spm_matcomp('LogDet', model.z.A) ...
                                    - spm_matcomp('LogDet', dat.z.S) ...
                                    - opt.pg.K );
         case 'lambda'
+            dat.v.lb.tr = 0;
+            dat.v.lb.ld = 0;
             K = prod(opt.tpl.lat) * 3;
             dat.v.lb.val = -0.5*( - K - K*log(model.r.l + opt.pg.geod) ...
                                   - opt.pg.ld + dat.v.lb.ld ...
