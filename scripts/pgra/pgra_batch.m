@@ -171,6 +171,7 @@ function dat = oneInitPush(dat, model, opt)
                                               'output', {dat.f.pf, dat.f.c}, ...
                                               'loop', loop, 'par', par, ...
                                               'debug', opt.ui.debug);
+    dat.v.ipsi = copyarray(ipsi, dat.v.ipsi);
     clear ipsi
 
 end
@@ -223,34 +224,23 @@ function dat = oneInitPull(dat, model, opt)
     
     % Warp
     % ----
-    iphi = spm_warps('identity', opt.tpl.lat);
-    ipsi = reconstructIPsi(eye(4), iphi, 'lat', opt.tpl.lat, ...
-                           'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
-                           'debug', opt.ui.debug);
-    clear iphi
     if opt.tpl.cat
-        dat.tpl.wa = warp(ipsi, model.tpl.a, opt.tpl.itrp, opt.tpl.bnd, ...
-                          'par', par, 'output', dat.tpl.wa);
+        dat.tpl.wa = pullTemplate(dat.v.ipsi, model.tpl.a, ...
+            'par', par, 'output', dat.tpl.wa, 'debug', opt.ui.debug);
         dat.tpl.wmu = reconstructProbaTemplate(dat.tpl.wa, ...
-                                               'output', dat.tpl.wmu, ...
-                                               'loop', loop, 'par', par, ...
-                                               'debug', opt.ui.debug);
+            'loop', loop, 'par', par, 'output', dat.tpl.wmu, ...
+            'debug', opt.ui.debug);
         dat.tpl.wa = rmarray(dat.tpl.wa);
     else
-        dat.tpl.wmu = warp(ipsi, model.tpl.mu, opt.tpl.itrp, opt.tpl.bnd, ...
-                           'par', par, 'output', dat.tpl.wmu, ...
-                           'debug', opt.ui.debug);
+        dat.tpl.wmu = pullTemplate(dat.v.ipsi, model.tpl.mu, ...
+            'par', par, 'output', dat.tpl.wmu, 'debug', opt.ui.debug);
     end
-    clear ipsi
     
     % Matching likelihood
     % -------------------
     dat.f.lb.type = 'll';
-%     dat.f.lb.val  = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
-%                                'loop', loop, 'par', par);
-    dat.f.lb.val  = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
-                               'loop', loop, 'par', par, 'bb', dat.f.bb);
-
+    dat.f.lb.val  = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
+        'loop', loop, 'par', par, 'debug', opt.ui.debug);
 end
 
 function [dat, model] = batchInitPull(dat, model, opt)
@@ -327,7 +317,7 @@ function [dat, model] = batchInitAffine(mode, dat, model, opt)
             rind = opt.q.rind;
             dat(n).q.lb.type = 'kl';
             dat(n).q.lb.val  = -0.5*( trace((dat(n).q.S(rind,rind) + dat(n).q.qq(rind,rind)) * model.q.A) ...
-                                      - spm_matcomp('LogDet', model.q.A) ...
+                                      - spm_prob('Wishart', 'ELogDet', model.q.A, opt.N + opt.q.n0) ...
                                       - spm_matcomp('LogDet', dat(n).q.S(rind,rind)) ...
                                       - opt.q.Mr );
         else
@@ -404,14 +394,19 @@ function dat = oneInitResidual(dat, model, opt, mode)
 
     % Hessian
     % -------
-    bx = dat.f.bb.x;
-    by = dat.f.bb.y;
-    bz = dat.f.bb.z;
-    h = zeros([opt.tpl.lat 6], 'single');
-    h(bx,by,bz,:) = ghMatchingVel(noisemodel, ...
-        model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, ...
-        'bb', dat.f.bb, 'hessian', true, ...
-        'loop', loop, 'par', par, 'debug', opt.ui.debug);
+    if strcmpi(opt.match, 'pull')
+        h = ghMatchingVel(noisemodel, ...
+            dat.tpl.wmu, dat.f.f, model.tpl.gmu, ...
+            'ipsi', dat.v.ipsi, 'hessian', true, ...
+            'loop', loop, 'par', par, 'debug', opt.ui.debug);
+    else
+        h = zeros([opt.tpl.lat 6], 'single');
+        h(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:) = ghMatchingVel(...
+            noisemodel, ...
+            model.tpl.mu, dat.f.pf, model.tpl.gmu, ...
+            'count', dat.f.c, 'bb', dat.f.bb, 'hessian', true, ...
+            'loop', loop, 'par', par, 'debug', opt.ui.debug);
+    end
 
     % Trace
     % -----
@@ -582,7 +577,7 @@ function [dat, model] = batchInitLatent(mode, dat, model, opt)
         if opt.ui.verbose, before = plotBatch(n, 1, N, 50, before); end
         dat(n).z.lb.type = 'kl';
         dat(n).z.lb.val  = -0.5*( trace((dat(n).z.S + dat(n).z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                  - spm_matcomp('LogDet', model.z.A) ...
+                                  - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
                                   - spm_matcomp('LogDet', dat(n).z.S) ...
                                   - opt.pg.K );
         model.lb.z.val = model.lb.z.val + dat(n).z.lb.val;
@@ -645,7 +640,7 @@ function dat = oneFitAffine(dat, model, opt)
         par  = 0;
         verbose = false;
     else
-        loop    = opt.split.lopp;
+        loop    = opt.split.loop;
         par     = opt.split.par;
         verbose = opt.split.verbose;
     end
@@ -657,6 +652,7 @@ function dat = oneFitAffine(dat, model, opt)
     end
     
     if opt.q.Mr || dat.q.ok >= 0
+        
         % Compute phi/jac (needed for Affine fitting)
         % ---------------
         if isfield(dat, 'v')
@@ -678,7 +674,7 @@ function dat = oneFitAffine(dat, model, opt)
         
     % Penalise previous failure
     % -------------------------
-    if dat.q.ok < 0
+    if opt.iter.pena && dat.q.ok < 0
         dat.q.ok = dat.q.ok + 1;
     else
 
@@ -693,52 +689,71 @@ function dat = oneFitAffine(dat, model, opt)
             % Compute gradient/hessian
             % ------------------------
 
-            [dat.q.g, dat.q.h] = ghMatchingAffine(noisemodel, ...
-                model.tpl.mu, dat.f.pf, dat.f.c, ...
-                model.tpl.gmu, dat.q.A, opt.q.B, ...
-                phi, jac, 'bb', dat.f.bb, ...
-                'Mmu', model.tpl.M, 'loop', loop, 'par', par, ...
-                'debug', opt.ui.debug, 'approx', opt.q.hapx);
+            if strcmpi(opt.match, 'pull')
+                [g, h] = ghMatchingAffine(noisemodel, ...
+                    dat.tpl.wmu, dat.f.f, ...
+                    model.tpl.gmu, dat.q.A, opt.q.B, ...
+                    phi, jac, 'ipsi', dat.v.ipsi, ...
+                    'Mmu', model.tpl.M, 'loop', loop, 'par', par, ...
+                    'debug', opt.ui.debug, 'approx', opt.q.hapx);
+            else
+                [g, h] = ghMatchingAffine(noisemodel, ...
+                    model.tpl.mu, dat.f.pf, ...
+                    model.tpl.gmu, dat.q.A, opt.q.B, ...
+                    phi, jac, 'count', dat.f.c, 'bb', dat.f.bb, ...
+                    'Mmu', model.tpl.M, 'loop', loop, 'par', par, ...
+                    'debug', opt.ui.debug, 'approx', opt.q.hapx);
+            end
 
             if checkarray(model.q.A)
                 rind = opt.q.rind;
                 [gq, hq] = ghPriorAffine(dat.q.q(rind), model.q.A, 'debug', opt.debug);
-                dat.q.g(rind)      = dat.q.g(rind)      + gq;
-                dat.q.h(rind,rind) = dat.q.h(rind,rind) + hq;
+                g(rind)      = g(rind)      + gq;
+                h(rind,rind) = h(rind,rind) + hq;
                 clear gq hq
             else
                 rind = [];
             end
 
-            dat.q.h = spm_matcomp('LoadDiag', dat.q.h); % Additional regularisation for robustness)
+            h = spm_matcomp('LoadDiag', h); % Additional regularisation for robustness)
 
             % Compute search direction
             % ------------------------
-            dq = - dat.q.h \ dat.q.g;
+            dq = -h\g;
 
             % Line search
             % -----------
-            [okq, q, llm, ~, A, pf, c, bb] = lsAffine(...
-                noisemodel, dq, dat.q.q, dat.f.lb.val, model.tpl.mu, dat.f.f, ...
+            if opt.tpl.cat && strcmpi(opt.match, 'pull')
+                a = model.tpl.a;
+            else
+                a = model.tpl.mu;
+            end
+            result = lsAffine(...
+                noisemodel, dq, dat.q.q, dat.f.lb.val, a, dat.f.f, ...
                 'B', opt.q.B, 'regq', model.q.A, 'rind', rind, ...
                 'iphi', iphi, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
+                'match', opt.match, ...
                 'nit', opt.iter.ls, 'loop', loop, 'par', par, ...
-                'verbose', verbose, 'debug', opt.ui.debug);
-
+                'verbose', verbose, 'debug', opt.ui.debug, ...
+                'pf', dat.f.pf, 'c', dat.f.c, 'wa', dat.tpl.wa, 'wmu', dat.tpl.wmu);
+            
             % Store better values
             % -------------------
-            cumok = cumok || okq;
-            compute_hessian = okq;
-            if okq
-                dat.q.q       = q;
-                dat.q.qq      = q * q';
-                dat.f.lb.val  = llm;
-                dat.q.A       = A;
-                dat.f.pf      = prepareOnDisk(dat.f.pf, size(pf));
-                dat.f.pf(:)   = pf(:);
-                dat.f.c       = prepareOnDisk(dat.f.c, size(c));
-                dat.f.c(:)    = c(:);
-                dat.f.bb      = bb;
+            cumok = cumok || result.ok;
+            compute_hessian = result.ok;
+            if result.ok
+                dat.q.q       = result.q;
+                dat.q.qq      = result.q * result.q';
+                dat.q.A       = result.A;
+                dat.f.lb.val  = result.llm;
+                dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
+                dat.f.pf      = copyarray(result.pf,   dat.f.pf);
+                dat.f.c       = copyarray(result.c,    dat.f.c);
+                dat.f.bb      = result.bb;
+                if strcmpi(opt.match, 'pull')
+                    dat.tpl.wmu = copyarray(result.wmu, dat.tpl.wmu);
+                    rmarray(result.wa);
+                end
             else
                 break
             end
@@ -748,8 +763,13 @@ function dat = oneFitAffine(dat, model, opt)
             dat.q.ok2 = 0;
             dat.q.ok  = 1; 
         else
-            dat.q.ok2 = dat.q.ok2 - 1;
-            dat.q.ok  = dat.q.ok2; 
+            if opt.iter.pena
+                dat.q.ok2 = dat.q.ok2 - 1;
+                dat.q.ok  = dat.q.ok2; 
+            else
+                dat.q.ok2 = 0;
+                dat.q.ok  = 0;
+            end
         end
         
         if opt.q.Mr
@@ -758,13 +778,23 @@ function dat = oneFitAffine(dat, model, opt)
             % ---------------------
 
             if compute_hessian
-                dat.q.h = ghMatchingAffine(noisemodel, ...
-                    model.tpl.mu, dat.f.pf, dat.f.c, ...
-                    model.tpl.gmu, dat.q.A, opt.q.B, ...
-                    dat.v.phi, dat.v.jac, ...
-                    'bb', dat.f.bb', 'hessian', true, ...
-                    'Mmu', model.tpl.M, 'loop', loop, 'par', par, ...
-                    'debug', opt.ui.debug, 'approx', opt.q.hapx);
+                if strcmpi(opt.match, 'pull')
+                    dat.q.h = ghMatchingAffine(noisemodel, ...
+                        dat.tpl.wmu, dat.f.f, ...
+                        model.tpl.gmu, dat.q.A, opt.q.B, ...
+                        phi, jac, 'ipsi', dat.v.ipsi, ...
+                        'hessian', true, ...
+                        'Mmu', model.tpl.M, 'loop', loop, 'par', par, ...
+                        'debug', opt.ui.debug, 'approx', opt.q.hapx);
+                else
+                    dat.q.h = ghMatchingAffine(noisemodel, ...
+                        model.tpl.mu, dat.f.pf, ...
+                        model.tpl.gmu, dat.q.A, opt.q.B, ...
+                        phi, jac, 'count', dat.f.c, 'bb', dat.f.bb, ...
+                        'hessian', true, ...
+                        'Mmu', model.tpl.M, 'loop', loop, 'par', par, ...
+                        'debug', opt.ui.debug, 'approx', opt.q.hapx);
+                end
 
                 if checkarray(model.q.A)
                     [~, hq] = ghPriorAffine(dat.q(rind), model.q.A, 'debug', opt.ui.debug);
@@ -779,16 +809,19 @@ function dat = oneFitAffine(dat, model, opt)
             dat.q.S = 0;
         end
     
+        % Lower bound
+        % -----------
+        rind = opt.q.rind;
+        dat.q.lb.val = -0.5*( trace((dat.q.qq(rind,rind) + dat.q.S(rind,rind))*model.q.A) ...
+                              - spm_prob('Wishart', 'ELogDet', model.q.A, opt.N + opt.q.n0) ...
+                              - spm_matcomp('LogDet', dat.q.S(rind,rind)) ...
+                              - opt.q.Mr );
+                              
     end % < penalise previous failure
     
-    % Cleaning
+    % Cleaning (just in case)
     % --------
-    % I should probably clear variables and remove files that are not
-    % useful anymore. This will cause less disk and broadband usage.
-    dat.q.g    = rmarray(dat.q.g);
-    dat.q.h    = rmarray(dat.q.h);
-    dat.v.iphi = rmarray(dat.v.ipsi);
-    dat.v.ipsi = rmarray(dat.v.iphi);
+    dat.v.iphi = rmarray(dat.v.iphi);
     dat.v.phi  = rmarray(dat.v.phi);
     dat.v.jac  = rmarray(dat.v.jac);
 end
@@ -827,7 +860,6 @@ function [dat, model] = batchFitAffine(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-%         dat(n1:ne) = distribute('oneFitAffine', dat(n1:ne), model, opt);
         dat(n1:ne) = distribute(opt.dist, 'pgra_batch', 'oneFitAffine', 'inplace', dat(n1:ne), model, opt);
         
         for n=n1:ne
@@ -868,7 +900,7 @@ function dat = oneFitLatent(dat, model, opt)
         par  = 0;
         verbose = false;
     else
-        loop    = opt.split.lopp;
+        loop    = opt.split.loop;
         par     = opt.split.par;
         verbose = opt.split.verbose;
     end
@@ -881,7 +913,7 @@ function dat = oneFitLatent(dat, model, opt)
     
     % Penalise previous failure
     % -------------------------
-    if dat.z.ok < 0
+    if opt.iter.pena && dat.z.ok < 0
         dat.z.ok = dat.z.ok + 1;
     else
 
@@ -896,10 +928,17 @@ function dat = oneFitLatent(dat, model, opt)
             % Compute gradient/hessian
             % ------------------------
 
-            [g, h] = ghMatchingLatent(noisemodel, ...
-                model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, model.pg.w, ...
-                'bb', dat.f.bb, 'loop', loop, ...
-                'par', par, 'debug', opt.ui.debug);
+            if strcmpi(opt.match, 'pull')
+                [g, h] = ghMatchingLatent(noisemodel, ...
+                    dat.tpl.wmu, dat.f.f, model.tpl.gmu, model.pg.w, ...
+                    'ipsi', dat.v.ipsi, 'loop', loop, ...
+                    'par', par, 'debug', opt.ui.debug);
+            else
+                [g, h] = ghMatchingLatent(noisemodel, ...
+                    model.tpl.mu, dat.f.pf, model.tpl.gmu, model.pg.w, ...
+                    'count', dat.f.c, 'bb', dat.f.bb, 'loop', loop, ...
+                    'par', par, 'debug', opt.ui.debug);
+            end
 
             [gz, hz] = ghPriorLatent(dat.z.z, model.z.A + opt.pg.geod * model.pg.ww, 'debug', opt.ui.debug);
             g = g + gz;
@@ -914,41 +953,58 @@ function dat = oneFitLatent(dat, model, opt)
 
             % Line search
             % -----------
-            [okz, z, llm, ~, v, ~, pf, c, bb] = lsLatent(...
+            if opt.tpl.cat && strcmpi(opt.match, 'pull')
+                a = model.tpl.a;
+            else
+                a = model.tpl.mu;
+            end
+            result = lsLatent(...
                 noisemodel, dz, dat.z.z, dat.v.v, dat.f.lb.val, ...
-                model.pg.w, model.tpl.mu, dat.f.f, ...
+                model.pg.w, a, dat.f.f, ...
                 'regz', model.z.A + opt.pg.geod * model.pg.ww, ...
                 'A', dat.q.A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
                 'nit', opt.iter.ls, 'itgr', opt.iter.itg, ...
                 'prm', opt.pg.prm, 'bnd', opt.pg.bnd, ...
+                'match', opt.match, ...
                 'par', par, 'loop', loop, ...
-                'verbose', verbose, 'debug', opt.ui.debug);
+                'verbose', verbose, 'debug', opt.ui.debug, ...
+                'pf', dat.f.pf, 'c', dat.f.c, 'wa', dat.tpl.wa, 'wmu', dat.tpl.wmu);
 
             % Store better values
             % -------------------
-            cumok = cumok || okz;
-            compute_hessian = okz;
-            if okz
-                dat.z.z       = z;
-                dat.z.zz      = z * z';
-                dat.f.lb.val  = llm;
-                dat.v.v(:)    = v(:);
-                dat.f.pf      = prepareOnDisk(dat.f.pf, size(pf));
-                dat.f.pf(:)   = pf(:);
-                dat.f.c       = prepareOnDisk(dat.f.c, size(c));
-                dat.f.c(:)    = c(:);
-                dat.f.bb      = bb;
+            cumok = cumok || result.ok;
+            compute_hessian = result.ok;
+            if result.ok
+                dat.z.z       = result.z;
+                dat.z.zz      = result.z * result.z';
+                dat.f.lb.val  = result.llm;
+                dat.v.v       = copyarray(result.v,    dat.v.v);
+                dat.v.iphi    = copyarray(result.iphi, dat.v.iphi);
+                dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
+                dat.f.pf      = copyarray(result.pf,   dat.f.pf);
+                dat.f.c       = copyarray(result.c,    dat.f.c);
+                dat.f.bb      = result.bb;
+                if strcmpi(opt.match, 'pull')
+                    dat.tpl.wmu = copyarray(result.wmu, dat.tpl.wmu);
+                    rmarray(result.wa);
+                end
             else
                 break
             end
+            clear result
 
         end % < GN iterations
         if cumok
-            dat.z.ok = 0;
-            dat.z.ok  = 1; 
+            dat.z.ok2 = 0; 
+            dat.z.ok  = 1;
         else
-            dat.z.ok2 = dat.z.ok2 - 1;
-            dat.z.ok  = dat.z.ok2; 
+            if opt.iter.pena
+                dat.z.ok2 = dat.z.ok2 - 1;
+                dat.z.ok  = dat.z.ok2; 
+            else
+                dat.z.ok2 = 0; 
+                dat.z.ok  = 0;
+            end
         end
         
     
@@ -956,9 +1012,17 @@ function dat = oneFitLatent(dat, model, opt)
         % ---------------------
 
         if compute_hessian
-            h = ghMatchingLatent(noisemodel, ...
-                model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, model.pg.w,...
-                'bb', dat.f.bb, 'hessian', true);
+            if strcmpi(opt.match, 'pull')
+                h = ghMatchingLatent(noisemodel, ...
+                    dat.tpl.wmu, dat.f.f, model.tpl.gmu, model.pg.w, ...
+                    'ipsi', dat.v.ipsi, 'hessian', true, ...
+                    'loop', loop, 'par', par, 'debug', opt.ui.debug);
+            else
+                h = ghMatchingLatent(noisemodel, ...
+                    model.tpl.mu, dat.f.pf, model.tpl.gmu, model.pg.w, ...
+                    'count', dat.f.c, 'bb', dat.f.bb, 'hessian', true, ...
+                    'loop', loop, 'par', par, 'debug', opt.ui.debug);
+            end
 
             [~, hz] = ghPriorLatent(dat.z.z, model.z.A + opt.pg.geod * model.pg.ww);
             h = h + hz;
@@ -970,14 +1034,16 @@ function dat = oneFitLatent(dat, model, opt)
     dat.z.S = inv(h);
     clear h
     
-    end % < penalise previous failure
-    
     % Lower bound
     % -----------
+    % I don't update the lower bound when GN is not performed because it
+    % may lead to 'rightfully) lowering the lower bound.
     dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                           - spm_matcomp('LogDet', model.z.A) ...
+                           - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
                            - spm_matcomp('LogDet', dat.z.S) ...
                            - opt.pg.K );
+                       
+    end % < penalise previous failure
     
 end
 
@@ -1043,7 +1109,7 @@ end
 
 
 %% ------------------------------------------------------------------------
-% Fit Velocity field
+% Fit Residual field
 % -------------------------------------------------------------------------
 
 function dat = oneFitResidual(dat, model, opt)
@@ -1075,7 +1141,7 @@ function dat = oneFitResidual(dat, model, opt)
             
     % Penalise previous failure
     % -------------------------
-    if dat.v.ok < 0
+    if opt.iter.pena && dat.v.ok < 0
         dat.v.ok = dat.v.ok + 1;
     else
         
@@ -1086,16 +1152,22 @@ function dat = oneFitResidual(dat, model, opt)
             
             % Compute gradient/hessian
             % ------------------------
-            g = zeros([opt.tpl.lat 3], 'single'); 
-            h = zeros([opt.tpl.lat 6], 'single'); 
-            bx = dat.f.bb.x;
-            by = dat.f.bb.y;
-            bz = dat.f.bb.z;
 
-            [g(bx,by,bz,:), h(bx,by,bz,:)] = ghMatchingVel(...
-                noisemodel, ...
-                model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, ...
-                'bb', dat.f.bb, 'loop', loop, 'par', par, 'debug', opt.ui.debug);
+            if strcmpi(opt.match, 'pull')
+                [g, h] = ghMatchingVel(...
+                    noisemodel, ...
+                    dat.tpl.wmu, dat.f.f, model.tpl.gmu, 'ipsi', dat.v.ipsi, ...
+                    'loop', loop, 'par', par, 'debug', opt.ui.debug);
+            else
+                g = zeros([opt.tpl.lat 3], 'single');
+                h = zeros([opt.tpl.lat 6], 'single');
+                [g(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:), ...
+                 h(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:)] ...
+                    = ghMatchingVel(noisemodel, ...
+                        model.tpl.mu, dat.f.pf, model.tpl.gmu, ...
+                        'count', dat.f.c, 'bb', dat.f.bb, ...
+                        'loop', loop, 'par', par, 'debug', opt.ui.debug);
+            end
             v = numeric(dat.v.v);
             r = numeric(dat.v.r);
             g = g + ghPriorVel(r, opt.tpl.vs, (model.r.l + opt.pg.geod) * opt.pg.prm, opt.pg.bnd);
@@ -1108,16 +1180,20 @@ function dat = oneFitResidual(dat, model, opt)
 
             % Line search
             % -----------
-            result = lsVelocity2(...
-                noisemodel, dv, r, dat.f.lb.val, model.tpl.mu, dat.f.f, ...
+            if opt.tpl.cat && strcmpi(opt.match, 'pull')
+                a = model.tpl.a;
+            else
+                a = model.tpl.mu;
+            end
+            result = lsVelocity(...
+                noisemodel, dv, r, dat.f.lb.val, a, dat.f.f, ...
                 'v0', v, 'lam', model.r.l + opt.pg.geod, 'prm', opt.pg.prm, ...
                 'itgr', opt.iter.itg, 'bnd', opt.pg.bnd, ...
                 'A', A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
-                'match', 'push', ...
+                'match', opt.match, ...
                 'nit', opt.iter.ls,  'par', par, 'loop', loop, ...
                 'verbose', verbose, 'debug', opt.ui.debug, ...
                 'pf', dat.f.pf, 'c', dat.f.c, 'wa', dat.tpl.wa, 'wmu', dat.tpl.wmu);
-%                 'match', 'pull', 'itrp', opt.tpl.itrp, 'tplbnd', opt.tpl.bnd, ...
 
             % Store better values
             % -------------------
@@ -1125,26 +1201,18 @@ function dat = oneFitResidual(dat, model, opt)
             compute_hessian = result.ok;
             if result.ok
                 dat.f.lb.val  = result.match;
-                dat.v.v       = prepareOnDisk(dat.v.v, size(result.v));
-                dat.v.v(:)    = result.v(:);
-                dat.v.r       = prepareOnDisk(dat.v.r, size(result.r));
-                dat.v.r(:)    = result.r(:);
-                if isfield(result, 'pf')
-                    dat.f.pf = result.pf;
-                end
-                if isfield(result, 'c')
-                    dat.f.c = result.c;
-                end
-                if isfield(result, 'bb')
-                    dat.f.bb = result.bb;
-                end
-                if isfield(result, 'wa')
-                    dat.tpl.wmu = result.wmu;
-                end
-                if isfield(result, 'wmu')
-                    dat.tpl.wmu = result.wmu;
+                dat.v.v       = copyarray(result.v,    dat.v.v);
+                dat.v.r       = copyarray(result.r,    dat.v.r);
+                dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
+                dat.f.pf      = copyarray(result.pf,   dat.f.pf);
+                dat.f.c       = copyarray(result.c,    dat.f.c);
+                dat.f.bb      = result.bb;
+                if strcmpi(opt.match, 'pull')
+                    dat.tpl.wmu   = copyarray(result.wmu, dat.tpl.wmu);
+                    rmarray(result.wa);
                 end
                 r = result.r;
+                ipsi = dat.v.ipsi;
             else
                 break
             end
@@ -1155,8 +1223,13 @@ function dat = oneFitResidual(dat, model, opt)
             dat.v.ok2 = 0;
             dat.v.ok  = 1; 
         else
-            dat.v.ok2 = dat.v.ok2 - 1;
-            dat.v.ok  = dat.v.ok2; 
+            if opt.iter.pena
+                dat.v.ok2 = dat.v.ok2 - 1;
+                dat.v.ok  = dat.v.ok2; 
+            else
+                dat.v.ok2 = 0;
+                dat.v.ok  = 0;
+            end
         end
     
 
@@ -1176,14 +1249,20 @@ function dat = oneFitResidual(dat, model, opt)
         % Trace(P\L) part
         % ---------------
         if compute_hessian
-            bx = dat.f.bb.x;
-            by = dat.f.bb.y;
-            bz = dat.f.bb.z;
-            h  = zeros([opt.tpl.lat 6], 'single'); 
-            h(bx,by,bz,:) = ghMatchingVel(noisemodel, ...
-                model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, ...
-                'bb', dat.f.bb, 'hessian', true, ...
-                'loop', loop, 'par', par, 'debug', opt.ui.debug);
+            if strcmpi(opt.match, 'pull')
+                h = ghMatchingVel(noisemodel, ...
+                    dat.tpl.wmu, dat.f.f, model.tpl.gmu, 'ipsi', ipsi, ...
+                    'hessian', true, 'loop', loop, 'par', par, ...
+                    'debug', opt.ui.debug);
+            else
+                h = zeros([opt.tpl.lat 6], 'single');
+                h(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:) = ghMatchingVel(...
+                    noisemodel, ...
+                    model.tpl.mu, dat.f.pf, model.tpl.gmu, ...
+                    'count', dat.f.c, 'bb', dat.f.bb, ...
+                    'hessian', true, 'loop', loop, 'par', par, ...
+                    'debug', opt.ui.debug);
+            end
         end
         dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.r.l + opt.pg.geod) * opt.pg.prm]));
         dat.v.lb.tr = dat.v.lb.tr(1);
@@ -1214,7 +1293,6 @@ function dat = oneFitResidual(dat, model, opt)
     % --------
     % Just in case
     dat.v.iphi = rmarray(dat.v.iphi);
-    dat.v.ipsi = rmarray(dat.v.ipsi);
     dat.tpl.wa = rmarray(dat.tpl.wa);
 end
 
@@ -1244,7 +1322,7 @@ function [dat, model] = batchFitResidual(dat, model, opt)
     end
     
     % --- Batch processing
-    if opt.ui.verbose, before = plotBatchBegin('Fit Vel'); end
+    if opt.ui.verbose, before = plotBatchBegin('Fit Res'); end
     for i=1:ceil(N/batch)
         n1 = (i-1)*batch + 1;
         ne = min(N, i*batch);
@@ -1285,15 +1363,38 @@ end
 
 function dat = oneGradHessVelocity(dat, model, opt)
 
+    % Detect parallelisation scheme
+    % -----------------------------
+    if strcmpi(opt.split.loop, 'subject')
+        loop    = '';
+        par     = 0;
+    else
+        loop    = opt.split.loop;
+        par     = opt.split.par;
+    end
+    
     if isfield(dat, 'model')
         noisemodel = dat.model;
     else
         noisemodel = opt.model;
     end
     
-    [dat.v.g, dat.v.h] = ghMatchingVel(noisemodel, ...
-        model.tpl.mu, dat.f.pf, dat.f.c, model.tpl.gmu, ...
-        'bb', dat.f.bb, 'output', {dat.v.g, dat.v.h});
+    if strcmpi(opt.match, 'pull')
+        [g, h] = ghMatchingVel(noisemodel, ...
+            dat.tpl.wmu, dat.f.f, model.tpl.gmu, 'ipsi', dat.v.ipsi, ...
+            'loop', loop, 'par', par, 'debug', opt.ui.debug);
+    else
+        g = zeros([opt.tpl.lat 3], 'single');
+        h = zeros([opt.tpl.lat 6], 'single');
+        [g(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:), ...
+         h(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:)] ...
+            = ghMatchingVel(noisemodel, ...
+                model.tpl.mu, dat.f.pf, model.tpl.gmu, ...
+                'count', dat.f.c, 'bb', dat.f.bb, ...
+                'loop', loop, 'par', par, 'debug', opt.ui.debug);
+    end
+    dat.v.g = copyarray(g, dat.v.g);
+    dat.v.h = copyarray(h, dat.v.h);
 end
 
 % --------
@@ -1340,11 +1441,8 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
             for n=n1:ne
                 gv = numeric(dat(n).v.g);
                 hv = numeric(dat(n).v.h);
-                bx = dat(n).f.bb.x;
-                by = dat(n).f.bb.y;
-                bz = dat(n).f.bb.z;
-                gw(bx,by,bz,:) = gw(bx,by,bz,:) + gv * single(dat(n).z.z(k));
-                hw(bx,by,bz,:) = hw(bx,by,bz,:) + hv * single(dat(n).z.z(k))^2;
+                gw = gw + gv * single(dat(n).z.z(k));
+                hw = hw + hv * single(dat(n).z.z(k))^2;
                 clear gv hv
             end
             model.pg.g(:,:,:,:,k) = gw;
@@ -1388,29 +1486,51 @@ function dat = oneLB(dat, model, opt, which)
     switch lower(which)
         
         case 'matching'
-%             dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
-%                                       'par', par, 'loop', loop, ...
-%                                       'debug', opt.ui.debug);
-            dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
-                                      'par', par, 'loop', loop, ...
-                                      'debug', opt.ui.debug, 'bb', dat.f.bb);
-        
+            if strcmpi(opt.match, 'pull')
+                dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
+                    'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            else
+                dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
+                    'bb', dat.f.bb, 'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            end
+            
+        case 'template'
+            if strcmpi(opt.match, 'pull')
+                if opt.tpl.cat
+                    dat.tpl.wa = pullTemplate(dat.v.ipsi, model.tpl.a, ...
+                        'par', par, 'output', dat.tpl.wa, 'debug', opt.ui.debug);
+                    dat.tpl.wmu = reconstructProbaTemplate(dat.tpl.wa, ...
+                        'loop', loop, 'par', par, 'output', dat.tpl.wmu, ...
+                        'debug', opt.ui.debug);
+                    dat.tpl.wa = rmarray(dat.tpl.wa);
+                else
+                    dat.tpl.wmu = pullTemplate(dat.v.ipsi, model.tpl.mu, ...
+                        'par', par, 'output', dat.tpl.wmu, 'debug', opt.ui.debug);
+                end
+                dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
+                    'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            else
+                dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
+                    'bb', dat.f.bb, 'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            end
+            
         case 'precisionz'
             dat.z.lb.val = -0.5*( trace((dat.z.zz + dat.z.S)*(model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                  - spm_matcomp('LogDet', model.z.A) ...
+                                  - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
                                   - spm_matcomp('LogDet', dat.z.S) ...
                                   - opt.pg.K );
     
         case 'precisionq'
             rind = opt.q.rind;
             dat.q.lb.val = -0.5*( trace((dat.q.qq(rind,rind) + dat.q.S(rind,rind))*model.q.A) ...
-                                  - spm_matcomp('LogDet', model.q.A) ...
+                                  - spm_prob('Wishart', 'ELogDet', model.q.A, opt.f.N + opt.q.n0) ...
                                   - spm_matcomp('LogDet', dat.q.S(rind,rind)) ...
                                   - opt.q.Mr );
+                              
         case 'orthogonalise'
             % Here, no need to recompute terms depending on Wz
             dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                   - spm_matcomp('LogDet', model.z.A) ...
+                                   - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
                                    - spm_matcomp('LogDet', dat.z.S) ...
                                    - opt.pg.K );
                                
@@ -1423,7 +1543,7 @@ function dat = oneLB(dat, model, opt, which)
             iphi = exponentiateVelocity(v, 'iphi', ....
                                         'itgr', opt.iter.itg, 'vs', opt.tpl.vs, ...
                                         'prm', opt.pg.prm, 'bnd', opt.pg.bnd);
-            dat.v.v(:) = v(:);
+            dat.v.v = copyarray(v, dat.v.v);
             clear v
             ipsi = reconstructIPsi(dat.q.A, iphi, 'lat', opt.tpl.lat, ...
                                    'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
@@ -1433,12 +1553,28 @@ function dat = oneLB(dat, model, opt, which)
                                                       'output', {dat.f.pf, dat.f.c}, ...
                                                       'loop', loop, 'par', par, ...
                                                       'debug', opt.ui.debug);
-            clear ipsi
-            dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
-                                      'par', par, 'loop', loop, ...
-                                      'debug', opt.ui.debug, 'bb', dat.f.bb);
+            if strcmpi(opt.match, 'pull')
+                if opt.tpl.cat
+                    dat.tpl.wa = pullTemplate(ipsi, model.tpl.a, ...
+                        'par', par, 'output', dat.tpl.wa, 'debug', opt.ui.debug);
+                    dat.tpl.wmu = reconstructProbaTemplate(dat.tpl.wa, ...
+                        'loop', loop, 'par', par, 'output', dat.tpl.wmu, ...
+                        'debug', opt.ui.debug);
+                    dat.tpl.wa = rmarray(dat.tpl.wa);
+                else
+                    dat.tpl.wmu = pullTemplate(dat.v.ipsi, model.tpl.mu, ...
+                        'par', par, 'output', dat.tpl.wmu, 'debug', opt.ui.debug);
+                end
+                dat.v.ipsi = copyarray(ipsi, dat.v.ipsi);
+                clear ipsi
+                dat.f.lb.val = llMatching(noisemodel, dat.tpl.wmu, dat.f.f, ...
+                    'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            else
+                dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
+                    'bb', dat.f.bb, 'par', par, 'loop', loop, 'debug', opt.ui.debug);
+            end
             dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                   - spm_matcomp('LogDet', model.z.A) ...
+                                   - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
                                    - spm_matcomp('LogDet', dat.z.S) ...
                                    - opt.pg.K );
         case 'lambda'
@@ -1516,16 +1652,16 @@ function [dat, model] = batchLB(which, dat, model, opt)
         case 'precisionz'
             if opt.z.n0
                 model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
-                                           model.z.A,   opt.z.n0+opt.N, ...
-                                           opt.z.A0,    opt.z.n0, ...
-                                           'normal');
+                                            model.z.A,   opt.z.n0+opt.N, ...
+                                            opt.z.A0,    opt.z.n0, ...
+                                            'normal');
             end
         case 'precisionq'
             if opt.q.n0 && opt.q.Mr
                 model.lb.Aq.val = -spm_prob('Wishart', 'kl', ...
-                                           model.q.A,   opt.q.n0+opt.N, ...
-                                           opt.q.A0,    opt.q.n0, ...
-                                           'normal');
+                                            model.q.A,   opt.q.n0+opt.N, ...
+                                            opt.q.A0,    opt.q.n0, ...
+                                            'normal');
             end
         case 'lambda'
             if opt.r.n0

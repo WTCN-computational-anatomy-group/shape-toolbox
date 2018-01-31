@@ -16,7 +16,7 @@ function [model, dat, opt] = pgra_model(varargin)
 %   w    = principal subspace of deformation
 %   z    = latent coordinates in the principal subspace
 %   r    = residual field
-%   q    = parameters of a rigid-body (or affine) transform, to align shapes
+%   q    = parameters of a rigid (or affine) transform, to align shapes
 %   a/mu = Template (i.e., mean shape)
 %
 % In this model, W, z, and r are explicit in the model and are all  
@@ -73,8 +73,6 @@ function [model, dat, opt] = pgra_model(varargin)
 % q.hapx   - Approximate affine hessian [true]
 % f.M      - Force same voxel-to-world to all images [read from file]
 %
-% PROCESSING
-% ----------
 % optimise.pg.w  - Optimise subspace [true] or keep if fixed (false)
 % optimise.z.z   - Optimise latent coordinates [true]
 % optimise.z.A   - Optimise latent precision [true]
@@ -83,18 +81,24 @@ function [model, dat, opt] = pgra_model(varargin)
 % optimise.r.r   - Optimise reidual fields [true]
 % optimise.r.l   - Optimise residual precision [true]
 % optimise.tpl.a - Optimise template [true]
+%
+% PROCESSING
+% ----------
+% match        - Matching term version 'push'/['pull']
 % iter.em      - Maximum number of EM iterations [1000]
 % iter.gn      - Maximum number of Gauss-Newton iterations [1]
 % iter.ls      - Maximum number of line search iterations [6]
 % iter.itg     - Number of integration steps for geodesic shooting [auto]
+% iter.pena    - Penalise Gauss-Newton failures [true]
 % lb.threshold - Convergence criterion (lower bound gain) [1e-5]
+% lb.moving    - Moving average over LB gain [3]
 % split.loop   - How to split array processing: 'none'/'slice'/['subject']
 % split.par    - Parallelise processing (number of workers): 0/n/[inf]
 % split.batch  - Batch size for parallelisation [auto]
 % ui.verbose   - Talk during processing [true]
 % ui.debug     - Further debuging talk [false]
 % ui.ftrack    - Figure object for the lower bound tracking [gcf]
-% dist         - distributed processing. See `help distribute_default`.
+% dist         - Distributed processing. See `help distribute_default`.
 %
 % I/O
 % ---
@@ -260,7 +264,9 @@ function [model, dat, opt] = pgra_model(varargin)
             fprintf(['%10s | %10d | ' repmat('=',1,50) ' |\n'], 'EM', emit);
         end
         
-        if model.lb.lb.gain < opt.lb.threshold
+        N = numel(model.lb.lb.gainlist);
+        moving_gain = mean(abs(model.lb.lb.gainlist(N:-1:max(1,N-opt.lb.moving+1))));
+        if moving_gain < opt.lb.threshold
             if opt.optimise.q.q && ~model.q.active
                 model.q.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'Affine');
@@ -271,11 +277,7 @@ function [model, dat, opt] = pgra_model(varargin)
                 model.r.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'Residual');
             else
-                if model.lb.lb.gain >= 0
-                    fprintf('Converged :D\n');
-                else
-                    fprintf('Lower bound dropped :(\n');
-                end
+                fprintf('Converged :D\n');
                 break
             end
         end
@@ -496,35 +498,26 @@ function [model, dat, opt] = pgra_model(varargin)
             if opt.ui.verbose, fprintf('%10s | %10s ', 'Template', ''); tic; end
             if opt.tpl.cat
                 model.tpl.a = updateMuML(opt.model, dat, ...
-                                         'lat',    opt.tpl.lat,   ...
-                                         'par',    opt.split.par, ...
-                                         'debug',  opt.ui.debug,  ...
-                                         'output', model.tpl.a);
-                model.tpl.gmu = templateGrad(model.tpl.a,  ...
-                                             opt.tpl.itrp, ...
-                                             opt.tpl.bnd,  ...
-                                             'debug',  opt.ui.debug, ...
-                                             'output', model.tpl.gmu);
+                    'lat', opt.tpl.lat, 'par', opt.split.par, ...
+                    'debug', opt.ui.debug, 'output', model.tpl.a);
+                model.tpl.gmu = templateGrad(model.tpl.a, ...
+                    opt.tpl.itrp, opt.tpl.bnd,  ...
+                    'debug',  opt.ui.debug, 'output', model.tpl.gmu);
                 model.tpl.mu = reconstructProbaTemplate(model.tpl.a, ...
-                                                        'par',    opt.split.par, ...
-                                                        'debug',  opt.ui.debug,  ...
-                                                        'output', model.tpl.mu);
+                    'par', opt.split.par, 'debug',  opt.ui.debug, ...
+                    'output', model.tpl.mu);
             else
                 model.tpl.mu = updateMuML(opt.model, dat, ...
-                                          'lat',    opt.tpl.lat,   ...
-                                          'par',    opt.split.par, ...
-                                          'debug',  opt.ui.debug,  ...
-                                          'output', model.tpl.mu);
+                    'lat', opt.tpl.lat, 'par',    opt.split.par, ...
+                    'debug',  opt.ui.debug, 'output', model.tpl.mu);
                 model.tpl.gmu = templateGrad(model.tpl.mu, ...
-                                             opt.tpl.itrp, ...
-                                             opt.tpl.bnd, ...
-                                             'debug',  opt.ui.debug, ...
-                                             'output', model.tpl.gmu);
+                    opt.tpl.itrp, opt.tpl.bnd, ...
+                    'debug',  opt.ui.debug, 'output', model.tpl.gmu);
             end
             if opt.ui.verbose, fprintf('| %6.3s\n', toc); end
             % -----------
             % Lower bound
-            [dat, model] = pgra_batch('LB', 'Matching', dat, model, opt);
+            [dat, model] = pgra_batch('LB', 'Template', dat, model, opt);
             model = updateLowerBound(model);
             plotAll(model, opt);
             % -----------
@@ -641,41 +634,51 @@ function plotAll(model, opt)
         title('Lower bound')
         % Data likelihood
         i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.m.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.m.name)
+        if isfield(model.lb, 'm')
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.m.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.m.name)
+        end
         % PG prior
         i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.w.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.w.name)
+        if isfield(model.lb, 'w')
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.w.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.w.name)
+        end
         
         % --- Line 3
         
         if opt.q.Mr
             % KL affine
             i = i + 1;
-            subplot(nh,nw,i)
-            plot([model.lb.lb.it model.lb.lb.curit], model.lb.q.list, ...
-                 colors(mod(i, length(colors))+1))
-            title(model.lb.q.name)
+            if isfield(model.lb, 'q')
+                subplot(nh,nw,i)
+                plot([model.lb.lb.it model.lb.lb.curit], model.lb.q.list, ...
+                     colors(mod(i, length(colors))+1))
+                title(model.lb.q.name)
+            end
         else
             i = i + 1;
         end
         % KL residual
         i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.r.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.r.name)
+        if isfield(model.lb, 'r')
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.r.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.r.name)
+        end
         % KL latent
         i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.z.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.z.name)
+        if isfield(model.lb, 'z')
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.z.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.z.name)
+        end
         
         
         % --- Line 4
@@ -683,43 +686,55 @@ function plotAll(model, opt)
         if opt.q.Mr
             % KL affine precision
             i = i + 1;
-            subplot(nh,nw,i)
-            plot([model.lb.lb.it model.lb.lb.curit], model.lb.Aq.list, ...
-                 colors(mod(i, length(colors))+1))
-            title(model.lb.Aq.name)
+            if isfield(model.lb, 'Aq')
+                subplot(nh,nw,i)
+                plot([model.lb.lb.it model.lb.lb.curit], model.lb.Aq.list, ...
+                     colors(mod(i, length(colors))+1))
+                title(model.lb.Aq.name)
+            end
         else
             i = i + 1;
         end
         % KL residual precision
         i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.l.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.l.name)
+        if isfield(model.lb, 'l')
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.l.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.l.name)
+        end
         % KL latent precision
         i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.Az.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.Az.name)
+        if isfield(model.lb, 'Az')
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.Az.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.Az.name)
+        end
         
         % --- Line 5
         
         % WW
         i = i + 1;
-        subplot(nh,nw,i)
-        imagesc(model.pg.ww), colorbar;
-        title('W''LW')
+        if isfield(model.pg, 'ww')
+            subplot(nh,nw,i)
+            imagesc(model.pg.ww), colorbar;
+            title('W''LW')
+        end
         % Sample covariance
         i = i + 1;
-        subplot(nh,nw,i)
-        imagesc(model.z.S + model.z.zz), colorbar;
-        title('Sample covariance E[ZZ]')
+        if isfield(model.z, 'zz')
+            subplot(nh,nw,i)
+            imagesc(model.z.S + model.z.zz), colorbar;
+            title('Sample covariance E[ZZ]')
+        end
         % Precision matrix
         i = i + 1;
-        subplot(nh,nw,i)
-        imagesc(model.z.A), colorbar;
-        title('Latent precision E[A]')
+        if isfield(model.z, 'A')
+            subplot(nh,nw,i)
+            imagesc(model.z.A), colorbar;
+            title('Latent precision E[A]')
+        end
         
         drawnow
     end

@@ -74,7 +74,7 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
             armijo = armijo * 2;
         else
             if opt.ui.verbose, printInfo('success'); end
-            if isfield(model, 'armijo')
+            if isfield(model.pg, 'armijo')
                 model.pg.armijo = max(0.9 * armijo, 1);
             end
             ok  = true;

@@ -27,7 +27,7 @@ function gmu = templateGrad(mu, varargin)
     debug  = p.Results.debug;
     
     
-    if debug, fprintf('* templateGrad\n'); end;
+    if debug, fprintf('* templateGrad\n'); end
     
     % --- Default parameters
     if numel(itrp) == 1
@@ -60,12 +60,11 @@ function gmu = templateGrad(mu, varargin)
     % 4) Store data
     for i=1:nc
         mu1 = single(mu(:,:,:,i));
-        c = spm_diffeo('bsplinc', mu1, [itrp bnd]);
-        [~, G1, G2, G3] = spm_diffeo('bsplins', c, id, [itrp bnd]);
+        [~, G1, G2, G3] = spm_diffeo('bsplins', mu1, id, [itrp bnd]);
         gmu(:,:,:,i,1) = G1;
         gmu(:,:,:,i,2) = G2;
         gmu(:,:,:,i,3) = G3;
-        clear c G1 G2 G3
+        clear G1 G2 G3
     end
 
     % --- Write on disk

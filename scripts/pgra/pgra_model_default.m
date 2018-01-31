@@ -14,6 +14,10 @@ function opt = pgra_model_default(opt)
     %    MODEL
     % =====================================================================
     
+    if ~isfield(opt, 'match')
+        opt.match = 'pull';
+    end
+    
     % ---------------------------------------------------------------------
     % Data model
     % ---------------------------------------------------------------------
@@ -76,6 +80,9 @@ function opt = pgra_model_default(opt)
     end
     if ~isfield(opt.pg, 'geod')
         opt.pg.geod = true;
+    end
+    if ~isfield(opt.pg, 'armijo')
+        opt.pg.armijo = 1;
     end
     
     % ---------------------------------------------------------------------
@@ -215,6 +222,12 @@ function opt = pgra_model_default(opt)
         % (NaN = try to guess something efficient)
         opt.iter.itg = nan;
     end
+    if ~isfield(opt.iter, 'pena')
+        % Penalise GN failure by freezing variables for a given number of
+        % iterations (we use a heuristic to choose the number of frozen
+        % updates)
+        opt.iter.pena = true;
+    end
     
     % ---------------------------------------------------------------------
     % Lower bound
@@ -226,6 +239,10 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt.lb,  'threshold')
         % Gain threshold under which convergence is assumed
         opt.lb.threshold = 1e-5;
+    end
+    if ~isfield(opt.lb,  'moving')
+        % Number of EM iterations to take into account for moving average
+        opt.lb.moving = 3;
     end
     
     % ---------------------------------------------------------------------
@@ -421,7 +438,11 @@ function opt = pgra_model_default(opt)
         opt.ondisk.dat.v.iphi = false;
     end
     if ~isfield(opt.ondisk.dat.v, 'ipsi')
-        opt.ondisk.dat.v.ipsi = false;
+        if strcmpi(opt.match, 'pull')
+            opt.ondisk.dat.v.ipsi = true;
+        else
+            opt.ondisk.dat.v.ipsi = false;
+        end
     end
     if ~isfield(opt.ondisk.dat.v, 'phi')
         opt.ondisk.dat.v.phi = false;
@@ -447,6 +468,9 @@ function opt = pgra_model_default(opt)
     end
     if ~isfield(opt.ondisk.dat.tpl, 'wmu')
         opt.ondisk.dat.tpl.wmu = true;
+    end
+    if ~isfield(opt.ondisk.dat.tpl, 'wgmu')
+        opt.ondisk.dat.tpl.wgmu = true;
     end
     
     if ~isfield(opt.ondisk.dat, 'f')
@@ -619,6 +643,13 @@ function opt = pgra_model_default(opt)
             opt.fnames.dat.tpl.wmu = 'wmu_';
         else
             opt.fnames.dat.tpl.wmu = 'warped_template.nii';
+        end
+    end
+    if ~isfield(opt.fnames.dat.tpl, 'wgmu')
+        if isempty(opt.dir.dat)
+            opt.fnames.dat.tpl.wgmu = 'wgmu_';
+        else
+            opt.fnames.dat.tpl.wgmu = 'warped_grad_template.nii';
         end
     end
     

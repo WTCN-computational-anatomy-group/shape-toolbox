@@ -1,5 +1,5 @@
 
-    N = 20;
+    N = 10;
     input_dir = '/Users/balbasty/Desktop/model/input';
     files     = spm_select('List', input_dir, '\.img$');
     if ~isfinite(N)
@@ -18,9 +18,8 @@
     opt.model        = struct('name', 'categorical');
     opt.pg.prm       = [0 0.001 0.02 0.0025 0.005];
     opt.split.par    = 0;
-    opt.pg.K         = 19;
-    opt.match        = 'pull';
-    opt.lb.moving    = 1;
+    opt.pg.K         = 9;
+    opt.iter.pena    = false;
 
     [model, dat] = pgra_model(input, opt);
     
