@@ -15,18 +15,25 @@ function model = updateLowerBound(model, gain)
     if gain
         % Compute gain
         % ------------
-        if gain
-            if isempty(model.lb.lb.list)
-                model.lb.lb.gain = inf;
-            else
-                model.lb.lb.gain = (model.lb.lb.val - model.lb.lb.list(end))/abs(model.lb.lb.list(end));
-            end
-            model.lb.lb.list    = [model.lb.lb.list model.lb.lb.curlist];
-            model.lb.lb.it      = [model.lb.lb.it   model.lb.lb.curit];
-            model.lb.lb.curlist = [];
-            model.lb.lb.curit   = [];
+        if ~isfield(model.lb.lb, 'gainlist')
+            model.lb.lb.gainlist = [];
         end
-        fprintf('%10s | %6.3e\n', 'Gain', model.lb.lb.gain);
+        if isempty(model.lb.lb.list)
+            model.lb.lb.gain = inf;
+        else
+            model.lb.lb.gain = (model.lb.lb.val - model.lb.lb.list(end))/abs(model.lb.lb.list(end));
+        end
+        model.lb.lb.gainlist = [model.lb.lb.gainlist model.lb.lb.gain];
+        model.lb.lb.list     = [model.lb.lb.list model.lb.lb.curlist];
+        model.lb.lb.it       = [model.lb.lb.it   model.lb.lb.curit];
+        model.lb.lb.curlist  = [];
+        model.lb.lb.curit    = [];
+        if model.lb.lb.gain < 0
+            strwarn = '!! dropped';
+        else
+            strwarn = '';
+        end
+        fprintf('%10s | %10s | %6.3e\n', 'Gain', strwarn, model.lb.lb.gain);
         return
     end
 

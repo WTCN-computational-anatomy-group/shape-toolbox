@@ -81,6 +81,9 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt.pg, 'geod')
         opt.pg.geod = true;
     end
+    if ~isfield(opt.pg, 'armijo')
+        opt.pg.armijo = 1;
+    end
     
     % ---------------------------------------------------------------------
     % Template
@@ -236,6 +239,10 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt.lb,  'threshold')
         % Gain threshold under which convergence is assumed
         opt.lb.threshold = 1e-5;
+    end
+    if ~isfield(opt.lb,  'moving')
+        % Number of EM iterations to take into account for moving average
+        opt.lb.moving = 3;
     end
     
     % ---------------------------------------------------------------------

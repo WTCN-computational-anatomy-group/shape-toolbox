@@ -1,4 +1,4 @@
-function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, mu, f, varargin)
+function result = lsAffine(model, dq, q0, llm0, mu, f, varargin)
 %__________________________________________________________________________
 %
 % Performs a line search along a direction to find better affine
@@ -6,7 +6,7 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
 %
 %--------------------------------------------------------------------------
 %
-% FORMAT [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, mu, f, ...)
+% FORMAT result = lsAffine(model, dq, q0, llm0, mu, f, ...)
 %
 % REQUIRED
 % --------
@@ -35,15 +35,17 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
 % 
 % OUTPUT
 % ------
-% ok    - True if a better parameter value was found
-% q     - New parameter value
-% llm   - New log-likelihood (matching term)
-% llq   - New log-likelihood (prior term)
-% A     - New affine transform
-% pf    - New pushed image
-% c     - New pushed voxel count
-% bb    - Bounding box of pushed image in template space.
-% ipsi  - (if needed) New complete affine+diffeomorphic mapping
+% Structure with fields:
+%   ok   - True if a better parameter value was found
+% And if ok == true:
+%   q     - New parameter value
+%   llm   - New log-likelihood (matching term)
+%   llq   - New log-likelihood (prior term)
+%   A     - New affine transform
+%   pf    - New pushed image
+%   c     - New pushed voxel count
+%   bb    - Bounding box of pushed image in template space.
+%   ipsi  - New complete affine+diffeomorphic mapping
 %__________________________________________________________________________
 
     % --- Parse inputs
@@ -63,26 +65,64 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
     p.addParameter('Mf',       eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     p.addParameter('Mmu',      eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     p.addParameter('nit',      6,      @isscalar);
+    p.addParameter('match', 'pull', @ischar);
     p.addParameter('par',      false,  @isscalar);
     p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'slice', 'component', 'none', ''})));
-    p.addParameter('output',   []);
+    p.addParameter('pf',  nan, @(X) isnumeric(X) || isa(X, 'file_array'));
+    p.addParameter('c',   nan, @(X) isnumeric(X) || isa(X, 'file_array'));
+    p.addParameter('wa',  nan, @(X) isnumeric(X) || isa(X, 'file_array'));
+    p.addParameter('wmu', nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('verbose',  false,  @isscalar);
     p.addParameter('debug',    false,  @isscalar);
     p.parse(model, dq, q0, llm0, mu, f, varargin{:});
-    llq0   = p.Results.llq0;
-    B      = p.Results.B;
-    rind   = p.Results.rind;
-    regq   = p.Results.regq;
-    iphi   = p.Results.iphi;
-    Mf     = p.Results.Mf;
-    Mmu    = p.Results.Mmu;
-    nit    = p.Results.nit;
-    par    = p.Results.par;
-    loop   = p.Results.loop;
+    llq0    = p.Results.llq0;
+    B       = p.Results.B;
+    rind    = p.Results.rind;
+    regq    = p.Results.regq;
+    iphi    = p.Results.iphi;
+    Mf      = p.Results.Mf;
+    Mmu     = p.Results.Mmu;
+    nit     = p.Results.nit;
+    par     = p.Results.par;
+    loop    = p.Results.loop;
     verbose = p.Results.verbose;
-    debug  = p.Results.debug;
+    debug   = p.Results.debug;
+    
+    matchmode = p.Results.match;
+    pf      = p.Results.pf;
+    c       = p.Results.c;
+    wa      = p.Results.wa;
+    wmu     = p.Results.wmu;
     
     if debug, fprintf('* lsAffine\n'); end
+    
+    cat = any(strcmpi(model.name, {'bernoulli', 'binomial', 'categorical', 'multinomial'}));
+    
+    % --- Save previous pushed/pull
+    pf_bck = false;
+    if isa(pf, 'file_array') && exist(pf.fname, 'file')
+        pf_bck = true;
+        [path, name, ext] = fileparts(pf.fname);
+        copyfile(pf.fname, fullfile(path, [name '_bck' ext]));
+    end
+    c_bck = false;
+    if isa(c, 'file_array') && exist(c.fname, 'file')
+        c_bck = true;
+        [path, name, ext] = fileparts(c.fname);
+        copyfile(c.fname, fullfile(path, [name '_bck' ext]));
+    end
+    wa_bck = false;
+    if isa(wa, 'file_array') && exist(wa.fname, 'file')
+        wa_bck = true;
+        [path, name, ext] = fileparts(wa.fname);
+        copyfile(wa.fname, fullfile(path, [name '_bck' ext]));
+    end
+    wmu_bck = false;
+    if isa(wmu, 'file_array') && exist(wmu.fname, 'file')
+        wmu_bck = true;
+        [path, name, ext] = fileparts(wmu.fname);
+        copyfile(wmu.fname, fullfile(path, [name '_bck' ext]));
+    end
     
     % --- Set some default parameter value
     if isempty(B)
@@ -106,11 +146,12 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
     dq = numeric(dq);
     
     % --- Initialise line search
-    armijo = 1;           % Armijo factor
-    ok     = false;       % Found a better ll ?
+    armijo = 1;           % Armijo facto
     ll0    = llm0 + llq0; % Log-likelihood (only parts that depends on q)
     dimf   = [size(f) 1 1];
     latf   = dimf(1:3);
+    dimmu   = [size(mu) 1 1];
+    latmu   = dimmu(1:3);
     
     if verbose
         printInfo('header');
@@ -126,14 +167,27 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
         q = q0 + dq / armijo;
         A = exponentiateAffine(q, B, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
-        [pf, c, bb] = pushImage(ipsi, f, lat, 'par', par, 'loop', loop, 'debug', debug);
-        llm = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
+        if strcmpi(matchmode, 'push')
+            [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
+            llm = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
+        elseif strcmpi(matchmode, 'pull')
+            if cat
+                wa = pullTemplate(ipsi, mu, 'par', par, 'output', wa, 'debug', debug);
+                wmu = reconstructProbaTemplate(wa, 'output', wmu, 'loop', loop, 'par', par, 'debug', debug);
+                if ~isa(wa, 'file_array')
+                    clear wa
+                end
+            else
+                wmu = pullTemplate(ipsi, mu, 'par', par, 'output', wmu, 'debug', debug);
+            end
+            llm = llMatching(model, wmu, f, 'par', par, 'loop', loop, 'debug', debug);
+        end
         if checkarray(regq)
             llq = llPriorAffine(q(rind), regq, 'fast', 'debug', debug);
         else
             llq = 0;
         end
-        ll  = llm + llq;
+        ll = llm + llq;
         
         if verbose, printInfo(i, ll0, llm, llq); end
         
@@ -142,16 +196,48 @@ function [ok, q, llm, llq, A, pf, c, bb, ipsi] = lsAffine(model, dq, q0, llm0, m
             armijo = armijo * 2;
         else
             if verbose, printInfo('success'); end
+            result     = struct;
+            result.ok  = true;
+            result.q   = q;
+            result.A   = A;
             if checkarray(regq)
-                llq = llPriorAffine(q(rind), regq, 'debug', debug);
+                result.llq = llPriorAffine(q(rind), regq, 'debug', debug);
             end
-            ok  = true;
+            result.llm = llm;
+            result.ipsi = ipsi;
+            if strcmpi(matchmode, 'pull')
+                [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
+                result.wmu = wmu;
+                result.wa  = wa;
+            end
+            result.pf = pf;
+            result.c  = c;
+            result.bb = bb;
             return
         end
     end
     
     if verbose, printInfo('end'); end
-    q   = q0;
+    
+    result       = struct;
+    result.ok    = false;
+    if pf_bck
+        [path, name, ext] = fileparts(pf.fname);
+        movefile(fullfile(path, [name '_bck' ext]), pf.fname);
+        
+    end
+    if c_bck
+        [path, name, ext] = fileparts(c.fname);
+        movefile(fullfile(path, [name '_bck' ext]), c.fname);
+    end
+    if wa_bck
+        [path, name, ext] = fileparts(wa.fname);
+        movefile(fullfile(path, [name '_bck' ext]), wa.fname);
+    end
+    if wmu_bck
+        [path, name, ext] = fileparts(wmu.fname);
+        movefile(fullfile(path, [name '_bck' ext]), wmu.fname);
+    end
 
 end
 

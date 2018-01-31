@@ -87,7 +87,6 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     p.addParameter('c',   nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('wa',  nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('wmu', nan, @(X) isnumeric(X) || isa(X, 'file_array'));
-    p.addParameter('output',   []);
     p.addParameter('verbose',  false,  @isscalar);
     p.addParameter('debug',    false,  @isscalar);
     p.parse(model, dz, z0, v0, llm0, mu, f, varargin{:});
@@ -116,19 +115,27 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     cat = any(strcmpi(model.name, {'bernoulli', 'binomial', 'categorical', 'multinomial'}));
     
     % --- Save previous pushed/pull
-    if ~isa(pf, 'file_array')
+    pf_bck = false;
+    if isa(pf, 'file_array') && exist(pf.fname, 'file')
+        pf_bck = true;
         [path, name, ext] = fileparts(pf.fname);
         copyfile(pf.fname, fullfile(path, [name '_bck' ext]));
     end
-    if ~isa(c, 'file_array')
+    c_bck = false;
+    if isa(c, 'file_array') && exist(c.fname, 'file')
+        c_bck = true;
         [path, name, ext] = fileparts(c.fname);
         copyfile(c.fname, fullfile(path, [name '_bck' ext]));
     end
-    if ~isa(wa, 'file_array')
+    wa_bck = false;
+    if isa(wa, 'file_array') && exist(wa.fname, 'file')
+        wa_bck = true;
         [path, name, ext] = fileparts(wa.fname);
         copyfile(wa.fname, fullfile(path, [name '_bck' ext]));
     end
-    if ~isa(wmu, 'file_array')
+    wmu_bck = false;
+    if isa(wmu, 'file_array') && exist(wmu.fname, 'file')
+        wmu_bck = true;
         [path, name, ext] = fileparts(wmu.fname);
         copyfile(wmu.fname, fullfile(path, [name '_bck' ext]));
     end
@@ -209,6 +216,7 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
             if strcmpi(matchmode, 'pull')
                 [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
                 result.wmu = wmu;
+                result.wa  = wa;
             end
             result.pf = pf;
             result.c  = c;
@@ -221,25 +229,22 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
 
     result       = struct;
     result.ok    = false;
-    if ~isa(pf, 'file_array')
+    if pf_bck
         [path, name, ext] = fileparts(pf.fname);
-        copyfile(pf.fname, fullfile(path, [name(1:end-4) ext]));
-        result.pf = pf;
+        movefile(fullfile(path, [name '_bck' ext]), pf.fname);
+        
     end
-    if ~isa(c, 'file_array')
+    if c_bck
         [path, name, ext] = fileparts(c.fname);
-        copyfile(c.fname, fullfile(path, [name(1:end-4) ext]));
-        result.c = c;
+        movefile(fullfile(path, [name '_bck' ext]), c.fname);
     end
-    if ~isa(wa, 'file_array')
+    if wa_bck
         [path, name, ext] = fileparts(wa.fname);
-        copyfile(wa.fname, fullfile(path, [name(1:end-4) ext]));
-        result.wa = wa;
+        movefile(fullfile(path, [name '_bck' ext]), wa.fname);
     end
-    if ~isa(wmu, 'file_array')
+    if wmu_bck
         [path, name, ext] = fileparts(wmu.fname);
-        copyfile(wmu.fname, fullfile(path, [name(1:end-4) ext]));
-        result.wmu = wmu;
+        movefile(fullfile(path, [name '_bck' ext]), wmu.fname);
     end
 end
 

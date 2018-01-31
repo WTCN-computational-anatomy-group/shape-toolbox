@@ -40,7 +40,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     p.FunctionName = 'pushImage';
     p.addRequired('ipsi', @checkarray);
     p.addRequired('f',    @checkarray);
-    p.addOptional('lat',       [],     @(X) isnumeric(X) && length(X) == 3);
+    p.addOptional('lat',       [],     @(X) isnumeric(X) && length(X) >= 3);
     p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'component', 'none', ''})));
     p.addParameter('par',      false,  @isscalar);
     p.addParameter('output', []);
@@ -65,6 +65,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     if isempty(lat)
         lat = dim(1:3);
     end
+    lat = lat(1:3);
     
     % --- Allocate output
     if ~iscell(output)
@@ -96,8 +97,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     % --- No loop
     if strcmpi(loop, 'none')
         if debug, fprintf('   - No loop\n'); end
-        f = single(numeric(f));
-        [pf1, c1] = spm_diffeo('pushc', f, ipsi, lat);
+        [pf1, c1] = spm_diffeo('pushc', single(numeric(f)), ipsi, lat);
         if nargout > 2
             bb = boundingBox(c1);
         else

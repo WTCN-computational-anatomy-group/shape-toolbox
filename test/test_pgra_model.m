@@ -19,12 +19,8 @@
     opt.pg.prm       = [0 0.001 0.02 0.0025 0.005];
     opt.split.par    = 0;
     opt.pg.K         = 19;
-    opt.optimise.q.q  = false;
-    opt.optimise.q.A  = false;
-    opt.optimise.z.z  = false;
-    opt.optimise.z.A  = false;
-    opt.optimise.pg.w = false;
     opt.match        = 'pull';
+    opt.lb.moving    = 1;
 
     [model, dat] = pgra_model(input, opt);
     

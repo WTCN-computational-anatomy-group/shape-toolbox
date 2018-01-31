@@ -15,6 +15,10 @@ function opt = pgva_model_default(opt)
     %    MODEL
     % =====================================================================
     
+    if ~isfield(opt, 'match')
+        opt.match = 'pull';
+    end
+    
     % ---------------------------------------------------------------------
     % Data model
     % ---------------------------------------------------------------------
@@ -75,8 +79,8 @@ function opt = pgva_model_default(opt)
         % 3 = Sliding   (rotation invariant)
         opt.pg.bnd = 0;
     end
-    if ~isfield(opt.pg, 'pgprior')
-        opt.pg.pgprior = false;
+    if ~isfield(opt.pg, 'geod')
+        opt.pg.geod = true;
     end
     
     % ---------------------------------------------------------------------
@@ -216,6 +220,12 @@ function opt = pgva_model_default(opt)
         % (NaN = try to guess something efficient)
         opt.iter.itg = nan;
     end
+    if ~isfield(opt.iter, 'pena')
+        % Penalise GN failure by freezing variables for a given number of
+        % iterations (we use a heuristic to choose the number of frozen
+        % updates)
+        opt.iter.pena = true;
+    end
     
     % ---------------------------------------------------------------------
     % Lower bound
@@ -227,6 +237,10 @@ function opt = pgva_model_default(opt)
     if ~isfield(opt.lb,  'threshold')
         % Gain threshold under which convergence is assumed
         opt.lb.threshold = 1e-5;
+    end
+    if ~isfield(opt.lb,  'moving')
+        % Number of EM iterations to take into account for moving average
+        opt.lb.moving = 3;
     end
     
     % ---------------------------------------------------------------------
@@ -413,7 +427,11 @@ function opt = pgva_model_default(opt)
         opt.ondisk.dat.v.iphi = false;
     end
     if ~isfield(opt.ondisk.dat.v, 'ipsi')
-        opt.ondisk.dat.v.ipsi = false;
+        if strcmpi(opt.match, 'pull')
+            opt.ondisk.dat.v.ipsi = true;
+        else
+            opt.ondisk.dat.v.ipsi = false;
+        end
     end
     if ~isfield(opt.ondisk.dat.v, 'phi')
         opt.ondisk.dat.v.phi = false;

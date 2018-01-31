@@ -2,17 +2,6 @@ function [dat, model] = pgva_model_init(dat, model, opt)
 % Initialise all variables (that need it) 
 % + lower bound stuff
     
-    % Initial push/pull
-    % -----------------
-    % We need to push observed images to template space to initialise the
-    % template and to pull (warp) the template to image space to initialise
-    % the matching term.
-    % It makes sense always keeping the pushed images/pulled template on
-    % disk as it can also be the case in unified segmentation (images are
-    % responsibilities in this case).
-    if opt.f.N
-        dat = pgva_batch('InitPush', dat, model, opt);
-    end
     
     % ---------------------------------------------------------------------
     %    Model parameters
@@ -77,6 +66,18 @@ function [dat, model] = pgva_model_init(dat, model, opt)
         model.lb.l.name = '-KL Residual precision';
     end
     
+    % Initial push/pull
+    % -----------------
+    % We need to push observed images to template space to initialise the
+    % template and to pull (warp) the template to image space to initialise
+    % the matching term.
+    % It makes sense always keeping the pushed images/pulled template on
+    % disk as it can also be the case in unified segmentation (images are
+    % responsibilities in this case).
+    if opt.f.N
+        dat = pgva_batch('InitPush', dat, model, opt);
+    end
+    
     % Template
     % --------
     if opt.f.N
@@ -111,6 +112,9 @@ function [dat, model] = pgva_model_init(dat, model, opt)
                                          'debug',  opt.ui.debug, ...
                                          'output', model.tpl.gmu);
         end
+    end
+    if strcmpi(opt.match, 'pull')
+        [dat, model] = pgva_batch('InitPull', dat, model, opt);
     end
     
     % ---------------------------------------------------------------------
@@ -155,8 +159,9 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     
     % Matching term
     % -------------
-%     [dat, model] = pgva_batch('InitPull', dat, model, opt);
-    [dat, model] = pgva_batch('LB', 'Matching', dat, model, opt);
+    if strcmpi(opt.match, 'push')
+        [dat, model] = pgva_batch('LB', 'Matching', dat, model, opt);
+    end
     if opt.f.N
         model.lb.m.type = 'll';
         model.lb.m.name = 'Matching likelihood';

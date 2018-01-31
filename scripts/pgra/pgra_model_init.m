@@ -4,16 +4,6 @@ function [dat, model] = pgra_model_init(dat, model, opt)
 % Initialise all variables (that need it) 
 % + lower bound stuff
     
-    % Initial push/pull
-    % -----------------
-    % We need to push observed images to template space to initialise the
-    % template and to pull (warp) the template to image space to initialise
-    % the matching term.
-    % It makes sense always keeping the pushed images/pulled template on
-    % disk as it can also be the case in unified segmentation (images are
-    % responsibilities in this case).
-    dat = pgra_batch('InitPush', dat, model, opt);
-    
     % ---------------------------------------------------------------------
     %    Model parameters
     % ---------------------------------------------------------------------
@@ -75,6 +65,16 @@ function [dat, model] = pgra_model_init(dat, model, opt)
         model.lb.l.name = '-KL Residual precision';
     end
     
+    % Initial push/pull
+    % -----------------
+    % We need to push observed images to template space to initialise the
+    % template and to pull (warp) the template to image space to initialise
+    % the matching term.
+    % It makes sense always keeping the pushed images/pulled template on
+    % disk as it can also be the case in unified segmentation (images are
+    % responsibilities in this case).
+    dat = pgra_batch('InitPush', dat, model, opt);
+    
     % Template
     % --------
     if opt.tpl.cat
@@ -110,8 +110,6 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     end
     if strcmpi(opt.match, 'pull')
         [dat, model] = pgra_batch('InitPull', dat, model, opt);
-    else
-        [dat, model] = pgra_batch('LB', 'Matching', dat, model, opt);
     end
     
     % ---------------------------------------------------------------------
@@ -140,6 +138,9 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     
     % Matching term
     % -------------
+    if strcmpi(opt.match, 'push')
+        [dat, model] = pgra_batch('LB', 'Matching', dat, model, opt);
+    end
     model.lb.m.type = 'll';
     model.lb.m.name = 'Matching likelihood';
     

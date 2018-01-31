@@ -46,7 +46,7 @@ function ipsi = reconstructIPsi(A, iphi, varargin)
     id   = single(spm_warps('identity', size(iphi)));
     ipsi = single(spm_warps('identity', size(ixi)));
     for d=1:size(ipsi, 4)
-        ipsi(:,:,:,d) = ipsi(:,:,:,d) + spm_diffeo('bsplins', ...
+        ipsi(:,:,:,d) = ixi(:,:,:,d) + spm_diffeo('bsplins', ...
             single(iphi(:,:,:,d)-id(:,:,:,d)), single(ixi), [1 1 1  1 1 1]);
     end
     clear ixi id iphi

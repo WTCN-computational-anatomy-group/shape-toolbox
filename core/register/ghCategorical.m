@@ -2,11 +2,11 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
 %__________________________________________________________________________
 %
 % Gradient & Hessian of the **negative** log-likelihood of the Categorical 
-% matching term w.r.t. changes in the initial velocity.
+% matching term w.r.t. changes in template value or initial velocity.
 %
 %--------------------------------------------------------------------------
 %
-% FORMAT [(g), (h, htype)] = ghCategorical(mu, f, (ga), (ipsi), ...)
+% FORMAT [(g), (h, htype)] = ghCategorical(mu, f, (ga), ...)
 %
 % REQUIRED
 % --------
@@ -20,13 +20,14 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
 % --------
 % ga    - Spatial gradients of the log-probability template.
 %         > If ga provided, but not ipsi, compute pointwise gM * gA
-%           In this case, ga size is [mx my mz k]
-% ipsi  - Inverse (subj to template) warp [mx my mz 3]
-%         > If provided on top of ga, compute push(gM) * gA
-%           In this case, ga size is [nx ny nz k]
+%           In this case, ga size is [mx my mz k 3]
 %
 % KEYWORD ARGUMENTS
 % -----------------
+% ipsi    - Inverse (subj to template) warp [mx my mz 3]
+%           > If provided on top of ga, compute push(gM) * gA
+%             In this case, ga size is [nx ny nz k 3]
+% lat     - Output lattice size (not needed if ga provided)
 % count   - Pushed voxel count (if f pushed to template space).
 % bb      - Bounding box (if different between template and pushed image)
 % hessian - Compute only hessian (not gradient)
@@ -37,8 +38,16 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
 % OUTPUT
 % ------
 % g     - Gradient
+%         > If ga and ipsi: [nx ny nz 3]
+%         > Else if ga:     [mx my mz 3]
+%         > Else if ipsi:   [nx ny nz k]
+%         > Else:           [mx my mz k]
 % h     - Hessian
-% htype - Shape of the hessian ('diagonal', 'symtensor')
+%         > If ga and ipsi: [nx ny nz 6]
+%         > Else if ga:     [mx my mz 6]
+%         > Else if ipsi:   [nx ny nz k(k+1)/2]
+%         > Else:           [mx my mz k(k+1)/2]
+% htype - Shape of the hessian (always 'symtensor')
 %
 %--------------------------------------------------------------------------
 %
@@ -66,7 +75,8 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
     p.addRequired('mu',  @checkarray);
     p.addRequired('f',   @checkarray);
     p.addOptional('gmu', []);
-    p.addOptional('ipsi', []);
+    p.addParameter('ipsi',   []);
+    p.addParameter('lat',    []);
     p.addParameter('count',  [],     @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('bb',     struct, @isstruct);
     p.addParameter('hessian', false, @islogical);
@@ -77,6 +87,7 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
     p.parse(mu, f, varargin{:});
     gmu     = p.Results.gmu;
     ipsi    = p.Results.ipsi;
+    lat     = p.Results.lat;
     c       = p.Results.count;
     bb      = p.Results.bb;
     hessian = p.Results.hessian;
@@ -101,6 +112,8 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
     bbx = bb.x;
     bby = bb.y;
     bbz = bb.z;
+    oz = bbz(1) - 1;
+
     
     % --- Read dimensions
     dim = [numel(bbx)  numel(bby) numel(bbz) size(mu, 4)];
@@ -109,10 +122,18 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
     nvec = size(gmu, 5);
     
     % --- Switch between cases [push(g * pull(gmu))] and [push(g) * gmu]
-    if isempty(ipsi)
+    if ~isempty(ipsi)
         % We will used gmu for "gradient in image space"
         %         and  ga  for "gradient in template space"
         [ga, gmu] = deal(gmu, []);
+        if isempty(lat)
+            if ~isempty(ga)
+                lat = [size(ga) 1];
+            else
+                lat = dlat;
+            end
+        end
+        lat = lat(1:3);
     else
         ga = [];
     end
@@ -195,14 +216,12 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         [g1, h1] = onMemory(slicevol(mu, {bbx,bby,oz+z}), slicevol(f, z, 3), slicevol(c, z, 3));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         [g1, h1] = onMemory(slicevol(mu, {bbx,bby,oz+z}), f(:,:,z,:), c(:,:,z));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
@@ -230,13 +249,11 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         h1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), slicevol(f, z, 3), slicevol(c, z, 3), [], true);
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         h1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), f(:,:,z,:), c(:,:,z), [], true);
                         h(:,:,z,:) = h(:,:,z,:) + h1;
@@ -261,13 +278,11 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         g1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), slicevol(f, z, 3), slicevol(c, z, 3));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         g1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), f(:,:,z,:), c(:,:,z));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
@@ -297,14 +312,12 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array') && isa(f, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         [g1, h1] = onMemory(slicevol(mu, {bbx,bby,oz+z}), slicevol(f, z, 3), slicevol(c, z, 3), slicevol(gmu, {bbx,bby,oz+z}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         [g1, h1] = onMemory(slicevol(mu, {bbx,bby,oz+z}), f(:,:,z,:), c(:,:,z), slicevol(gmu, {bbx,bby,oz+z}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
@@ -312,7 +325,6 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
                     gmu = gmu(bbx,bby,bbz,:,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         [g1, h1] = onMemory(slicevol(mu, {bbx,bby,oz+z}), slicevol(f, z, 3), slicevol(c, z, 3), gmu(:,:,z,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
@@ -321,7 +333,6 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                 elseif isa(gmu, 'file_array') && isa(f, 'file_array')
                     mu  = mu(bbx,bby,bbz,:);
                     gmu = gmu(bbx,bby,bbz,:,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         [g1, h1] = onMemory(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3), slicevol(gmu, {bbx,bby,oz+z}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
@@ -329,7 +340,6 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                     end
                 elseif isa(mu, 'file_array')
                     gmu = gmu(bbx,bby,bbz,:,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         [g1, h1] = onMemory(slicevol(mu, {bbx,bby,oz+z}), f(:,:,z,:), c(:,:,z), gmu(:,:,z,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
@@ -337,7 +347,6 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                     end
                 elseif isa(gmu, 'file_array')
                     mu  = mu(bbx,bby,bbz,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         [g1, h1] = onMemory(mu(:,:,z,:), f(:,:,z,:), c(:,:,z), slicevol(gmu, {bbx,bby,oz+z}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
@@ -368,19 +377,16 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array') && isa(f, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         h1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), slicevol(f, z, 3), slicevol(c, z, 3), slicevol(gmu, {bbx,bby,oz+z}), true);
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         h1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), f(:,:,z,:), c(:,:,z), slicevol(gmu, {bbx,bby,oz+z}), true);
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
-                    oz = bbz(1) - 1;
                     gmu = gmu(bbx,bby,bbz,:,:);
                     parfor (z=1:dlat(3), par)
                         h1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), slicevol(f, z, 3), slicevol(c, z, 3), gmu(:,:,z,:,:), true);
@@ -389,21 +395,18 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                 elseif isa(gmu, 'file_array') && isa(f, 'file_array')
                     mu  = mu(bbx,bby,bbz,:);
                     gmu = gmu(bbx,bby,bbz,:,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         h1 = onMemory(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3), slicevol(gmu, {bbx,bby,oz+z}), true);
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array')
                     gmu = gmu(bbx,bby,bbz,:,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                        h1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), f(:,:,z,:), c(:,:,z), gmu(:,:,z,:,:), true);
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(gmu, 'file_array')
                     mu  = mu(bbx,bby,bbz,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         h1 = onMemory(mu(:,:,z,:), f(:,:,z,:), c(:,:,z), slicevol(gmu, {bbx,bby,oz+z}), true);
                         h(:,:,z,:) = h(:,:,z,:) + h1;
@@ -431,19 +434,17 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array') && isa(f, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         g1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), slicevol(f, z, 3), slicevol(c, z, 3), slicevol(gmu, {bbx,bby,oz+z}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array')
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         g1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), f(:,:,z,:), c(:,:,z), slicevol(gmu, {bbx,bby,oz+z}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
-                    oz = bbz(1) - 1;
+                
                     gmu = gmu(bbx,bby,bbz,:,:);
                     parfor (z=1:dlat(3), par)
                         g1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), slicevol(f, z, 3), slicevol(c, z, 3), gmu(:,:,z,:,:));
@@ -451,21 +452,18 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                     end
                 elseif isa(gmu, 'file_array') && isa(f, 'file_array')
                     mu  = mu(bbx,bby,bbz,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         g1 = onMemory(mu(:,:,z,:), slicevol(f, z, 3), slicevol(c, z, 3), slicevol(gmu, {bbx,bby,oz+z}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array')
                     gmu = gmu(bbx,bby,bbz,:,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         g1 = onMemory(slicevol(mu, {bbx,bby,oz+z}), f(:,:,z,:), c(:,:,z), gmu(:,:,z,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(gmu, 'file_array')
                     mu  = mu(bbx,bby,bbz,:);
-                    oz = bbz(1) - 1;
                     parfor (z=1:dlat(3), par)
                         g1 = onMemory(mu(:,:,z,:), f(:,:,z,:), c(:,:,z), slicevol(gmu, {bbx,bby,oz+z}));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
@@ -491,34 +489,47 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
     end
     
     % --- Push gradient if needed
-    if checkarray(ga)
-        lat = [size(ga) 1];
-        lat = lat(1:3);
+    if checkarray(ipsi)
         if hessian || nargin > 1
-            [indv, length] = spm_matcomp('SymIndices', nvec, 'n');
-            [hc, h] = deal(h, zeros([lat length], 'single'));
-            hc = pushImage(ipsi, h, size(ga), 'output', hc, ...
+            h = pushImage(ipsi, h, lat, 'output', h, ...
                 'loop', p.Results.loop, 'par', p.Results.par, 'debug', p.Results.debug);
-            for d=1:nvec
-                for l=d:nvec
-                    for k1=1:nc
-                        for k2=1:nc
-                            h(:,:,:,indv(d,l)) = h(:,:,:,indv(d,l)) ...
-                                + hc(:,:,:,ind(k1,k2)) .* ga(:,:,:,k1,d) .* ga(:,:,:,k2,l);
+            if ~isempty(ga)
+                ind = spm_matcomp('SymIndices', nc, 'n');
+                [indv, len] = spm_matcomp('SymIndices', nvec, 'n');
+                [hc, h] = deal(h, zeros([lat len], 'single'));
+                for z=1:size(h,3)
+                    for d=1:nvec
+                        for l=d:nvec
+                            for k1=1:nc
+                                for k2=1:nc
+                                    h(:,:,z,indv(d,l)) = h(:,:,z,indv(d,l)) ...
+                                        + hc(:,:,z,ind(k1,k2)) .* ga(:,:,z,k1,d) .* ga(:,:,z,k2,l);
+                                end
+                            end
                         end
                     end
                 end
             end
-            h(~isfinite(h)) = 0;
+            for z=1:size(h, 3)
+                h1 = h(:,:,z,:);
+                h1(~isfinite(h1)) = 0;
+                h(:,:,z,:) = h1;
+            end
         end
         if ~hessian
-            [gc, g] = deal(g, zeros([lat nvec], 'single'));
-            gc = pushImage(ipsi, g, size(ga), 'output', gc, ...
+            g = pushImage(ipsi, g, lat, 'output', g, ...
                 'loop', p.Results.loop, 'par', p.Results.par, 'debug', p.Results.debug);
-            for z=1:lat(3)
-                g(:,:,z,:) = -spm_matcomp('Pointwise', ga(:,:,z,:), gc(:,:,z,:), 't');
+            if ~isempty(ga)
+                [gc, g] = deal(g, zeros([lat nvec], 'single'));
+                for z=1:lat(3)
+                    g(:,:,z,:) = -spm_matcomp('Pointwise', ga(:,:,z,:,:), gc(:,:,z,:), 't');
+                end
             end
-            g(~isfinite(g)) = 0;
+            for z=1:size(g, 3)
+                g1 = g(:,:,z,:);
+                g1(~isfinite(g1)) = 0;
+                g(:,:,z,:) = g1;
+            end
         end
     end
     
