@@ -75,16 +75,17 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
         output = [output {[]}];
     end
     
-    % --- Ccase where the input and output are the same file_array
+    % --- Case where the input and output are the same file_array
     same_in_out = false;
     if isa(f, 'file_array') ...
             && ~isempty(output{1}) ...
             && isa(output{1}, 'file_array') ...
-            && strcmpi(f.fname, output{1}.fname)
+            && strcmpi({f.fname}, {output{1}.fname})
         % copy input
         same_in_out = true;
         pf = output{1};
-        [path, fname, ext] = fileparts(pf.fname);
+        fnames = {pf.fname};
+        [path, fname, ext] = fileparts(fnames{1});
         f.fname = fullfile(path, [fname '_copy' ext]);
         for k=1:size(pf, 4)
             f(:,:,:,k,:) = pf(:,:,:,k,:);
