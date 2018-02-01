@@ -270,7 +270,7 @@ function [model, dat, opt] = pgra_model(varargin)
             if opt.optimise.q.q && ~model.q.active
                 model.q.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'Affine');
-            elseif (opt.optimise.pg.w || opt.optimise.z.z) && ~model.pg.active
+            elseif (opt.optimise.z.z || opt.optimise.pg.w) && ~model.pg.active
                 model.pg.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'PG');
             elseif opt.optimise.r.r && ~model.r.active
@@ -286,21 +286,23 @@ function [model, dat, opt] = pgra_model(varargin)
         % -----------------------------------------------------------------
         %    Affine
         % -----------------------------------------------------------------
-        if opt.optimise.q.q && model.q.active
+        if model.q.active
         
-            % Update parameters
-            % -----------------
-            [dat, model] = pgra_batch('FitAffine', dat, model, opt);
+            if opt.optimise.q.q
+                % Update parameters
+                % -----------------
+                [dat, model] = pgra_batch('FitAffine', dat, model, opt);
 
-            % -----------
-            % Lower bound
-            model = updateLowerBound(model);
-            plotAll(model, opt);
-            % -----------
+                % -----------
+                % Lower bound
+                model = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
+            end
             
-            % Update prior
-            % ------------
-            if opt.optimise.q.A && opt.q.Mr
+            if opt.q.Mr && opt.optimise.q.A
+                % Update prior
+                % ------------
                 rind = opt.q.rind;
                 model.q.A = spm_prob('Wishart', 'up', ...
                                      opt.N, 0, model.q.qq(rind,rind) + model.q.S(rind,rind), ...
@@ -401,7 +403,7 @@ function [model, dat, opt] = pgra_model(varargin)
 
             % Orthogonalisation
             % -------------------------------------------------------------
-            if opt.optimise.z.z && opt.optimise.pg.w && opt.optimise.z.A
+            if opt.optimise.pg.w && opt.optimise.z.z && opt.optimise.z.A
             
                 % Orthogonalise
                 % -------------

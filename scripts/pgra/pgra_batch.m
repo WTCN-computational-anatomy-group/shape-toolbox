@@ -29,6 +29,9 @@ function varargout = pgra_batch(id, varargin)
 %   Initialise latent coordinates ('zero'/'rand') + lower bound
 %   If random, insure they are zero-centered and orthogonal.
 %
+% FORMAT [dat, model] = pgra_batch('InitLaplace', dat, model, opt)
+%   Initialise covariance for Laplace approximations + lower bound
+%
 % ---
 % Fit
 % ---
@@ -87,6 +90,8 @@ function varargout = pgra_batch(id, varargin)
             [varargout{1:nargout}] = batchInitLatent(varargin{:});
         case 'initresidual'
             [varargout{1:nargout}] = batchInitResidual(varargin{:});
+        case 'initlaplace'
+            [varargout{1:nargout}] = batchInitLaplace(varargin{:});
         case 'rotatesubspace'
             [varargout{1:nargout}] = batchRotateSubspace(varargin{:});
         case 'fitaffine'
@@ -108,6 +113,8 @@ function varargout = pgra_batch(id, varargin)
             [varargout{1:nargout}] = oneInitPull(varargin{:});
         case 'oneinitresidual'
             [varargout{1:nargout}] = oneInitResidual(varargin{:});
+        case 'oneinitlaplace'
+            [varargout{1:nargout}] = oneInitLaplace(varargin{:});
         case 'onefitaffine'
             [varargout{1:nargout}] = oneFitAffine(varargin{:});
         case 'onefitlatent'
@@ -162,8 +169,15 @@ function dat = oneInitPush(dat, model, opt)
     
     % Warp
     % ----
-    iphi = spm_warps('identity', opt.tpl.lat);
-    ipsi = reconstructIPsi(eye(4), iphi, 'lat', opt.tpl.lat, ...
+    if opt.pg.provided
+        iphi = exponentiateVelocity(dat.v.v, 'iphi', ...
+            'itgr', opt.iter.itg, 'vs', opt.tpl.vs, 'prm', opt.pg.prm);
+    else
+        iphi = spm_warps('identity', opt.tpl.lat);
+    end
+    if isfield(dat, 'q') && isfield(dat.q, 'A'),  A = dat.q.A;
+    else,                                         A = eye(4);  end
+    ipsi = reconstructIPsi(A, iphi, 'lat', opt.tpl.lat, ...
                            'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
                            'debug', opt.ui.debug);
     clear iphi
@@ -171,7 +185,9 @@ function dat = oneInitPush(dat, model, opt)
                                               'output', {dat.f.pf, dat.f.c}, ...
                                               'loop', loop, 'par', par, ...
                                               'debug', opt.ui.debug);
-    dat.v.ipsi = copyarray(ipsi, dat.v.ipsi);
+    if isa(dat.v.ipsi, 'file_array')
+        dat.v.ipsi = copyarray(ipsi, dat.v.ipsi);
+    end
     clear ipsi
 
 end
@@ -344,14 +360,6 @@ function dat = oneInitResidual(dat, model, opt, mode)
         loop = opt.split.loop;
         par  = opt.split.par;
     end
-    
-    % --- Detect noise model
-    if isfield(dat, 'model')
-        noisemodel = dat.model;
-    else
-        noisemodel = opt.model;
-    end
-    
         
     % Creator function
     % ----------------
@@ -371,72 +379,27 @@ function dat = oneInitResidual(dat, model, opt, mode)
     dat.v.v = prepareOnDisk(dat.v.v, [opt.tpl.lat 3]);
     dat.v.r = prepareOnDisk(dat.v.r, [opt.tpl.lat 3]);
     if strcmpi(mode, 'zero')
-        dat.v.v(:)   = 0;
         dat.v.r(:)   = 0;
         dat.v.lb.reg = 0;
+        r = 0;
     else
         r = create([opt.tpl.lat 3], 'single');
         dat.v.r(:,:,:,:) = r;
-        if opt.pg.provided
-            clear m
-            wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
-                                     'loop', loop, 'par', par);
-            dat.v.v(:,:,:,:) = r + wz;
-            clear wz
-            m = spm_diffeo('vel2mom', r, double([opt.tpl.vs opt.pg.prm]));
-            dat.v.lb.reg = r(:)' * m(:);
-            clear r m
-        end
         m = spm_diffeo('vel2mom', r, double([opt.tpl.vs opt.pg.prm]));
         dat.v.lb.reg = r(:)' * m(:);
-        clear r m
+        clear m
     end
-
-    % Hessian
-    % -------
-    if strcmpi(opt.match, 'pull')
-        h = ghMatchingVel(noisemodel, ...
-            dat.tpl.wmu, dat.f.f, model.tpl.gmu, ...
-            'ipsi', dat.v.ipsi, 'hessian', true, ...
-            'loop', loop, 'par', par, 'debug', opt.ui.debug);
+    if opt.pg.provided
+        wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
+                                 'loop', loop, 'par', par);
+        dat.v.v(:,:,:,:) = r + wz;
+        clear wz
     else
-        h = zeros([opt.tpl.lat 6], 'single');
-        h(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:) = ghMatchingVel(...
-            noisemodel, ...
-            model.tpl.mu, dat.f.pf, model.tpl.gmu, ...
-            'count', dat.f.c, 'bb', dat.f.bb, 'hessian', true, ...
-            'loop', loop, 'par', par, 'debug', opt.ui.debug);
+        dat.v.v(:) = r;
     end
-
-    % Trace
-    % -----
-    dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.r.l + opt.pg.geod)*opt.pg.prm]));
-    dat.v.lb.tr = dat.v.lb.tr(1);
-    dat.v.lb.tr = dat.v.lb.tr / (model.r.l + opt.pg.geod);
+    clear r
     
-    % LogDet(P)
-    % ---------
-    % Approximation where all off-diagonal elements of L are zero
-    h(:,:,:,1) = h(:,:,:,1) * (model.r.l + opt.pg.geod) * opt.pg.ker(1);
-    h(:,:,:,2) = h(:,:,:,2) * (model.r.l + opt.pg.geod) * opt.pg.ker(2);
-    h(:,:,:,3) = h(:,:,:,3) * (model.r.l + opt.pg.geod) * opt.pg.ker(3);
-    h = spm_matcomp('Pointwise3', h, 'd');
-    h(h <= 0) = nan;
-    dat.v.lb.ld = sum(log(h(:)), 'omitnan');
-    clear h
-        
-    % Lower bound
-    % -----------
-    % KL divergence between multivariate normal distributions
-    % posterior: mean = r,    precision = H + (l+w)*L
-    % prior:     mean = 0 ,   precision = (l+w)*L
-    K = prod(opt.tpl.lat)*3;
-    dat.v.lb.val = -0.5*( - K - K*log(model.r.l + opt.pg.geod) ...
-                          - opt.pg.ld + dat.v.lb.ld ...
-                          + (model.r.l + opt.pg.geod) * dat.v.lb.reg ...
-                          + (model.r.l + opt.pg.geod) * dat.v.lb.tr );
-    dat.v.lb.type = 'kl';
-        
+    
 
 end
 
@@ -451,9 +414,7 @@ function [dat, model] = batchInitResidual(mode, dat, model, opt)
 
     % Init log-likelihood
     % -------------------
-    model.lb.r.val  = 0;
     model.r.reg     = 0;
-    model.r.tr      = 0;
     
     % --- Batch processing
     N = numel(dat);
@@ -471,8 +432,6 @@ function [dat, model] = batchInitResidual(mode, dat, model, opt)
             % Add individual contributions
             % ----------------------------
             model.r.reg     = model.r.reg     + dat(n).v.lb.reg;
-            model.r.tr      = model.r.tr      + dat(n).v.lb.tr;
-            model.lb.r.val  = model.lb.r.val  + dat(n).v.lb.val;
         end
         
     end
@@ -584,6 +543,126 @@ function [dat, model] = batchInitLatent(mode, dat, model, opt)
     end
     if opt.ui.verbose, plotBatchEnd; end
 
+end
+%% ------------------------------------------------------------------------
+%    Init Residual
+% -------------------------------------------------------------------------
+
+function dat = oneInitLaplace(dat, model, opt)
+
+    % --- Detect parallelisation scheme
+    if strcmpi(opt.split.loop, 'subject')
+        loop = '';
+        par  = 0;
+    else
+        loop = opt.split.loop;
+        par  = opt.split.par;
+    end
+    
+    % --- Detect noise model
+    if isfield(dat, 'model')
+        noisemodel = dat.model;
+    else
+        noisemodel = opt.model;
+    end
+    
+    % --------------
+    %    Residual
+    % --------------
+    if opt.optimise.r.r
+    
+        % Hessian
+        % -------
+        if strcmpi(opt.match, 'pull')
+            h = ghMatchingVel(noisemodel, ...
+                dat.tpl.wmu, dat.f.f, model.tpl.gmu, ...
+                'ipsi', dat.v.ipsi, 'hessian', true, ...
+                'loop', loop, 'par', par, 'debug', opt.ui.debug);
+        else
+            h = zeros([opt.tpl.lat 6], 'single');
+            h(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:) = ghMatchingVel(...
+                noisemodel, ...
+                model.tpl.mu, dat.f.pf, model.tpl.gmu, ...
+                'count', dat.f.c, 'bb', dat.f.bb, 'hessian', true, ...
+                'loop', loop, 'par', par, 'debug', opt.ui.debug);
+        end
+
+        % Trace
+        % -----
+        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.r.l + opt.pg.geod)*opt.pg.prm]));
+        dat.v.lb.tr = dat.v.lb.tr(1);
+        dat.v.lb.tr = dat.v.lb.tr / (model.r.l + opt.pg.geod);
+
+        % LogDet(P)
+        % ---------
+        % Approximation where all off-diagonal elements of L are zero
+        h(:,:,:,1) = h(:,:,:,1) * (model.r.l + opt.pg.geod) * opt.pg.ker(1);
+        h(:,:,:,2) = h(:,:,:,2) * (model.r.l + opt.pg.geod) * opt.pg.ker(2);
+        h(:,:,:,3) = h(:,:,:,3) * (model.r.l + opt.pg.geod) * opt.pg.ker(3);
+        h = spm_matcomp('Pointwise3', h, 'd');
+        h(h <= 0) = nan;
+        dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+        clear h
+
+        % Lower bound
+        % -----------
+        % KL divergence between multivariate normal distributions
+        % posterior: mean = r,    precision = H + (l+w)*L
+        % prior:     mean = 0 ,   precision = (l+w)*L
+        K = prod(opt.tpl.lat)*3;
+        dat.v.lb.val = -0.5*( - K - K*log(model.r.l + opt.pg.geod) ...
+                              - opt.pg.ld + dat.v.lb.ld ...
+                              + (model.r.l + opt.pg.geod) * dat.v.lb.reg ...
+                              + (model.r.l + opt.pg.geod) * dat.v.lb.tr );
+        dat.v.lb.type = 'kl';
+    else
+        dat.v.lb.val = 0;
+        dat.v.lb.tr  = 0;
+        dat.v.lb.reg = 0;
+    end
+        
+
+end
+
+function [dat, model] = batchInitLaplace(dat, model, opt)
+
+    % --- Detect parallelisation scheme
+    if strcmpi(opt.split.loop, 'subject') && opt.split.par > 0
+        batch = opt.split.batch;
+    else
+        batch = 1;
+    end
+
+    % Init log-likelihood
+    % -------------------
+    if isfield(model.lb, 'q'),   model.lb.q.val  = 0; end
+    if isfield(model.lb, 'z'),   model.lb.z.val  = 0; end
+    if isfield(model.lb, 'r'),   model.lb.r.val  = 0; end
+    if isfield(model.r,  'tr'),  model.r.tr      = 0; end
+    
+    % --- Batch processing
+    N = numel(dat);
+    if opt.ui.verbose, before = plotBatchBegin('Init Lap'); end
+    for i=1:ceil(N/batch)
+        n1 = (i-1)*batch + 1;
+        ne = min(N, i*batch);
+
+        if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
+    
+        dat(n1:ne) = distribute(opt.dist, 'pgra_batch', 'OneInitLaplace', 'inplace', dat(n1:ne), model, opt);
+        
+        for n=n1:ne
+            
+            % Add individual contributions
+            % ----------------------------
+            if isfield(model.lb, 'q'),   model.lb.q.val  = model.lb.q.val  + dat(n).q.lb.val; end
+            if isfield(model.lb, 'z'),   model.lb.z.val  = model.lb.z.val  + dat(n).z.lb.val; end
+            if isfield(model.lb, 'r'),   model.lb.r.val  = model.lb.r.val  + dat(n).v.lb.val; end
+            if isfield(model.r,  'tr'),  model.r.tr      = model.r.tr      + dat(n).v.lb.tr;  end
+        end
+        
+    end
+    if opt.ui.verbose, plotBatchEnd; end
 end
 
 %% ------------------------------------------------------------------------
@@ -911,6 +990,9 @@ function dat = oneFitLatent(dat, model, opt)
         noisemodel = opt.model;
     end
     
+    if isfield(dat, 'q') && isfield(dat.q, 'A'),  A = dat.q.A;
+    else,                                         A = eye(4);  end
+    
     % Penalise previous failure
     % -------------------------
     if opt.iter.pena && dat.z.ok < 0
@@ -962,7 +1044,7 @@ function dat = oneFitLatent(dat, model, opt)
                 noisemodel, dz, dat.z.z, dat.v.v, dat.f.lb.val, ...
                 model.pg.w, a, dat.f.f, ...
                 'regz', model.z.A + opt.pg.geod * model.pg.ww, ...
-                'A', dat.q.A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
+                'A', A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
                 'nit', opt.iter.ls, 'itgr', opt.iter.itg, ...
                 'prm', opt.pg.prm, 'bnd', opt.pg.bnd, ...
                 'match', opt.match, ...
@@ -1545,7 +1627,9 @@ function dat = oneLB(dat, model, opt, which)
                                         'prm', opt.pg.prm, 'bnd', opt.pg.bnd);
             dat.v.v = copyarray(v, dat.v.v);
             clear v
-            ipsi = reconstructIPsi(dat.q.A, iphi, 'lat', opt.tpl.lat, ...
+            if isfield(dat, 'q') && isfield(dat.q, 'A'),  A = dat.q.A;
+            else,                                         A = eye(4);  end
+            ipsi = reconstructIPsi(A, iphi, 'lat', opt.tpl.lat, ...
                                    'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
                                    'debug', opt.ui.debug);
             clear iphi
@@ -1599,12 +1683,12 @@ function [dat, model] = batchLB(which, dat, model, opt)
 
     % Init gradient/hessian
     % ---------------------
-    model.lb.m.val  = 0;
-    model.lb.z.val  = 0;
-    model.lb.q.val  = 0;
-    model.lb.r.val  = 0;
-    model.r.tr      = 0;
-    model.r.reg     = 0;
+    if isfield(model.lb, 'm'),   model.lb.m.val  = 0; end
+    if isfield(model.lb, 'z'),   model.lb.z.val  = 0; end
+    if isfield(model.lb, 'q'),   model.lb.q.val  = 0; end
+    if isfield(model.lb, 'r'),   model.lb.r.val  = 0; end
+    if isfield(model.r,  'tr'),  model.r.tr      = 0; end
+    if isfield(model.r,  'reg'), model.r.reg     = 0; end
     
     N = numel(dat);
     
@@ -1624,12 +1708,12 @@ function [dat, model] = batchLB(which, dat, model, opt)
             
             % Add individual contributions
             % ----------------------------
-            model.lb.z.val  = model.lb.z.val + dat(n).z.lb.val;
-            model.lb.m.val  = model.lb.m.val + dat(n).f.lb.val;
-            model.lb.q.val  = model.lb.q.val + dat(n).q.lb.val;
-            model.lb.r.val  = model.lb.r.val + dat(n).v.lb.val;
-            model.r.tr      = model.r.tr     + dat(n).v.lb.tr;
-            model.r.reg     = model.r.reg    + dat(n).v.lb.reg;
+            if isfield(model.lb, 'm'),   model.lb.m.val  = model.lb.m.val + dat(n).f.lb.val; end
+            if isfield(model.lb, 'z'),   model.lb.z.val  = model.lb.z.val + dat(n).z.lb.val; end
+            if isfield(model.lb, 'q'),   model.lb.q.val  = model.lb.q.val + dat(n).q.lb.val; end
+            if isfield(model.lb, 'r'),   model.lb.r.val  = model.lb.r.val + dat(n).v.lb.val; end
+            if isfield(model.r,  'tr'),  model.r.tr      = model.r.tr     + dat(n).v.lb.tr;  end
+            if isfield(model.r,  'reg'), model.r.reg     = model.r.reg    + dat(n).v.lb.reg; end
             
         end
         
@@ -1640,31 +1724,35 @@ function [dat, model] = batchLB(which, dat, model, opt)
     % --------------------
     switch lower(which)
         case 'orthogonalise'
-            model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
-            if opt.z.n0
+            if isfield(model.lb, 'w')
+                model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+            end
+            if opt.z.n0 && isfield(model.lb, 'Az')
                 model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
                                            model.z.A,   opt.z.n0+opt.N, ...
                                            opt.z.A0,    opt.z.n0, ...
                                            'normal');
             end
         case 'subspace'
-            model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+            if isfield(model.lb, 'w')
+                model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+            end
         case 'precisionz'
-            if opt.z.n0
+            if opt.z.n0 && isfield(model.lb, 'Az')
                 model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
                                             model.z.A,   opt.z.n0+opt.N, ...
                                             opt.z.A0,    opt.z.n0, ...
                                             'normal');
             end
         case 'precisionq'
-            if opt.q.n0 && opt.q.Mr
+            if opt.q.n0 && opt.q.Mr && isfield(model.lb, 'Aq')
                 model.lb.Aq.val = -spm_prob('Wishart', 'kl', ...
                                             model.q.A,   opt.q.n0+opt.N, ...
                                             opt.q.A0,    opt.q.n0, ...
                                             'normal');
             end
         case 'lambda'
-            if opt.r.n0
+            if opt.r.n0 && isfield(model.lb, 'l')
                 model.lb.l.val  = -spm_prob('Gamma', 'kl', ...
                                             model.r.l, opt.N+opt.r.n0, ...
                                             opt.r.l0,  opt.r.n0, ...

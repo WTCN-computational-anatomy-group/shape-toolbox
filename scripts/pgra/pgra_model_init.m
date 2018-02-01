@@ -1,8 +1,51 @@
 function [dat, model] = pgra_model_init(dat, model, opt)
+% _________________________________________________________________________
+%
+%    Initialise all variables that need it (if they are not provided).
+%
+% -------------------------------------------------------------------------
+%
 % FORMAT [dat, model] = pgra_model_init(dat, model, opt)
 %
-% Initialise all variables (that need it) 
-% + lower bound stuff
+%
+% - Principal geodesic
+%   * model.pg.w:  principal subspace [mx my mz 3 k]
+%   * model.pg.ww: principal geodesic prior on latent coordinates [k k]
+%
+% - Latent coordinates
+%   * dat.z.z:    parameters [k]
+%   * dat.z.zz:   second order (z * z') [k k]
+%   * dat.z.S:    posterior covariance matrix [k k]
+%   * dat.z.lb:   lots of lower bound / precision stuff to avoid 
+%                 recomputing them when updating model parts.
+%   * model.z.A:  Regularisation of the affine part (if needed) [k k]
+%   * model.z.q:  Sum of all individual parameters (1st order statistic)
+%   * model.z.qq: Sum of all individual parameters (2nd order statistic)
+%   * model.z.S:  Sum of all posterior covariance matrices
+%   * model.z.Z:  Table of all individual z [k N]
+%
+% - Rigid-body (or affine)
+%   * dat.q.q:    parameters (in the Lie algebra) [Q]
+%   * dat.q.qq:   second order (q * q') [Q Q]
+%   * dat.q.S:    posterior covariance matrix [Q Q]
+%   * dat.q.A:    Rigid/affine matrix (exponentiated from q) [4 4]
+%   * dat.q.lb:   lots of lower bound / precision stuff to avoid 
+%                 recomputing them when updating model parts.
+%   * model.q.A:  Regularisation of the affine part (if needed) [Qr Qr]
+%   * model.q.q:  Sum of all individual parameters (1st order statistic)
+%   * model.q.qq: Sum of all individual parameters (2nd order statistic)
+%   * model.q.S:  Sum of all posterior covariance matrices
+%
+% - Velocity / Residual field
+%   * dat.v.r:     residual field [mx my mz 3]
+%   * dat.v.v:     initial velocity (= W*z + r) [mx my mz 3]
+%   * dat.v.ipsi:  complete inverse transform (= iphi(ixi)) [nx ny nz 3]
+%   * dat.v.lb:    lots of lower bound / precision stuff to avoid 
+%                  recomputing them when updating model parts.
+%   * model.r.l:   Residual precision magnitude (lambda)
+%   * model.r.tr:  Sum of all Tr(Sr\L)
+%   * model.r.reg: Sum of all r'*L*r
+% _________________________________________________________________________
     
     % ---------------------------------------------------------------------
     %    Model parameters
@@ -65,14 +108,55 @@ function [dat, model] = pgra_model_init(dat, model, opt)
         model.lb.l.name = '-KL Residual precision';
     end
     
+    % ---------------------------------------------------------------------
+    %    Individual parameters
+    % ---------------------------------------------------------------------
+    % These parameters cannot be provided and must be optimised.
+    % ---------------------------------------------------------------------
+    
+    % Affine coordinates
+    % ------------------
+    if opt.optimise.q.q
+        [dat, model]    = pgra_batch('InitAffine', 'zero', dat, model, opt);
+        model.lb.q.type = 'kl';
+        model.lb.q.name = '-KL Affine';
+    end
+        
+    % Latent coordinates
+    % ------------------
+    if opt.optimise.z.z
+        [dat, model] = pgra_batch('InitLatent', opt.z.init, dat, model, opt);
+        model.lb.z.type = 'kl';
+        model.lb.z.name = '-KL Latent';
+    end
+
+    % Velocity
+    % --------
+    if opt.optimise.r.r
+        [dat, model] = pgra_batch('InitResidual', 'zero', dat, model, opt);
+        model.lb.r.type = 'kl';
+        model.lb.r.name = '-KL Residual';
+    end
+    
+    
+    % ---------------------------------------------------------------------
+    %    Transforms/Template
+    % ---------------------------------------------------------------------
+    % These parameters depend on the above parameters
+    % ---------------------------------------------------------------------
+    
     % Initial push/pull
     % -----------------
-    % We need to push observed images to template space to initialise the
-    % template and to pull (warp) the template to image space to initialise
-    % the matching term.
-    % It makes sense always keeping the pushed images/pulled template on
-    % disk as it can also be the case in unified segmentation (images are
-    % responsibilities in this case).
+    % - We need to push observed images to template space to initialise 
+    %   the template and to pull (warp) the template to image space to 
+    %   initialise the matching term.
+    % - It makes sense always keeping the pushed images/pulled template on
+    %   disk as it can also be the case in unified segmentation (images 
+    %   are responsibilities in this case).
+    % - This step also writes ipsi (= iphi(ixi), inverse complete
+    %   transform), if they are supposed to be written on disk. It is
+    %   usually the case when match = 'pull', since ipsi is needed to
+    %   update all warped templates after template update.
     dat = pgra_batch('InitPush', dat, model, opt);
     
     % Template
@@ -108,43 +192,26 @@ function [dat, model] = pgra_model_init(dat, model, opt)
                                      'debug',  opt.ui.debug, ...
                                      'output', model.tpl.gmu);
     end
-    if strcmpi(opt.match, 'pull')
-        [dat, model] = pgra_batch('InitPull', dat, model, opt);
-    end
-    
-    % ---------------------------------------------------------------------
-    %    Individual parameters
-    % ---------------------------------------------------------------------
-    % These parameters cannot be provided and must be optimised.
-    % ---------------------------------------------------------------------
-    
-    % Affine coordinates
-    % ------------------
-    [dat, model]    = pgra_batch('InitAffine', 'zero', dat, model, opt);
-    model.lb.q.type = 'kl';
-    model.lb.q.name = '-KL Affine';
-        
-    % Latent coordinates
-    % ------------------
-    [dat, model] = pgra_batch('InitLatent', opt.z.init, dat, model, opt);
-    model.lb.z.type = 'kl';
-    model.lb.z.name = '-KL Latent';
-
-    % Velocity
-    % --------
-    [dat, model] = pgra_batch('InitResidual', 'zero', dat, model, opt);
-    model.lb.r.type = 'kl';
-    model.lb.r.name = '-KL Residual';
     
     % Matching term
     % -------------
-    if strcmpi(opt.match, 'push')
+    if strcmpi(opt.match, 'pull')
+        [dat, model] = pgra_batch('InitPull', dat, model, opt);
+    else
         [dat, model] = pgra_batch('LB', 'Matching', dat, model, opt);
     end
     model.lb.m.type = 'll';
     model.lb.m.name = 'Matching likelihood';
     
-    % Lower Bound
-    % -----------
+    % Laplace approximation
+    % ---------------------
+    % To compute the KL divergence of distributions estimated by
+    % Gauss-Newton, we need images to be pushed or pulled, which can only
+    % be done after velocities were initialised
+    [dat, model] = pgra_batch('InitLaplace', dat, model, opt);
+    
+    % ---------------------------------------------------------------------
+    %    Update lower bound
+    % ---------------------------------------------------------------------
     model = updateLowerBound(model);  % Accumulate lower bound parts
 end

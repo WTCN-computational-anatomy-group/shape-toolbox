@@ -10,8 +10,8 @@ function sw = endsWith(s, pattern, varargin)
 % if IGNORE is true, ignores case when comparing S and PATTERN.
 
 % - If bultin function exists, use it
-if exist('startsWith', 'builtin')
-    sw = startWith(s, pattern, varargin{:});
+if exist('endsWith', 'builtin')
+    sw = builtin('endsWith', s, pattern, varargin{:});
     return
 end
 

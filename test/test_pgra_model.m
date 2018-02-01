@@ -21,6 +21,7 @@
     opt.pg.K         = 19;
     opt.match        = 'pull';
     opt.lb.moving    = 1;
+    opt.optimise.q   = false;
 
     [model, dat] = pgra_model(input, opt);
     

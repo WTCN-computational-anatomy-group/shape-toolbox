@@ -209,7 +209,12 @@ function dat = oneInitPush(dat, model, opt)
     
     % Warp
     % ----
-    iphi = spm_warps('identity', opt.tpl.lat);
+    if opt.pg.provided
+        iphi = exponentiateVelocity(dat.v.v, 'iphi', ...
+            'itgr', opt.iter.itg, 'vs', opt.tpl.vs, 'prm', opt.pg.prm);
+    else
+        iphi = spm_warps('identity', opt.tpl.lat);
+    end
     ipsi = reconstructIPsi(eye(4), iphi, 'lat', opt.tpl.lat, ...
                            'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
                            'debug', opt.ui.debug);
@@ -218,7 +223,9 @@ function dat = oneInitPush(dat, model, opt)
                                               'output', {dat.f.pf, dat.f.c}, ...
                                               'loop', loop, 'par', par, ...
                                               'debug', opt.ui.debug);
-    dat.v.ipsi = copyarray(ipsi, dat.v.ipsi);
+    if isa(dat.v.ipsi, 'file_array')
+        dat.v.ipsi = copyarray(ipsi, dat.v.ipsi);
+    end
     clear ipsi
 
 end

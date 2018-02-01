@@ -1,6 +1,6 @@
 function bool = issame(a, b)
     if exist('issame', 'builtin')
-        bool = issame(a, b);
+        bool = builtin('issame', a, b);
         return
     end
     bool = a == b;
