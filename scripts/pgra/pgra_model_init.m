@@ -130,12 +130,26 @@ function [dat, model] = pgra_model_init(dat, model, opt)
         model.lb.z.name = '-KL Latent';
     end
 
-    % Velocity
+    % Residual
     % --------
     if opt.optimise.r.r
         [dat, model] = pgra_batch('InitResidual', 'zero', dat, model, opt);
         model.lb.r.type = 'kl';
         model.lb.r.name = '-KL Residual';
+    end
+    
+    % Velocity (Geodesic prior)
+    % -------------------------
+    if opt.pg.geod
+        model.lb.g.val = 0;
+        for n=1:opt.N
+            dat(n).v.lb.geod = llPriorVelocity(dat(n).v.v, ...
+                'vs', opt.tpl.vs, 'prm', opt.pg.prm, ...
+                'bnd', opt.pg.bnd, 'logdet', opt.pg.ld);
+            model.lb.g.val = model.lb.g.val + dat(n).v.lb.geod;
+        end
+        model.lb.g.type = 'll';
+        model.lb.g.name = 'Geodesic prior';
     end
     
     

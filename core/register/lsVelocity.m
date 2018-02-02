@@ -27,9 +27,11 @@ function result = lsVelocity(model, dv, r0, match0, mu, f, varargin)
 % prm  - Regularisation parameters (L matrix) [0.0001 0.001 0.2 0.05 0.2]
 % vs   - Lattice voxel size [[] = from Mmu]
 % itgr - Number of integration steps for geodesic shooting [NaN = auto]
-% bnd  - Differential operator boundary conditions: [0]/1/2/3
+% bnd  - Differential operator boundary conditions: [0]/1/2/3$
+% geod - eight of the geodesic prior [0]
+% reg0 - Previous prior term [compute]
+% vel0 - Previous geodesic term [compute]
 %
-% reg0  - Previous prior term [NaN = compute]
 % A     - Affine transform [eye(4)]
 % Mf    - Image voxel-to-world mappinf [eye(4)]
 % Mmu   - Template voxel-to-world mapping [eye(4)]
@@ -87,12 +89,13 @@ function result = lsVelocity(model, dv, r0, match0, mu, f, varargin)
     p.addParameter('v0',   [],      @checkarray);
     p.addParameter('lam',  1,       @isscalar);
     p.addParameter('prm',  dft_prm, @(X) length(X) == 5);
-    p.addParameter('pgprior', false,@(X) isscalar(X) && islogical(X));
     p.addParameter('vs',   [],      @isnumeric);
     p.addParameter('itgr', nan,     @isscalar);
     p.addParameter('bnd',  0,       @(X) isscalar(X) && isnumeric(X));
+    p.addParameter('geod', 0,       @isscalar);
+    p.addParameter('reg0', nan,     @isscalar);
+    p.addParameter('vel0', nan,     @isscalar);
     
-    p.addParameter('reg0',  nan,    @isscalar);
     p.addParameter('A',     eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     p.addParameter('Mf',    eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     p.addParameter('Mmu',   eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
@@ -119,9 +122,10 @@ function result = lsVelocity(model, dv, r0, match0, mu, f, varargin)
     vs      = p.Results.vs;
     itgr    = p.Results.itgr;
     bnd     = p.Results.bnd;
-    pgprior = p.Results.pgprior;
-    
+    geod    = p.Results.geod;
     reg0    = p.Results.reg0;
+    vel0    = p.Results.vel0;
+    
     A       = p.Results.A;
     Mf      = p.Results.Mf;
     Mmu     = p.Results.Mmu;
@@ -183,16 +187,20 @@ function result = lsVelocity(model, dv, r0, match0, mu, f, varargin)
         vs = sqrt(sum(Mmu(1:3,1:3).^2)); 
     end
     if isnan(reg0)
-        reg0 = llPriorVelocity(r0, 'fast', 'vs', vs, 'prm', lam*prm, 'bnd', bnd, 'debug', debug);
-        if pgprior
-            reg0 = reg0 + llPriorVelocity(v0, 'fast', 'vs', vs, 'prm', prm, 'bnd', bnd, 'debug', debug);
-        end
+        reg0 = llPriorVelocity(r0, 'fast', 'debug', debug);
+
     end 
+    if isnan(vel0)
+        if geod
+            vel0 = geod * llPriorVelocity(v0, 'fast', 'vs', vs, 'prm', prm, 'bnd', bnd);
+        else
+            vel0 = 0;
+        end
+    end
     
     % --- Initialise line search
     armijo = 1;             % Armijo factor
-    ok     = false;         % Found a better ll ?
-    ll0    = match0 + reg0; % Log-likelihood (only parts that depends on v)
+    ll0    = match0 + reg0 + vel0; % Log-likelihood (only parts that depends on v)
     dimf   = [size(f) 1 1];
     latf   = dimf(1:3);
     dimmu  = [size(mu) 1 1];
@@ -200,7 +208,7 @@ function result = lsVelocity(model, dv, r0, match0, mu, f, varargin)
     
     if verbose
         printInfo('header');
-        printInfo('initial', ll0, match0, reg0);
+        printInfo('initial', ll0, match0, reg0, vel0);
     end
     
     % --- Loop
@@ -222,12 +230,14 @@ function result = lsVelocity(model, dv, r0, match0, mu, f, varargin)
         end
         r = r0 + dv / armijo;
         reg = llPriorVelocity(r,  'fast', 'vs', vs, 'prm', lam*prm, 'bnd', bnd, 'debug', debug);
-        if pgprior
-            reg = reg + llPriorVelocity(v,  'fast', 'vs', vs, 'prm', prm, 'bnd', bnd, 'debug', debug);
+        if geod
+            vel = geod * llPriorVelocity(v, 'fast', 'vs', vs, 'prm', prm, 'bnd', bnd);
+        else
+            vel = 0;
         end
-        ll  = match + reg;
+        ll  = match + reg + vel;
         
-        if verbose, printInfo(i, ll0, match, reg); end
+        if verbose, printInfo(i, ll0, match, reg, vel); end
         
         if ll <= ll0
             if verbose, printInfo('failed'); end
@@ -278,12 +288,12 @@ function result = lsVelocity(model, dv, r0, match0, mu, f, varargin)
 
 end
 
-function printInfo(which, oll, llm, llr)
+function printInfo(which, oll, llm, llr, llv)
     if ischar(which) 
         if strcmpi(which, 'header')
             fprintf('R - LineSearch | Armijo  | %12s = %12s + %12s | %12s\n', 'RLL', 'LL-Match', 'RLL-Prior', 'LL-Diff');
         elseif strcmpi(which, 'initial')
-            fprintf('R - LineSearch | Initial | %12.4f = %12.4f + %12.4f \n', oll, llm, llr);
+            fprintf('R - LineSearch | Initial | %12.4f = %12.4f + %12.4f + %12.4f \n', oll, llm, llr, llv);
         elseif strcmpi(which, 'failed')
             fprintf('| Failed\n');
         elseif strcmpi(which, 'success')
@@ -292,7 +302,7 @@ function printInfo(which, oll, llm, llr)
             fprintf('R - LineSearch | Complete failure\n');
         end
     else
-        fprintf('R - LineSearch | Try %3d | %12.4f = %12.4f + %12.4f | %12.4f ', which, llm+llr, llm, llr, llm+llr-oll);
+        fprintf('R - LineSearch | Try %3d | %12.4f = %12.4f + %12.4f + %12.4f | %12.4f ', which, llm+llr+llv, llm, llr, llv, llm+llr+llv-oll);
     end
 end
         

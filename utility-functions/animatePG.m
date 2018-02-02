@@ -62,29 +62,15 @@ function frames = animatePG(varargin)
     x     = p.Results.x;
     n     = p.Results.n;
     
-    % Deal with all model/opt versions
-    if isstruct(model.z)
-        A   = model.z.A;
-        w   = model.pg.w;
-        vs  = opt.tpl.vs;
-        prm = opt.pg.prm;
-        iscat = opt.tpl.cat && checkarray(model.tpl.a);
-        if iscat && checkarray(model.tpl.a)
-            mu = model.tpl.a;
-        else
-            mu = model.tpl.mu;
-        end
+    A   = model.z.A + opt.pg.geod * model.pg.ww;
+    w   = model.pg.w;
+    vs  = opt.tpl.vs;
+    prm = opt.pg.prm;
+    iscat = opt.tpl.cat && checkarray(model.tpl.a);
+    if iscat && checkarray(model.tpl.a)
+        mu = model.tpl.a;
     else
-        A   = model.Az;
-        w   = model.w;
-        vs  = opt.vs;
-        prm = opt.prm;
-        iscat = opt.tpm;
-        if iscat && checkarray(model.a)
-            mu = model.a;
-        else
-            mu = model.mu;
-        end
+        mu = model.tpl.mu;
     end
     
     cov  = inv(A);
