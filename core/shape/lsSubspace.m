@@ -39,12 +39,17 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
     llm0 = model.lb.m.val;
     llz0 = model.lb.z.val;
     llw0 = model.lb.w.val;
-    ll0  = llm0 + llz0 + llw0;
+    if opt.pg.geod
+        llg0 = model.lb.g.val;
+    else
+        llg0 = 0;
+    end
+    ll0  = llm0 + llz0 + llg0 + llw0;
     ok   = false;
     
     if opt.ui.verbose
         printInfo('header');
-        printInfo('initial', ll0, llm0, llz0, llw0);
+        printInfo('initial', ll0, llm0, llz0+llg0, llw0);
         opt1 = opt;
         opt1.ui.verbose = false;
     end
@@ -65,9 +70,14 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
         llm = model.lb.m.val;
         llz = model.lb.z.val;
         llw = model.lb.w.val;
-        ll = llm + llz + llw;
+        if opt.pg.geod
+            llg = model.lb.g.val;
+        else
+            llg = 0;
+        end
+        ll = llm + llz + llw + llg;
         
-        if opt.ui.verbose, printInfo(armijo, ll0, llm, llz, llw); end
+        if opt.ui.verbose, printInfo(armijo, ll0, llm, llz + llg, llw); end
         
         if ll <= ll0
             if opt.ui.verbose, printInfo('failed'); end

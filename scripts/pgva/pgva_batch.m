@@ -182,7 +182,7 @@ function dat = batchMomentum(dat, opt)
 
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
-        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'OneMomentum', 'inplace', dat(n1:ne), opt);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'OneMomentum', 'inplace', dat(n1:ne), opt);
         
     end
     if opt.ui.verbose, plotBatchEnd; end
@@ -209,7 +209,12 @@ function dat = oneInitPush(dat, model, opt)
     
     % Warp
     % ----
-    iphi = spm_warps('identity', opt.tpl.lat);
+    if opt.pg.provided
+        iphi = exponentiateVelocity(dat.v.v, 'iphi', ...
+            'itgr', opt.iter.itg, 'vs', opt.tpl.vs, 'prm', opt.pg.prm);
+    else
+        iphi = spm_warps('identity', opt.tpl.lat);
+    end
     ipsi = reconstructIPsi(eye(4), iphi, 'lat', opt.tpl.lat, ...
                            'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
                            'debug', opt.ui.debug);
@@ -218,7 +223,9 @@ function dat = oneInitPush(dat, model, opt)
                                               'output', {dat.f.pf, dat.f.c}, ...
                                               'loop', loop, 'par', par, ...
                                               'debug', opt.ui.debug);
-    dat.v.ipsi = copyarray(ipsi, dat.v.ipsi);
+    if isa(dat.v.ipsi, 'file_array')
+        dat.v.ipsi = copyarray(ipsi, dat.v.ipsi);
+    end
     clear ipsi
 
 end
@@ -241,7 +248,7 @@ function dat = batchInitPush(dat, model, opt)
 
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
-        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'OneInitPush', 'inplace', dat(n1:ne), model, opt);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'OneInitPush', 'inplace', dat(n1:ne), model, opt);
         
     end
     if opt.ui.verbose, plotBatchEnd; end
@@ -278,6 +285,9 @@ function dat = oneInitPull(dat, model, opt)
     if opt.tpl.cat
         dat.tpl.wa = pullTemplate(dat.v.ipsi, model.tpl.a, ...
             'par', par, 'output', dat.tpl.wa, 'debug', opt.ui.debug);
+        dat.tpl.wmu = reconstructProbaTemplate(dat.tpl.wa, ...
+            'loop', loop, 'par', par, 'output', dat.tpl.wmu, ...
+            'debug', opt.ui.debug);
         dat.tpl.wa = rmarray(dat.tpl.wa);
     else
         dat.tpl.wmu = pullTemplate(dat.v.ipsi, model.tpl.mu, ...
@@ -313,7 +323,7 @@ function [dat, model] = batchInitPull(dat, model, opt)
 
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
-        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'OneInitPull', 'inplace', dat(n1:ne), model, opt);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'OneInitPull', 'inplace', dat(n1:ne), model, opt);
         
         for n=n1:ne
             if dat(n).f.observed
@@ -573,7 +583,7 @@ function [dat, model] = batchInitVelocity(mode, dat, model, opt)
 
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
-        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'OneInitVelocity', 'inplace', dat(n1:ne), model, opt, mode);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'OneInitVelocity', 'inplace', dat(n1:ne), model, opt, mode);
         
         for n=n1:ne
             
@@ -983,7 +993,7 @@ function [dat, model] = batchFitAffine(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'oneFitAffine', 'inplace', dat(n1:ne), model, opt);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'oneFitAffine', 'inplace', dat(n1:ne), model, opt);
         
         for n=n1:ne
             
@@ -1070,7 +1080,7 @@ function [dat, model] = batchFitLatent(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'oneFitLatent', 'inplace', dat(n1:ne), model, opt);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'oneFitLatent', 'inplace', dat(n1:ne), model, opt);
         
         for n=n1:ne
             
@@ -1334,7 +1344,7 @@ function [dat, model] = batchFitVelocity(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'oneFitVelocity', 'inplace', dat(n1:ne), model, opt);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'oneFitVelocity', 'inplace', dat(n1:ne), model, opt);
         
         
         for n=n1:ne
@@ -1526,7 +1536,7 @@ function [dat, model] = batchLB(which, dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        dat(n1:ne) = distribute(opt.dist, 'pgva_batch', 'oneLB', 'inplace', dat(n1:ne), model, opt, which);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'oneLB', 'inplace', dat(n1:ne), model, opt, which);
         
         for n=n1:ne
             

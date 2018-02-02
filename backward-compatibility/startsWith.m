@@ -11,7 +11,7 @@ function sw = startsWith(s, pattern, varargin)
 
 % - If bultin function exists, use it
 if exist('startsWith', 'builtin')
-    sw = startWith(s, pattern, varargin{:});
+    sw = builtin('startsWith', s, pattern, varargin{:});
     return
 end
 

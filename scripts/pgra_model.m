@@ -270,7 +270,7 @@ function [model, dat, opt] = pgra_model(varargin)
             if opt.optimise.q.q && ~model.q.active
                 model.q.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'Affine');
-            elseif (opt.optimise.pg.w || opt.optimise.z.z) && ~model.pg.active
+            elseif (opt.optimise.z.z || opt.optimise.pg.w) && ~model.pg.active
                 model.pg.active = true;
                 fprintf('%10s | %10s\n', 'Activate', 'PG');
             elseif opt.optimise.r.r && ~model.r.active
@@ -286,21 +286,23 @@ function [model, dat, opt] = pgra_model(varargin)
         % -----------------------------------------------------------------
         %    Affine
         % -----------------------------------------------------------------
-        if opt.optimise.q.q && model.q.active
+        if model.q.active
         
-            % Update parameters
-            % -----------------
-            [dat, model] = pgra_batch('FitAffine', dat, model, opt);
+            if opt.optimise.q.q
+                % Update parameters
+                % -----------------
+                [dat, model] = pgra_batch('FitAffine', dat, model, opt);
 
-            % -----------
-            % Lower bound
-            model = updateLowerBound(model);
-            plotAll(model, opt);
-            % -----------
+                % -----------
+                % Lower bound
+                model = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
+            end
             
-            % Update prior
-            % ------------
-            if opt.optimise.q.A && opt.q.Mr
+            if opt.q.Mr && opt.optimise.q.A
+                % Update prior
+                % ------------
                 rind = opt.q.rind;
                 model.q.A = spm_prob('Wishart', 'up', ...
                                      opt.N, 0, model.q.qq(rind,rind) + model.q.S(rind,rind), ...
@@ -345,22 +347,15 @@ function [model, dat, opt] = pgra_model(varargin)
 
                     % Factor of the prior : ln p(z|W) + ln p(W)
                     % -------------------
-                    reg = opt.pg.geod * (model.z.zz + model.z.S) + eye(opt.pg.K);
-                    % /!\ Should I include Sz ?
+                    reg = diag(opt.pg.geod * (model.z.zz + model.z.S) + eye(opt.pg.K));
 
                     model.pg.d = prepareOnDisk(model.pg.d, size(model.pg.w));
                     for k=1:opt.pg.K
-                        % Gradient
-                        % --------
-                        lw = spm_diffeo('vel2mom', single(model.pg.w(:,:,:,:,k)), [opt.tpl.vs, opt.pg.prm]);
-                        gw = single(model.pg.g(:,:,:,:,k)) + reg(k,k) * lw;
-                        clear lw
-                        
                         % Search direction
                         % ----------------
                         model.pg.d(:,:,:,:,k) = -spm_diffeo('fmg', ...
-                            single(model.pg.h(:,:,:,:,k)), gw, ...
-                            double([opt.tpl.vs reg(k,k) * opt.pg.prm 2 2]));
+                            single(model.pg.h(:,:,:,:,k)), single(model.pg.g(:,:,:,:,k)), ...
+                            double([opt.tpl.vs reg(k) * opt.pg.prm 2 2]));
                         clear gw
                     end
                     model.pg.g = rmarray(model.pg.g);
@@ -373,7 +368,7 @@ function [model, dat, opt] = pgra_model(varargin)
 
                         % -----------
                         % Lower bound
-                        model           = updateLowerBound(model);
+                        model = updateLowerBound(model);
                         plotAll(model, opt);
                         % -----------
                     else
@@ -401,7 +396,7 @@ function [model, dat, opt] = pgra_model(varargin)
 
             % Orthogonalisation
             % -------------------------------------------------------------
-            if opt.optimise.z.z && opt.optimise.pg.w && opt.optimise.z.A
+            if opt.optimise.pg.w && opt.optimise.z.z && opt.optimise.z.A
             
                 % Orthogonalise
                 % -------------
@@ -651,9 +646,9 @@ function plotAll(model, opt)
         
         % --- Line 3
         
+        i = i + 1;
         if opt.q.Mr
             % KL affine
-            i = i + 1;
             if isfield(model.lb, 'q')
                 subplot(nh,nw,i)
                 plot([model.lb.lb.it model.lb.lb.curit], model.lb.q.list, ...
@@ -661,7 +656,13 @@ function plotAll(model, opt)
                 title(model.lb.q.name)
             end
         else
-            i = i + 1;
+            % LL geodesic
+            if isfield(model.lb, 'g')
+                subplot(nh,nw,i)
+                plot([model.lb.lb.it model.lb.lb.curit], model.lb.g.list, ...
+                     colors(mod(i, length(colors))+1))
+                title(model.lb.g.name)
+            end
         end
         % KL residual
         i = i + 1;
@@ -683,17 +684,15 @@ function plotAll(model, opt)
         
         % --- Line 4
         
+        i = i + 1;
         if opt.q.Mr
             % KL affine precision
-            i = i + 1;
             if isfield(model.lb, 'Aq')
                 subplot(nh,nw,i)
                 plot([model.lb.lb.it model.lb.lb.curit], model.lb.Aq.list, ...
                      colors(mod(i, length(colors))+1))
                 title(model.lb.Aq.name)
             end
-        else
-            i = i + 1;
         end
         % KL residual precision
         i = i + 1;

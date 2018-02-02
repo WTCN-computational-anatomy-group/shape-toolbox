@@ -24,10 +24,12 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
 %
 % KEYWORD ARGUMENTS
 % -----------------
-% llz0 - Previous log-likelihood (prior term) [compute]
 % regz - Precision matrix of the latent parameters [none]
 % prm  - Differential operator parameters [0.0001 0.001 0.2 0.05 0.2]
 % itgr - Number of integration steps for geodesic shooting [auto]
+% geod - Weight of the geodesic prior [0]
+% llz0 - Previous log-likelihood (prior term) [compute]
+% llv0 - Previous log-likelihood (geodesic term) [compute]
 %
 % A    - Affine transform [eye(4)]
 % Mf   - Image voxel-to-world mappinf [eye(4)]
@@ -71,7 +73,7 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     p.addRequired('llm0',   @isscalar);
     p.addRequired('mu',     @checkarray);
     p.addRequired('f',      @checkarray);
-    p.addParameter('llz0',     nan,    @iscalar);
+    p.addParameter('llz0',     nan,    @isscalar);
     p.addParameter('regz',     []);
     p.addParameter('A',        eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
     p.addParameter('Mf',       eye(4), @(X) isnumeric(X) && issame(size(X), [4 4]));
@@ -79,8 +81,10 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     p.addParameter('nit',      6,      @isscalar);
     p.addParameter('itgr',     nan,    @isscalar);
     p.addParameter('prm',      [0.0001 0.001 0.2 0.05 0.2], @(X) length(X) == 5);
-    p.addParameter('bnd',      0, @(X) isscalar(X) && isnumeric(X));
-    p.addParameter('match', 'pull', @ischar);
+    p.addParameter('bnd',      0,      @(X) isscalar(X) && isnumeric(X));
+    p.addParameter('match',    'pull', @ischar);
+    p.addParameter('geod',     0,      @isscalar);
+    p.addParameter('llv0',     nan,    @isscalar);
     p.addParameter('par',      false,  @isscalar);
     p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'slice', 'component', 'none', ''})));
     p.addParameter('pf',  nan, @(X) isnumeric(X) || isa(X, 'file_array'));
@@ -91,6 +95,8 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     p.addParameter('debug',    false,  @isscalar);
     p.parse(model, dz, z0, v0, llm0, mu, f, varargin{:});
     llz0    = p.Results.llz0;
+    llv0    = p.Results.llv0;
+    geod    = p.Results.geod;
     regz    = p.Results.regz;
     A       = p.Results.A;
     Mf      = p.Results.Mf;
@@ -143,6 +149,14 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     % --- Template voxel size
     vsmu = sqrt(sum(Mmu(1:3,1:3).^2)); 
     
+    
+    % --- Load some data (in case it is on disk)
+    z0 = numeric(z0);
+    v0 = numeric(v0);
+    dz = numeric(dz);
+    dv = reconstructVelocity('latent', dz, 'subspace', W, ...
+        'debug', debug, 'par', par, 'loop', loop);
+    
     % --- Set some default parameter value
     if isempty(regz)
         regz = precisionZ(W, vsmu, prm, bnd, 'debug', debug);
@@ -150,16 +164,17 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     if isnan(llz0)
        llz0 = llPriorLatent(z0, regz, 'fast');
     end
-    
-    % --- Load some data (in case it is on disk)
-    z0 = numeric(z0);
-    dz = numeric(dz);
-    dv = reconstructVelocity('latent', dz, 'subspace', W, ...
-        'debug', debug, 'par', par, 'loop', loop);
+    if isnan(llv0)
+        if geod
+            llv0 = geod * llPriorVelocity(v0, 'fast', 'vs', vsmu, 'prm', prm, 'bnd', bnd);
+        else
+            llv0 = 0;
+        end
+    end
     
     % --- Initialise line search
     armijo = 1;           % Armijo factor
-    ll0    = llm0 + llz0; % Log-likelihood (only parts that depends on z)
+    ll0    = llm0 + llz0 + llv0; % Log-likelihood (only parts that depends on z)
     dimf   = [size(f) 1 1];
     latf   = dimf(1:3);
     dimmu  = [size(mu) 1 1];
@@ -167,7 +182,7 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     
     if verbose
         printInfo('header');
-        printInfo('initial', ll0, llm0, llz0);
+        printInfo('initial', ll0, llm0, llz0, llv0);
     end
     
     % //!\\ Here, the pushed image is temporarily kept in memory. This
@@ -177,7 +192,7 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     % --- Loop
     for i=1:nit
         z = single(z0 + dz / armijo);
-        v = single(numeric(v0) + dv / armijo);
+        v = single(v0 + dv / armijo);
         iphi = exponentiateVelocity(v, 'iphi', 'itgr', itgr, 'vs', vsmu, 'prm', prm, 'bnd', bnd, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
         if strcmpi(matchmode, 'push')
@@ -195,10 +210,15 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
             end
             llm = llMatching(model, wmu, f, 'par', par, 'loop', loop, 'debug', debug);
         end
+        if geod
+            llv = geod * llPriorVelocity(v, 'fast', 'vs', vsmu, 'prm', prm, 'bnd', bnd);
+        else
+            llv = 0;
+        end
         llz = llPriorLatent(z, regz, 'fast', 'debug', debug);
-        ll  = llm + llz;
+        ll  = llm + llz + llv;
         
-        if verbose, printInfo(i, ll0, llm, llz); end
+        if verbose, printInfo(i, ll0, llm, llz, llv); end
         
         if ll <= ll0
             if verbose, printInfo('failed'); end
@@ -248,12 +268,12 @@ function result = lsLatent(model, dz, z0, v0, llm0, W, mu, f, varargin)
     end
 end
 
-function printInfo(which, oll, llm, llz)
+function printInfo(which, oll, llm, llz, llv)
     if ischar(which) 
         if strcmpi(which, 'header')
-            fprintf('Z - LineSearch | Armijo  | %12s = %12s + %12s | %12s\n', 'RLL', 'LL-Match', 'RLL-Prior', 'LL-Diff');
+            fprintf('Z - LineSearch | Armijo  | %12s = %12s + %12s + %12s | %12s\n', 'RLL', 'LL-Match', 'RLL-Prior', 'RLL-Geod', 'LL-Diff');
         elseif strcmpi(which, 'initial')
-            fprintf('Z - LineSearch | Initial | %12.6f = %12.6f + %12.6f \n', oll, llm, llz);
+            fprintf('Z - LineSearch | Initial | %12.6f = %12.6f + %12.6f + %12.6f \n', oll, llm, llz, llv);
         elseif strcmpi(which, 'failed')
             fprintf('| Failed\n');
         elseif strcmpi(which, 'success')
@@ -262,7 +282,7 @@ function printInfo(which, oll, llm, llz)
             fprintf('Z - LineSearch | Complete failure\n');
         end
     else
-        fprintf('Z - LineSearch | Try %3d | %12.6f = %12.6f + %12.6f | %12.6f ', which, llm+llz, llm, llz, llm+llz-oll);
+        fprintf('Z - LineSearch | Try %3d | %12.6f = %12.6f + %12.6f + %12.6f | %12.6f ', which, llm+llz+llv, llm, llz, llv, llm+llz+llv-oll);
     end
 end
         

@@ -4,6 +4,8 @@ function setpath(component)
 %
 % Set path (i.e., source dependencies) for the specified model.
 
+    warning('off','MATLAB:dispatcher:nameConflict')
+
     if nargin == 0
         component = {'pgva', 'pgra', 'pg', 'affine', 'diffeo'};
     end
@@ -16,6 +18,7 @@ function setpath(component)
         setonepath(component{i});
     end
 
+    warning('on','MATLAB:dispatcher:nameConflict')
 end
 
 function setonepath(component)

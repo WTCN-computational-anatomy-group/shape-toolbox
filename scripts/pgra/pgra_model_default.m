@@ -318,11 +318,20 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt.optimise, 'pg')
         opt.optimise.pg = struct;
     end
+    if islogical(opt.optimise.pg)
+        [opt.optimise.pg, val] = deal(struct, opt.optimise.pg);
+        opt.optimise.pg.w = val;
+    end
     if ~isfield(opt.optimise.pg, 'w')
         opt.optimise.pg.w = true;
     end
     if ~isfield(opt.optimise, 'q')
         opt.optimise.q = struct;
+    end
+    if islogical(opt.optimise.q)
+        [opt.optimise.q, val] = deal(struct, opt.optimise.q);
+        opt.optimise.q.A = val;
+        opt.optimise.q.q = val;
     end
     if ~isfield(opt.optimise.q, 'A')
         opt.optimise.q.A = true;
@@ -333,6 +342,11 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt.optimise, 'z')
         opt.optimise.z = struct;
     end
+    if islogical(opt.optimise.z)
+        [opt.optimise.z, val] = deal(struct, opt.optimise.z);
+        opt.optimise.z.A = val;
+        opt.optimise.z.z = val;
+    end
     if ~isfield(opt.optimise.z, 'A')
         opt.optimise.z.A = true;
     end
@@ -342,6 +356,11 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt.optimise, 'r')
         opt.optimise.r = struct;
     end
+    if islogical(opt.optimise.r)
+        [opt.optimise.r, val] = deal(struct, opt.optimise.r);
+        opt.optimise.r.A = val;
+        opt.optimise.r.q = val;
+    end
     if ~isfield(opt.optimise.r, 'l')
         opt.optimise.r.l = true;
     end
@@ -350,6 +369,10 @@ function opt = pgra_model_default(opt)
     end
     if ~isfield(opt.optimise, 'tpl')
         opt.optimise.tpl = struct;
+    end
+    if islogical(opt.optimise.tpl)
+        [opt.optimise.tpl, val] = deal(struct, opt.optimise.tpl);
+        opt.optimise.tpl.a = val;
     end
     if ~isfield(opt.optimise.tpl, 'a')
         opt.optimise.tpl.a = true;
