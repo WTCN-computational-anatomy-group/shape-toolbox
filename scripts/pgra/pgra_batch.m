@@ -1571,7 +1571,7 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgra_batch', 'oneGradHessVelocity', dat(n1:ne), model, opt);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgra_batch', 'oneGradHessVelocity', 'inplace', dat(n1:ne), model, opt);
         
         
         % Add individual contributions
