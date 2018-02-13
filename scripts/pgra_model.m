@@ -252,7 +252,7 @@ function [model, dat, opt] = pgra_model(varargin)
         end
         
         plotAll(model, opt);
-        if ~isempty(opt.fnames.fig)
+        if ~isempty(opt.fnames.fig) && (~islogical(opt.ui.ftrack) || opt.ui.ftrack)
             saveas(gcf, fullfile(opt.dir.model, opt.fnames.fig));
         end
         
@@ -558,7 +558,7 @@ function plotAll(model, opt)
 % nice.
     
     if opt.ui.verbose
-	if islogical(opt.ui.ftrack) && ~opt.ui.ftrack
+        if islogical(opt.ui.ftrack) && ~opt.ui.ftrack
             return
         end
         try
