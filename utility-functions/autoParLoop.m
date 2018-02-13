@@ -37,9 +37,9 @@ function [par, loop] = autoParLoop(par, loop, isfa, nz, nc)
     end
     
     % --- Parallelisation scheme
-    try
+    if usejava('jvm')
         parid = getCurrentTask();
-    catch
+    else
         parid = '';
     end
     if ~isempty(parid)
