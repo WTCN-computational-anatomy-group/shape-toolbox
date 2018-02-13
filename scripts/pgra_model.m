@@ -558,6 +558,9 @@ function plotAll(model, opt)
 % nice.
     
     if opt.ui.verbose
+	if islogical(opt.ui.ftrack) && ~opt.ui.ftrack
+            return
+        end
         try
             figure(opt.ui.ftrack);
             clf(opt.ui.ftrack);
