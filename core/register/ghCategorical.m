@@ -176,6 +176,11 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
         end
     end
     
+    % --- create sliceable empty count
+    if isempty(c)
+        c = zeros([0 0 dlat(3)]);
+    end
+    
     % --- No loop
     if strcmpi(loop, 'none')
         if p.Results.debug, fprintf('   - No loop\n'); end
@@ -211,7 +216,7 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
             if nargout > 1
                 if ~par
                     for z=1:dlat(3)
-                        [g1, h1] = onMemory(mu(bbx,bby,bbz(1)+z-1,:), f(:,:,z,:), c(:,:,z));
+                        [g1, h1] = onMemory(mu(bbx,bby,oz+z,:), f(:,:,z,:), c(:,:,z));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
@@ -245,7 +250,7 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
              elseif hessian
                 if ~par
                     for z=1:dlat(3)
-                        h1 = onMemory(mu(bbx,bby,bbz(1)+z-1,:), f(:,:,z,:), c(:,:,z), [], true);
+                        h1 = onMemory(mu(bbx,bby,oz+z,:), f(:,:,z,:), c(:,:,z), [], true);
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
@@ -274,7 +279,7 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
              else
                 if ~par
                     for z=1:dlat(3)
-                        g1 = onMemory(mu(bbx,bby,bbz(1)+z-1,:), f(:,:,z,:), c(:,:,z));
+                        g1 = onMemory(mu(bbx,bby,oz+z,:), f(:,:,z,:), c(:,:,z));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
@@ -307,7 +312,7 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                 h = numeric(h);
                 if ~par
                     for z=1:dlat(3)
-                        [g1, h1] = onMemory(mu(bbx,bby,bbz(1)+z-1,:), f(:,:,z,:), c(:,:,z), gmu(bbx,bby,bbz(1)+z-1,:,:));
+                        [g1, h1] = onMemory(mu(bbx,bby,oz+z,:), f(:,:,z,:), c(:,:,z), gmu(bbx,bby,oz+z,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
@@ -373,7 +378,7 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                 h = numeric(h);
                 if ~par
                     for z=1:dlat(3)
-                        h1 = onMemory(mu(bbx,bby,bbz(1)+z-1,:), f(:,:,z,:), c(:,:,z), gmu(bbx,bby,bbz(1)+z-1,:,:), true);
+                        h1 = onMemory(mu(bbx,bby,oz+z,:), f(:,:,z,:), c(:,:,z), gmu(bbx,bby,oz+z,:,:), true);
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array') && isa(f, 'file_array')
@@ -430,7 +435,7 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
                 g = numeric(g);
                 if ~par
                     for z=1:dlat(3)
-                        g1 = onMemory(mu(bbx,bby,bbz(1)+z-1,:), f(:,:,z,:), c(:,:,z), gmu(bbx,bby,bbz(1)+z-1,:,:));
+                        g1 = onMemory(mu(bbx,bby,oz+z,:), f(:,:,z,:), c(:,:,z), gmu(bbx,bby,oz+z,:,:));
                         g(:,:,z,:) = g(:,:,z,:) + g1;
                     end
                 elseif isa(mu, 'file_array') && isa(gmu, 'file_array') && isa(f, 'file_array')
