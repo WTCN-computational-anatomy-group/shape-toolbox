@@ -1035,7 +1035,7 @@ function dat = oneFitLatent(dat, model, opt)
 
             % Part of geodesic prior
             if opt.pg.geod && checkarray(dat.v.r)
-                m = spm_diffeo('vel2mom', single(dat.v.r), double([opt.tpl.vs opt.pg.prm]));
+                m = spm_diffeo('vel2mom', single(numeric(dat.v.r)), double([opt.tpl.vs opt.pg.prm]));
                 for k=1:opt.pg.K
                     w1 = single(model.pg.w(:,:,:,:,k));
                     g(k) = g(k) + opt.pg.geod * w1(:)' * m(:);
