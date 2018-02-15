@@ -76,7 +76,7 @@ function [dat, model] = pgra_model_init(dat, model, opt)
         model.pg.ww = precisionZ(model.pg.w, opt.tpl.vs, opt.pg.prm);
     end
     if opt.optimise.pg.w
-        model.lb.w.val  = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+        model.lb.w.val  = llPriorSubspace(model.pg.w, opt.N * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*opt.N);
         model.lb.w.type = 'll';
         model.lb.w.name = 'Subspace prior';
     end

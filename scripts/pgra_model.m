@@ -347,7 +347,7 @@ function [model, dat, opt] = pgra_model(varargin)
 
                     % Factor of the prior : ln p(z|W) + ln p(W)
                     % -------------------
-                    reg = diag(opt.pg.geod * (model.z.zz + model.z.S) + eye(opt.pg.K));
+                    reg = diag(opt.pg.geod * (model.z.zz + model.z.S) + opt.N * eye(opt.pg.K));
 
                     model.pg.d = prepareOnDisk(model.pg.d, size(model.pg.w));
                     for k=1:opt.pg.K
