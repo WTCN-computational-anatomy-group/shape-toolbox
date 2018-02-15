@@ -480,7 +480,7 @@ function opt = pgra_model_default(opt)
         opt.ondisk.dat.v.jac = false;
     end
     if ~isfield(opt.ondisk.dat.v, 'r')
-        opt.ondisk.dat.v.r = false;
+        opt.ondisk.dat.v.r = true;
     end
     if ~isfield(opt.ondisk.dat.v, 'g')
         opt.ondisk.dat.v.g = false;
