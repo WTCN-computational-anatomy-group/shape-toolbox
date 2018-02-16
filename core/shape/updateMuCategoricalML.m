@@ -137,8 +137,9 @@ function mu = loopSlice(f, c, bb, lat, par, output)
                 end
             end
             tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
-            tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
-            mu(:,:,z,:) = log(tmpf(:,:,:,:));
+            tmpf = max(tmpf, eps('single'));
+            tmpf = bsxfun(@rdivide, tmpf, tmpf(:,:,:,nc));
+            mu(:,:,z,:) = log(tmpf);
         end
     elseif isa(f{1}, 'file_array')
         parfor (z=1:lat(3), par)
@@ -153,8 +154,9 @@ function mu = loopSlice(f, c, bb, lat, par, output)
                 end
             end
             tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
-            tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
-            mu(:,:,z,:) = log(tmpf(:,:,:,:));
+            tmpf = max(tmpf, eps('single'));
+            tmpf = bsxfun(@rdivide, tmpf, tmpf(:,:,:,nc));
+            mu(:,:,z,:) = log(tmpf);
         end
     else
         parfor (z=1:lat(3), par)
@@ -169,8 +171,9 @@ function mu = loopSlice(f, c, bb, lat, par, output)
                 end
             end
             tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
-            tmpf = bsxfun(@rdivide, tmpf, max(eps('single'),tmpf(:,:,:,nc)));
-            mu(:,:,z,:) = log(tmpf(:,:,:,:));
+            tmpf = max(tmpf, eps('single'));
+            tmpf = bsxfun(@rdivide, tmpf, tmpf(:,:,:,nc));
+            mu(:,:,z,:) = log(tmpf);
         end
     end
     
