@@ -595,9 +595,10 @@ function plotAll(model, opt)
             title('template (axial)')
             i = i + 1;
             subplot(nh, nw, i)
-            tpl = catToColor(model.tpl.mu(:,ceil(size(model.tpl.mu,2)/2),:,:));
-            dim = [size(tpl) 1 1];
-            tpl = permute(reshape(tpl, [dim(1) dim(3) dim(4)]), [2 1 3]);
+            tpl = model.tpl.mu(:,ceil(size(model.tpl.mu,2)/2),:,:);
+            tpl = reshape(tpl, [size(tpl,1) size(tpl,3) size(tpl,4)]);
+            tpl = catToColor(tpl);
+            tpl = permute(tpl, [2 1 3]);
             asp = 1./[opt.tpl.vs(3) opt.tpl.vs(1) 1];
             image(tpl(end:-1:1,:,:));
             daspect(asp);
