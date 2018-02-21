@@ -1042,6 +1042,7 @@ function dat = oneFitLatent(dat, model, opt)
                 end
                 clear w1
             end
+            clear m
             
             h = spm_matcomp('LoadDiag', h); % Additional regularisation for robustness
 
