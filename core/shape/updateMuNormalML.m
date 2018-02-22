@@ -91,7 +91,7 @@ function mu = updateMuNormalML(varargin)
     debug  = p.Results.debug;
     output = p.Results.output;
     
-    if debug, fprintf('* updateMuNormalML\n'); end;
+    if debug, fprintf('* updateMuNormalML\n'); end
 
     if isempty(lat)
         error('For now, the lattice size MUST be provided')
@@ -105,7 +105,7 @@ function mu = updateMuNormalML(varargin)
     
     switch lower(loop)
         case 'none'
-            if debug, fprintf('   - No loop\n'); end;
+            if debug, fprintf('   - No loop\n'); end
             mu = loopNone(f, c, s, bb, lat, output, fwhm);
         case 'component'
             if debug
@@ -317,9 +317,15 @@ function mu = loopNone(f, c, s, bb, lat, output, fwhm)
         tmpc = zeros([lat nc], 'single');
     end
     for n=1:numel(f)
-        bx = bb{n}.x;
-        by = bb{n}.y;
-        bz = bb{n}.z;
+        if ~isempty(bb)
+            bx = bb{n}.x;
+            by = bb{n}.y;
+            bz = bb{n}.z;
+        else
+            bx = 1:lat(1);
+            by = 1:lat(2);
+            bz = 1:lat(3);
+        end
         if ~isempty(s)
             s1 = reshape(s{n}, [1 1 1 nc]);
             c1 = bsxfun(@rdivide, single(numeric(c{n})), s1);

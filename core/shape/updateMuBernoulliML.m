@@ -123,9 +123,15 @@ function mu = loopSlice(f, c, bb, lat, par, output)
     % --- Compute count
     tmpc = zeros(lat, 'single');
     for n=1:numel(f)
-        bx = bb{n}.x;
-        by = bb{n}.y;
-        bz = bb{n}.z;
+        if ~isempty(bb)
+            bx = bb{n}.x;
+            by = bb{n}.y;
+            bz = bb{n}.z;
+        else
+            bx = 1:lat(1);
+            by = 1:lat(2);
+            bz = 1:lat(3);
+        end
         tmpc(bx,by,bz) = tmpc(bx,by,bz) + single(numeric(c{n}));
     end
     
@@ -134,9 +140,15 @@ function mu = loopSlice(f, c, bb, lat, par, output)
         for z=1:lat(3)
             tmpf = zeros(lat(1:2), 'single');
             for n=1:numel(f)
-                bx = bb{n}.x;
-                by = bb{n}.y;
-                bz = bb{n}.z;
+                if ~isempty(bb)
+                    bx = bb{n}.x;
+                    by = bb{n}.y;
+                    bz = bb{n}.z;
+                else
+                    bx = 1:lat(1);
+                    by = 1:lat(2);
+                    bz = 1:lat(3);
+                end
                 fz = z-bz(1)+1;
                 if fz >= 1 && fz <= size(f{n}, 3)
                     tmpf(bx,by) = tmpf(bx,by) + single(f{n}(:,:,fz));
@@ -152,9 +164,15 @@ function mu = loopSlice(f, c, bb, lat, par, output)
         parfor (z=1:lat(3), par)
             tmpf = zeros(lat(1:2), 'single');
             for n=1:numel(f)
-                bx = bb{n}.x;
-                by = bb{n}.y;
-                bz = bb{n}.z;
+                if ~isempty(bb)
+                    bx = bb{n}.x;
+                    by = bb{n}.y;
+                    bz = bb{n}.z;
+                else
+                    bx = 1:lat(1);
+                    by = 1:lat(2);
+                    bz = 1:lat(3);
+                end
                 fz = z-bz(1)+1;
                 if fz >= 1 && fz <= size(f{n}, 3)
                     tmpf(bx,by) = tmpf(bx,by) + single(slice(f{n}, fz, 3));
@@ -170,9 +188,15 @@ function mu = loopSlice(f, c, bb, lat, par, output)
         parfor (z=1:lat(3), par)
             tmpf = zeros(lat(1:2), 'single');
             for n=1:numel(f)
-                bx = bb{n}.x;
-                by = bb{n}.y;
-                bz = bb{n}.z;
+                if ~isempty(bb)
+                    bx = bb{n}.x;
+                    by = bb{n}.y;
+                    bz = bb{n}.z;
+                else
+                    bx = 1:lat(1);
+                    by = 1:lat(2);
+                    bz = 1:lat(3);
+                end
                 fz = z-bz(1)+1;
                 if fz >= 1 && fz <= size(f{n}, 3)
                     tmpf(bx,by) = tmpf(bx,by) + single(f{n}(:,:,fz));
@@ -201,9 +225,15 @@ function mu = loopNone(f, c, bb, output, fwhm)
     mu   = zeros(lat, 'single');
     tmpc = zeros(lat, 'single');
     for n=1:numel(f)
-        bx = bb{n}.x;
-        by = bb{n}.y;
-        bz = bb{n}.z;
+        if ~isempty(bb)
+            bx = bb{n}.x;
+            by = bb{n}.y;
+            bz = bb{n}.z;
+        else
+            bx = 1:lat(1);
+            by = 1:lat(2);
+            bz = 1:lat(3);
+        end
         mu(bx,by,bz)   = mu(bx,by,bz)   + single(numeric(f{n}));
         tmpc(bx,by,bz) = tmpc(bx,by,bz) + single(numeric(c{n}));
     end
