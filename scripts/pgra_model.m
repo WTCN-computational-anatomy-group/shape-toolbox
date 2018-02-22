@@ -252,7 +252,7 @@ function [model, dat, opt] = pgra_model(varargin)
         end
         
         plotAll(model, opt);
-        if ~isempty(opt.fnames.fig)
+        if ~isempty(opt.fnames.fig) && (~islogical(opt.ui.ftrack) || opt.ui.ftrack)
             saveas(gcf, fullfile(opt.dir.model, opt.fnames.fig));
         end
         
@@ -347,7 +347,7 @@ function [model, dat, opt] = pgra_model(varargin)
 
                     % Factor of the prior : ln p(z|W) + ln p(W)
                     % -------------------
-                    reg = diag(opt.pg.geod * (model.z.zz + model.z.S) + eye(opt.pg.K));
+                    reg = diag(opt.pg.geod * (model.z.zz + model.z.S) + opt.N * eye(opt.pg.K));
 
                     model.pg.d = prepareOnDisk(model.pg.d, size(model.pg.w));
                     for k=1:opt.pg.K
@@ -407,7 +407,7 @@ function [model, dat, opt] = pgra_model(varargin)
                 % Rescale
                 % -------
                 if opt.ui.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
-                [Q, iQ] = gnScalePG(iU' * model.pg.ww * iU, ...
+                [Q, iQ] = gnScalePG(iU' * model.pg.ww * iU * opt.N, ...
                                     U   * model.z.zz  * U', ...
                                     U   * model.z.S   * U', ...
                                     opt.z.A0, opt.z.n0, opt.N);
@@ -558,6 +558,9 @@ function plotAll(model, opt)
 % nice.
     
     if opt.ui.verbose
+        if islogical(opt.ui.ftrack) && ~opt.ui.ftrack
+            return
+        end
         try
             figure(opt.ui.ftrack);
             clf(opt.ui.ftrack);
@@ -592,9 +595,10 @@ function plotAll(model, opt)
             title('template (axial)')
             i = i + 1;
             subplot(nh, nw, i)
-            tpl = catToColor(model.tpl.mu(:,ceil(size(model.tpl.mu,2)/2),:,:));
-            dim = [size(tpl) 1 1];
-            tpl = permute(reshape(tpl, [dim(1) dim(3) dim(4)]), [2 1 3]);
+            tpl = model.tpl.mu(:,ceil(size(model.tpl.mu,2)/2),:,:);
+            tpl = reshape(tpl, [size(tpl,1) size(tpl,3) size(tpl,4)]);
+            tpl = catToColor(tpl);
+            tpl = permute(tpl, [2 1 3]);
             asp = 1./[opt.tpl.vs(3) opt.tpl.vs(1) 1];
             image(tpl(end:-1:1,:,:));
             daspect(asp);

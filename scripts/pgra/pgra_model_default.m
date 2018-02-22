@@ -260,16 +260,22 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt, 'split')
         opt.split = struct;
     end
-    if ~isfield(opt.split, 'par')
-        % Number of workers for parallel processing
-        % 0   = no parallelisation
-        % inf = Automatically set by Matlab
-        opt.split.par = inf;
-    end
     if ~isfield(opt.split, 'loop')
         % Along which dimension should processing be parallelised
         % 'none'/'subject'/'slice'
         opt.split.loop = 'subject';
+    end
+    if ~isfield(opt.split, 'par')
+        % Number of workers for parallel processing
+        % 0   = no parallelisation
+        % inf = Automatically set by Matlab
+        if usejava('jvm')
+            opt.split.par = inf;
+        elseif ~isempty(opt.dist.cluster.ip)
+            opt.split.par = true;
+        else
+            opt.split.par = false;
+        end
     end
     if ~isfield(opt.split, 'batch')
         % Batch size when distributing subjects
@@ -474,7 +480,7 @@ function opt = pgra_model_default(opt)
         opt.ondisk.dat.v.jac = false;
     end
     if ~isfield(opt.ondisk.dat.v, 'r')
-        opt.ondisk.dat.v.r = false;
+        opt.ondisk.dat.v.r = true;
     end
     if ~isfield(opt.ondisk.dat.v, 'g')
         opt.ondisk.dat.v.g = false;

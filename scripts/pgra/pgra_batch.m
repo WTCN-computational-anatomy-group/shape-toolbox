@@ -1035,13 +1035,14 @@ function dat = oneFitLatent(dat, model, opt)
 
             % Part of geodesic prior
             if opt.pg.geod && checkarray(dat.v.r)
-                m = spm_diffeo('vel2mom', single(dat.v.r), double([opt.tpl.vs opt.pg.prm]));
+                m = spm_diffeo('vel2mom', single(numeric(dat.v.r)), double([opt.tpl.vs opt.pg.prm]));
                 for k=1:opt.pg.K
                     w1 = single(model.pg.w(:,:,:,:,k));
                     g(k) = g(k) + opt.pg.geod * w1(:)' * m(:);
                 end
                 clear w1
             end
+            clear m
             
             h = spm_matcomp('LoadDiag', h); % Additional regularisation for robustness
 
@@ -1571,7 +1572,7 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
     
         % Compute subjects grad/hess w.r.t. initial velocity
         % --------------------------------------------------
-        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgra_batch', 'oneGradHessVelocity', dat(n1:ne), model, opt);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgra_batch', 'oneGradHessVelocity', 'inplace', dat(n1:ne), model, opt);
         
         
         % Add individual contributions
@@ -1618,7 +1619,7 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
                         
     % Regularisation gradient
     % -----------------------
-    reg = opt.pg.geod * (model.z.zz + model.z.S) + eye(opt.pg.K);
+    reg = opt.pg.geod * (model.z.zz + model.z.S) + opt.N * eye(opt.pg.K);
     for k=1:opt.pg.K
         lw = spm_diffeo('vel2mom', single(model.pg.w(:,:,:,:,k)), [opt.tpl.vs, opt.pg.prm]);
         model.pg.g(:,:,:,:,k) = model.pg.g(:,:,:,:,k) + reg(k,k) * lw + opt.pg.geod * model.z.z(k) * m;
@@ -1820,7 +1821,7 @@ function [dat, model] = batchLB(which, dat, model, opt)
     switch lower(which)
         case 'orthogonalise'
             if isfield(model.lb, 'w')
-                model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+                model.lb.w.val = llPriorSubspace(model.pg.w, opt.N * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*opt.N);
             end
             if opt.z.n0 && isfield(model.lb, 'Az')
                 model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
@@ -1830,7 +1831,7 @@ function [dat, model] = batchLB(which, dat, model, opt)
             end
         case 'subspace'
             if isfield(model.lb, 'w')
-                model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+                model.lb.w.val = llPriorSubspace(model.pg.w, opt.N * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*opt.N);
             end
         case 'precisionz'
             if opt.z.n0 && isfield(model.lb, 'Az')

@@ -37,7 +37,12 @@ function [par, loop] = autoParLoop(par, loop, isfa, nz, nc)
     end
     
     % --- Parallelisation scheme
-    if ~isempty(getCurrentTask())
+    if usejava('jvm')
+        parid = getCurrentTask();
+    else
+        parid = '';
+    end
+    if ~isempty(parid)
         par = 0;
     else
         if islogical(par)

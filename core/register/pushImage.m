@@ -41,7 +41,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     p.addRequired('ipsi', @checkarray);
     p.addRequired('f',    @checkarray);
     p.addOptional('lat',       [],     @(X) isnumeric(X) && length(X) >= 3);
-    p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'component', 'none', ''})));
+    p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'component', 'slice', 'none', ''})));
     p.addParameter('par',      false,  @isscalar);
     p.addParameter('output', []);
     p.addParameter('debug',  false);
@@ -55,6 +55,9 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     if debug, fprintf('* pushImage\n'); end
     
     % --- Optimise parallelisation and splitting schemes
+    if strcmpi(loop, 'slice')
+        loop = '';
+    end
     [par, loop] = autoParLoop(par, loop, isa(f, 'file_array'), 1, size(f,4));
     
     % -- Read dim info
