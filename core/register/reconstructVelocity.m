@@ -53,6 +53,9 @@ function v = reconstructVelocity(varargin)
         nv  = dim(4);
         nk  = dim(5);
         isfa = isa(W, 'file_array');
+        if numel(z) ~= nk
+            warning('Z and W have different number of classes')
+        end
     else
         dim = [size(r) 1 1 1];
         lat = dim(1:3);
@@ -149,6 +152,14 @@ function v = lat2vel(z, W)
     lat = dim(1:3);
     nv = dim(4);
     nk = dim(5);
+    
+    % Check if Z/W dimensions are the same
+    if numel(z) > nk
+        z = z(1:nk);
+    elseif numel(z) < nk
+        W = W(:,:,:,:,1:numel(z));
+    end
+    nk = numel(z);
     
     v = reshape(reshape(numeric(W), [], nk) * z(:), [lat nv]);
 end
