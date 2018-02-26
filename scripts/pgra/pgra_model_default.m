@@ -55,11 +55,15 @@ function opt = pgra_model_default(opt)
         % Number of principal components
         opt.pg.K = min(32, opt.N);
     end
-    if opt.pg.K > opt.N
+    if opt.pg.K > opt.N 
         % Check not too many PGs
-        warning(['No point learning more than %d principal components. ' ...
-                 'Fixing it.'], opt.N)
-        opt.pg.K = opt.N;
+        if isfield(opt, 'optimise') && isfield(opt.optimise, 'pg') && ...
+                ((islogical(opt.optimise.pg) && opt.optimise.pg) || ...
+                 (isstruct(opt.optimise.pg) && isfield(opt.optimise.pg, 'w') && opt.optimise.pg.w))
+            warning(['No point learning more than %d principal components. ' ...
+                     'Fixing it.'], opt.N)
+            opt.pg.K = opt.N;
+        end
     end
     if ~isfield(opt.pg, 'prm')
         % Parameters of the differential operator
@@ -70,6 +74,7 @@ function opt = pgra_model_default(opt)
         % 5) Linear elastic energy - volume change
         opt.pg.prm = [0.0001 0.001 0.2 0.05 0.2];
     end
+    opt.pg.prm = opt.pg.prm(:)'; % always horizontal
     if ~isfield(opt.pg, 'bnd')
         % Boundary condition of the differential operator
         % 0 = Circulant (translation invariant)
@@ -109,6 +114,12 @@ function opt = pgra_model_default(opt)
     if ~isfield(opt.tpl, 'itrp')
         % Interpolation order when warping the template to subjects
         opt.tpl.itrp = 1;
+    end
+    if isfield(opt.tpl, 'vs')
+        opt.tpl.vs = opt.tpl.vs(:)'; % always horizontal
+    end
+    if isfield(opt.tpl, 'lat')
+        opt.tpl.lat = opt.tpl.lat(:)'; % always horizontal
     end
     
     % ---------------------------------------------------------------------
