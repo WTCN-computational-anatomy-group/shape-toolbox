@@ -39,7 +39,7 @@ function v = reconstructVelocity(varargin)
     
     % --- Check that there are enough arguments
     if checkarray(z) + checkarray(W) == 1
-        error('latent and subpsace keywords must be used together')
+        error('latent and subspace keywords must be used together')
     end
     if ~checkarray(z) && ~checkarray(r)
         error('No argument provided')
@@ -63,6 +63,7 @@ function v = reconstructVelocity(varargin)
         nv  = dim(4);
         nk = 1;
         isfa = isa(r, 'file_array');
+        W = zeros([0 0 nz 3 nk], 'single'); % sliceable empty volume
     end
     
     % --- Optimise parallelisation and splitting schemes
