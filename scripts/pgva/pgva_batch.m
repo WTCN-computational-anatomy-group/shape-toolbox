@@ -29,6 +29,9 @@ function varargout = pgva_batch(id, varargin)
 %   Initialise latent coordinates ('zero'/'rand') + lower bound
 %   If random, insure they are zero-centered and orthogonal.
 %
+% FORMAT [dat, model] = pgva_batch('InitLaplace', dat, model, opt)
+%   Initialise covariance for Laplace approximations + lower bound
+%
 % ---
 % Fit
 % ---
@@ -70,10 +73,12 @@ function varargout = pgva_batch(id, varargin)
 % FORMAT dat = pgva_batch('OneInitPush',     dat, model, opt)
 % FORMAT dat = pgva_batch('OneInitPull',     dat, model, opt)
 % FORMAT dat = pgva_batch('OneInitVelocity', dat, model, opt, mode)
+% FORMAT dat = pgva_batch('OneInitLaplace',  dat, model, opt)
 % FORMAT dat = pgva_batch('OneFitAffine',    dat, model, opt)
 % FORMAT dat = pgva_batch('OneFitLatent',    dat, model, opt)
 % FORMAT dat = pgva_batch('OneFitVelocity',  dat, model, opt)
 % FORMAT dat = pgva_batch('OneLB',           dat, model, opt, var)
+% FORMAT dat = pgva_batch('OneMomentum',     dat, model, opt)
 % _________________________________________________________________________
 
     switch lower(id)
@@ -90,6 +95,8 @@ function varargout = pgva_batch(id, varargin)
             [varargout{1:nargout}] = batchInitLatent(varargin{:});
         case 'initvelocity'
             [varargout{1:nargout}] = batchInitVelocity(varargin{:});
+        case 'initlowerbound'
+            [varargout{1:nargout}] = batchInitLowerBound(varargin{:});
         case 'rotatesubspace'
             [varargout{1:nargout}] = batchRotateSubspace(varargin{:});
         case 'fitaffine'
@@ -111,6 +118,8 @@ function varargout = pgva_batch(id, varargin)
             [varargout{1:nargout}] = oneInitPull(varargin{:});
         case 'oneinitvelocity'
             [varargout{1:nargout}] = oneInitVelocity(varargin{:});
+        case 'oneinitlowerbound'
+            [varargout{1:nargout}] = oneInitLowerBound(varargin{:});
         case 'onefitaffine'
             [varargout{1:nargout}] = oneFitAffine(varargin{:});
         case 'onefitlatent'
@@ -215,7 +224,9 @@ function dat = oneInitPush(dat, model, opt)
     else
         iphi = spm_warps('identity', opt.tpl.lat);
     end
-    ipsi = reconstructIPsi(eye(4), iphi, 'lat', opt.tpl.lat, ...
+    if isfield(dat, 'q') && isfield(dat.q, 'A'),  A = dat.q.A;
+    else,                                         A = eye(4);  end
+    ipsi = reconstructIPsi(A, iphi, 'lat', opt.tpl.lat, ...
                            'Mf',  dat.f.M, 'Mmu', model.tpl.M, ...
                            'debug', opt.ui.debug);
     clear iphi
@@ -333,6 +344,238 @@ function [dat, model] = batchInitPull(dat, model, opt)
     end
     if opt.ui.verbose, plotBatchEnd; end
 end
+%% ------------------------------------------------------------------------
+%    Init Lower Bound
+% -------------------------------------------------------------------------
+
+function dat = oneInitLowerBound(dat, model, opt)
+
+    % --- Detect parallelisation scheme
+    if strcmpi(opt.split.loop, 'subject')
+        loop = '';
+        par  = 0;
+    else
+        loop = opt.split.loop;
+        par  = opt.split.par;
+    end
+    
+    % --- Detect noise model
+    if isfield(dat, 'model')
+        noisemodel = dat.model;
+    else
+        noisemodel = opt.model;
+    end
+    
+    % --------------
+    %    Velocity
+    % --------------
+    if dat.v.observed
+        
+        % Lower bound
+        % -----------
+        % log-likelihood of a mixture of two Gaussian distributions
+        K = prod(opt.tpl.lat)*3;
+        dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
+        dat.v.lb.ll1 = -0.5*( K*log(2*pi) ...
+                              - K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
+                              - opt.pg.ld ...
+                              + model.v.l * dat.v.lb.reg ...
+                              + model.v.l * dat.v.lb.uncty );
+        dat.v.lb.ll2 = -0.5*( K * log(2*pi) ...
+                              - opt.pg.ld ...
+                              + dat.v.lb.regv );
+        dat.v.lb.val = model.mixreg.w(1) * dat.v.lb.ll1 + ...
+                       model.mixreg.w(2) * dat.v.lb.ll2;
+        dat.v.lb.type = 'll';
+        
+    elseif opt.optimise.v.v % dat.f.observed
+    
+        % Hessian
+        % -------
+        if strcmpi(opt.match, 'pull')
+            h = ghMatchingVel(noisemodel, ...
+                dat.tpl.wmu, dat.f.f, model.tpl.gmu, ...
+                'ipsi', dat.v.ipsi, 'hessian', true, ...
+                'loop', loop, 'par', par, 'debug', opt.ui.debug);
+        else
+            h = zeros([opt.tpl.lat 6], 'single');
+            h(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:) = ghMatchingVel(...
+                noisemodel, ...
+                model.tpl.mu, dat.f.pf, model.tpl.gmu, ...
+                'count', dat.f.c, 'bb', dat.f.bb, 'hessian', true, ...
+                'loop', loop, 'par', par, 'debug', opt.ui.debug);
+        end
+
+        % Trace of inv(post)*prior
+        % ------------------------
+        % Approximation where all off-diagonal elements of L are zero
+        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.v.l + model.mixreg.w(2))*opt.pg.prm]));
+        dat.v.lb.tr = dat.v.lb.tr(1);
+        dat.v.lb.tr = dat.v.lb.tr / (model.mixreg.w(1)*model.v.l + model.mixreg.w(2));
+
+        % LogDet of posterior precision
+        % -----------------------------
+        % Approximation where all off-diagonal elements of L are zero
+        h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(1);
+        h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(2);
+        h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(3);
+        if opt.model.dim == 2
+            h(:,:,:,3) = 1;
+        end
+        h = spm_matcomp('Pointwise3', h, 'd');
+        h(h <= 0) = nan;
+        dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+        clear h
+
+        % Lower bound
+        % -----------
+        % KL divergence between multivariate normal distributions
+        % posterior: mean = v , precision = H + (a1*l+a2)*L
+        % prior:     a1 * [ mean = Wz , precision = l*L ]
+        %            a2 * [ mean = 0  , precision = L   ]
+        % (the prior is a mixture of two Gaussian distributions)
+        K = prod(opt.tpl.lat)*3;
+        dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
+        dat.v.lb.ll1 = -0.5*( K*log(2*pi) ...
+                              - K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
+                              - opt.pg.ld ...
+                              + model.v.l * dat.v.lb.reg ...
+                              + model.v.l * dat.v.lb.uncty ...
+                              + model.v.l * dat.v.lb.tr );
+        dat.v.lb.ll2 = -0.5*( K * log(2*pi) ...
+                              - opt.pg.ld ...
+                              + dat.v.lb.regv ...
+                              + dat.v.lb.tr );
+        dat.v.lb.val = -0.5*( - K ...
+                              - model.mixreg.w(1) * K * spm_prob('Gamma', 'Elog', model.v.l, opt.v.N+opt.f.N+opt.v.n0, K) ...
+                              - dat.v.lb.ld + opt.pg.ld  ...
+                              + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
+                              + model.mixreg.w(2) * dat.v.lb.regv ...
+                              + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...
+                              + model.mixreg.w(2) * dat.v.lb.tr ...
+                              + model.mixreg.w(1) * model.v.l * dat.v.lb.uncty );
+        dat.v.lb.type = 'kl';
+    else
+        dat.v.lb.val   = 0;
+        dat.v.lb.tr    = 0;
+        dat.v.lb.reg   = 0;
+        dat.v.lb.uncty = 0;
+        dat.v.lb.ll1   = 0;
+        dat.v.lb.ll2   = 0;
+        dat.v.lb.type  = '';
+    end
+    
+    % ------------
+    %    Latent
+    % ------------
+    if opt.optimise.z.z
+        dat.z.lb.type = 'kl';
+        dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                               - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                               - spm_matcomp('LogDet', dat.z.S) ...
+                               - opt.pg.K );
+    else
+        dat.z.lb.val  = 0;
+        dat.z.lb.type = '';
+    end
+    
+    % ------------
+    %    Affine
+    % ------------
+    if opt.optimise.q.q && opt.q.Mr
+        rind = opt.q.rind;
+        qq   = dat.q.qq(rind,rind);
+        Sq   = dat.q.S(rind,rind);
+        dat.q.lb.type = 'kl';
+        dat.q.lb.val  = -0.5*( trace((Sq + qq) * model.q.A) ...
+                               - spm_prob('Wishart', 'ELogDet', model.q.A, model.q.n, 'normal') ...
+                               + spm_matcomp('LogDet', Sq) ...
+                               - opt.q.Mr );
+    else
+        dat.q.lb.type = '';
+        dat.q.lb.val  = 0;
+    end
+
+    
+    % --------------
+    %    Mixture
+    % --------------
+    if opt.optimise.mixreg.w || opt.optimise.mixreg.a
+        N = model.mixreg.n;
+        A = model.mixreg.a;
+        N0 = opt.mixreg.n0;
+        A0 = opt.mixreg.a0;
+        dg = spm_prob('DiGamma', N*A) - spm_prob('DiGamma', N);
+        dig = spm_prob('DiGamma', N*(1-A)) - spm_prob('DiGamma', N);
+    end
+    if opt.optimise.mixreg.w
+        W1 = model.mixreg.w(1);
+        W2 = model.mixreg.w(2);
+        model.lb.wr.val = W1*(log(W1) - dg) + W2*(log(W2) + dg);
+        model.lb.wr.type = '-kl';
+    end
+    if opt.optimise.mixreg.a
+        model.lb.ar.val =   (N*A - N0*A0) * dg ...
+                          + (N*(1-A) - N0*(1-A0)) * dig...
+                          + beta_norm(N0*A0,N0*(1-A0)) ...
+                          - beta_norm(N*A,N*(1-A));
+        model.lb.ar.type = '-kl';
+    end
+end
+
+function b = beta_norm(a,b)
+    b = gammaln(a) + gammaln(b) - gammaln(a+b);
+end
+
+function [dat, model] = batchInitLowerBound(dat, model, opt)
+
+    % --- Detect parallelisation scheme
+    if strcmpi(opt.split.loop, 'subject') && opt.split.par > 0
+        batch = opt.split.batch;
+    else
+        batch = 1;
+    end
+
+    % Init log-likelihood
+    % -------------------
+    if isfield(model.lb, 'q'),    model.lb.q.val  = 0; end
+    if isfield(model.lb, 'z'),    model.lb.z.val  = 0; end
+    if isfield(model.lb, 'v1'),   model.lb.v1.val = 0; end
+    if isfield(model.lb, 'v2'),   model.lb.v2.val = 0; end
+    model.v.tr      = 0;
+    model.v.uncty   = 0;
+    model.v.reg     = 0;
+    
+    % --- Batch processing
+    N = numel(dat);
+    if opt.ui.verbose, before = plotBatchBegin('Init Lap'); end
+    for i=1:ceil(N/batch)
+        n1 = (i-1)*batch + 1;
+        ne = min(N, i*batch);
+
+        if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
+    
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'oneInitLowerBound', 'inplace', dat(n1:ne), model, opt);
+        
+        for n=n1:ne
+            
+            % Add individual contributions
+            % ----------------------------
+            if isfield(model.lb, 'q'),    model.lb.q.val = model.lb.q.val + dat(n).q.lb.val;   end
+            if isfield(model.lb, 'z'),    model.lb.z.val = model.lb.z.val + dat(n).z.lb.val;   end
+            if isfield(model.v, 'uncty'), model.v.uncty  = model.v.uncty  + dat(n).v.lb.uncty; end
+            if isfield(model.v, 'reg'),   model.v.reg    = model.v.reg    + dat(n).v.lb.reg;   end
+            if dat(n).v.observed
+                if isfield(model.lb, 'v2'),model.lb.v2.val = model.lb.v2.val + dat(n).v.lb.val; end
+            else
+                if isfield(model.v, 'tr'),  model.v.tr      = model.v.tr      + dat(n).v.lb.tr;  end
+                if isfield(model.lb, 'v1'), model.lb.v1.val = model.lb.v1.val + dat(n).v.lb.val; end
+            end
+        end
+        
+    end
+    if opt.ui.verbose, plotBatchEnd; end
+end
 
 %% ------------------------------------------------------------------------
 %    Init Affine
@@ -356,7 +599,6 @@ function [dat, model] = batchInitAffine(mode, dat, model, opt)
     model.q.q  = zeros(opt.q.M, 1);
     model.q.qq = zeros(opt.q.M);
     model.q.S  = zeros(opt.q.M);
-    model.lb.q.val = 0;
     
     % Init subjects
     % -------------
@@ -375,18 +617,6 @@ function [dat, model] = batchInitAffine(mode, dat, model, opt)
             model.q.qq  = model.q.qq + dat(n).q.qq;
             dat(n).q.ok  = 1; % for GN failure tracking
             dat(n).q.ok2 = 0; % for GN failure tracking
-            if opt.q.Mr
-                rind = opt.q.rind;
-                dat(n).q.lb.type = 'kl';
-                dat(n).q.lb.val  = -0.5*( trace((dat(n).q.S(rind,rind) + dat(n).q.qq(rind,rind)) * model.q.A) ...
-                                          - spm_prob('Wishart', 'ELogDet', model.q.A, opt.f.N + opt.q.n0) ...
-                                          - spm_matcomp('LogDet', dat(n).q.S(rind,rind)) ...
-                                          - opt.q.Mr );
-            else
-                dat(n).q.lb.type = '';
-                dat(n).q.lb.val = 0;
-            end
-            model.lb.q.val = model.lb.q.val + dat(n).q.lb.val;
         end
     end
     if opt.ui.verbose, plotBatchEnd; end
@@ -408,13 +638,6 @@ function dat = oneInitVelocity(dat, model, opt, mode)
         par  = opt.split.par;
     end
     
-    % --- Detect noise model
-    if isfield(dat, 'model')
-        noisemodel = dat.model;
-    else
-        noisemodel = opt.model;
-    end
-    
     % -------------------------
     % CASE 1: observed velocity
     % -------------------------
@@ -424,12 +647,11 @@ function dat = oneInitVelocity(dat, model, opt, mode)
         % -----------
         % Log-likelihood of a multivariate normal distribution
         % mean = W*z, precision = l*L
-        K = prod(opt.tpl.lat)*3;
         if opt.pg.provided
             wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
                                      'loop', loop, 'par', par);
             v = numeric(dat.v.v); 
-            if opt.pg.geod
+            if model.mixreg.w(2)
                 m = numeric(dat.v.m);
                 dat.v.lb.regv = v(:)' * m(:);
             else
@@ -444,14 +666,6 @@ function dat = oneInitVelocity(dat, model, opt, mode)
             dat.v.lb.reg  = single(dat.v.v(:))' * single(dat.v.m(:));
             dat.v.lb.regv = 0;
         end
-        dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
-        dat.v.lb.val   = -0.5*( K*log(2*pi) ...
-                                - K*spm_prob('Gamma', 'Elog', model.v.l, K) ...
-                                - opt.pg.ld ...
-                                + model.v.l * dat.v.lb.reg ...
-                                + opt.pg.geod * dat.v.lb.regv ...
-                                + model.v.l * dat.v.lb.uncty );
-        dat.v.lb.type  = 'll';
     
     % -----------------------
     % CASE 2: latent velocity
@@ -471,7 +685,7 @@ function dat = oneInitVelocity(dat, model, opt, mode)
         
         % Allocate and initialise
         % -----------------------
-        dat.v.ok = 1; % for GN failure tracking
+        dat.v.ok  = 1; % for GN failure tracking
         dat.v.ok2 = 0; % for GN failure tracking
         dat.v.v = prepareOnDisk(dat.v.v, [opt.tpl.lat 3]);
         dat.v.m = prepareOnDisk(dat.v.m, [opt.tpl.lat 3]);
@@ -485,7 +699,7 @@ function dat = oneInitVelocity(dat, model, opt, mode)
             dat.v.v(:,:,:,:) = v;
             m = spm_diffeo('vel2mom', v, double([opt.tpl.vs opt.pg.prm]));
             dat.v.m(:,:,:,:) = m;
-            if opt.pg.geod
+            if model.mixreg.w(2)
                 dat.v.lb.regv = v(:)' * m(:);
             else
                 dat.v.lb.regv = 0;
@@ -504,54 +718,6 @@ function dat = oneInitVelocity(dat, model, opt, mode)
                 clear v m
             end
         end
-        dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
-        
-        % Hessian
-        % -------
-        if strcmpi(opt.match, 'pull')
-            h = ghMatchingVel(noisemodel, ...
-                dat.tpl.wmu, dat.f.f, model.tpl.gmu, ...
-                'ipsi', dat.v.ipsi, 'hessian', true, ...
-                'loop', loop, 'par', par, 'debug', opt.ui.debug);
-        else
-            h = zeros([opt.tpl.lat 6], 'single');
-            h(dat.f.bb.x,dat.f.bb.y,dat.f.bb.z,:) = ghMatchingVel(...
-                noisemodel, ...
-                model.tpl.mu, dat.f.pf, model.tpl.gmu, ...
-                'count', dat.f.c, 'bb', dat.f.bb, 'hessian', true, ...
-                'loop', loop, 'par', par, 'debug', opt.ui.debug);
-        end
-        
-        % Trace
-        % -----
-        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.v.l + opt.pg.geod)*opt.pg.prm]));
-        dat.v.lb.tr = dat.v.lb.tr(1);
-        dat.v.lb.tr = dat.v.lb.tr / (model.v.l + opt.pg.geod);
-
-        % LogDet(P)
-        % ---------
-        % Approximation where all off-diagonal elements of L are zero
-        h(:,:,:,1) = h(:,:,:,1) * (model.v.l + opt.pg.geod) * opt.pg.ker(1);
-        h(:,:,:,2) = h(:,:,:,2) * (model.v.l + opt.pg.geod) * opt.pg.ker(2);
-        h(:,:,:,3) = h(:,:,:,3) * (model.v.l + opt.pg.geod) * opt.pg.ker(3);
-        h = spm_matcomp('Pointwise3', h, 'd');
-        h(h <= 0) = nan;
-        dat.v.lb.ld = sum(log(h(:)), 'omitnan');
-        clear h
-
-        % Lower bound
-        % -----------
-        % KL divergence between multivariate normal distributions
-        % posterior: mean = r,    precision = H + (l+w)*L
-        % prior:     mean = 0 ,   precision = (l+w)*L
-        K = prod(opt.tpl.lat)*3;
-        dat.v.lb.val = -0.5*( - K - K * spm_prob('Gamma', 'Elog', model.v.l, K) ...
-                              - opt.pg.ld + dat.v.lb.ld ...
-                              + model.v.l * dat.v.lb.reg ...
-                              + opt.pg.geod * dat.v.lb.regv ...
-                              + (model.v.l + opt.pg.geod) * dat.v.lb.tr ...
-                              + model.v.l * dat.v.lb.uncty );
-        dat.v.lb.type = 'kl';
     
     end
 
@@ -565,14 +731,6 @@ function [dat, model] = batchInitVelocity(mode, dat, model, opt)
     else
         batch = 1;
     end
-
-    % Init log-likelihood
-    % -------------------
-    model.lb.v1.val = 0;
-    model.lb.v2.val = 0;
-    model.v.uncty   = 0;
-    model.v.reg     = 0;
-    model.v.tr      = 0;
     
     % --- Batch processing
     N = numel(dat);
@@ -584,20 +742,6 @@ function [dat, model] = batchInitVelocity(mode, dat, model, opt)
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
         [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgva_batch', 'OneInitVelocity', 'inplace', dat(n1:ne), model, opt, mode);
-        
-        for n=n1:ne
-            
-            % Add individual contributions
-            % ----------------------------
-            model.v.uncty   = model.v.uncty + dat(n).v.lb.uncty;
-            model.v.reg     = model.v.reg   + dat(n).v.lb.reg;
-            if dat(n).v.observed
-                model.lb.v2.val = model.lb.v2.val + dat(n).v.lb.val;
-            else
-                model.v.tr      = model.v.tr      + dat(n).v.lb.tr;
-                model.lb.v1.val = model.lb.v1.val + dat(n).v.lb.val;
-            end
-        end
         
     end
     if opt.ui.verbose, plotBatchEnd; end
@@ -694,21 +838,6 @@ function [dat, model] = batchInitLatent(mode, dat, model, opt)
         if opt.ui.verbose, plotBatchEnd; end
         
     end
-    
-    % Lower bound
-    % -----------
-    model.lb.z.val = 0;
-    if opt.ui.verbose, before = plotBatchBegin('LB Z'); end
-    for n=1:N
-        if opt.ui.verbose, before = plotBatch(n, 1, N, 50, before); end
-        dat(n).z.lb.type = 'kl';
-        dat(n).z.lb.val  = -0.5*( trace((dat(n).z.S + dat(n).z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                               - spm_prob('Wishart', 'ELogDet', model.z.A, opt.f.N+opt.v.N+opt.z.n0) ...
-                               - spm_matcomp('LogDet', dat(n).z.S) ...
-                               - opt.pg.K );
-        model.lb.z.val = model.lb.z.val + dat(n).z.lb.val;
-    end
-    if opt.ui.verbose, plotBatchEnd; end
 
 end
 
@@ -944,11 +1073,16 @@ function dat = oneFitAffine(dat, model, opt)
     
         % Lower bound
         % -----------
-        rind = opt.q.rind;
-        dat.q.lb.val = -0.5*( trace((dat.q.qq(rind,rind) + dat.q.S(rind,rind))*model.q.A) ...
-                              - spm_prob('Wishart', 'ELogDet', model.q.A, opt.f.N + opt.q.n0) ...
-                              - spm_matcomp('LogDet', dat.q.S(rind,rind)) ...
-                              - opt.q.Mr );
+        if opt.q.Mr
+            rind = opt.q.rind;
+            qq   = dat.q.qq(rind,rind);
+            Sq   = dat.q.S(rind,rind);
+            dat.q.lb.type = 'kl';
+            dat.q.lb.val  = -0.5*( trace((Sq + qq) * model.q.A) ...
+                                   - spm_prob('Wishart', 'ELogDet', model.q.A, model.q.n, 'normal') ...
+                                   + spm_matcomp('LogDet', Sq) ...
+                                   - opt.q.Mr );
+        end
                               
     end % < penalise previous failure
     
@@ -1028,7 +1162,7 @@ function dat = oneFitLatent(dat, model, opt)
     
     % Update covariance
     % -----------------
-    dat.z.S = model.v.l * model.pg.ww + model.z.A;
+    dat.z.S = model.mixreg.w(1) * model.v.l * model.pg.ww + model.z.A;
     dat.z.S = spm_matcomp('Inv', dat.z.S);
     
     % Update mean
@@ -1040,15 +1174,8 @@ function dat = oneFitLatent(dat, model, opt)
         wm(k) = w1(:)'*m(:);
     end
     clear m w1
-    dat.z.z  = model.v.l * dat.z.S * wm;
+    dat.z.z  = model.mixreg.w(1) * model.v.l * dat.z.S * wm;
     dat.z.zz = dat.z.z * dat.z.z';
-    
-    % Lower bound
-    % -----------
-    dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                           - spm_prob('Wishart', 'ELogDet', model.z.A, opt.f.N+opt.v.N+opt.z.n0) ...
-                           - spm_matcomp('LogDet', dat.z.S) ...
-                           - opt.pg.K );
     
 end
 
@@ -1064,7 +1191,6 @@ function [dat, model] = batchFitLatent(dat, model, opt)
 
     % Init gradient/hessian
     % ---------------------
-    model.z.lb.val = 0;
     model.z.z      = zeros(opt.pg.K, 1);
     model.z.zz     = zeros(opt.pg.K);
     model.z.S      = zeros(opt.pg.K);
@@ -1089,7 +1215,6 @@ function [dat, model] = batchFitLatent(dat, model, opt)
             model.z.z      = model.z.z      + dat(n).z.z;
             model.z.zz     = model.z.zz     + dat(n).z.zz;
             model.z.S      = model.z.S      + dat(n).z.S;
-            model.lb.z.val = model.lb.z.val + dat(n).z.lb.val;
             model.z.Z(:,n) = dat(n).z.z;
             
         end
@@ -1171,15 +1296,15 @@ function dat = oneFitVelocity(dat, model, opt)
             v = numeric(dat.v.v);
             r = v - wz;
             clear wz
-            g = g + ghPriorVel(r, opt.tpl.vs, model.v.l * opt.pg.prm, opt.pg.bnd);
-            if opt.pg.geod
-                g = g + numeric(dat.v.m);
+            g = g + ghPriorVel(r, opt.tpl.vs, model.mixreg.w(1) * model.v.l * opt.pg.prm, opt.pg.bnd);
+            if model.mixreg.w(2)
+                g = g + model.mixreg.w(2) * numeric(dat.v.m);
             end
 
             % Compute search direction
             % ------------------------
             dv = -spm_diffeo('fmg', single(h), single(g), ...
-                double([opt.tpl.vs (model.v.l + opt.pg.geod) * opt.pg.prm 2 2]));
+                double([opt.tpl.vs (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.prm 2 2]));
             clear g
 
             % Line search
@@ -1191,7 +1316,7 @@ function dat = oneFitVelocity(dat, model, opt)
             end
             result = lsVelocity(...
                 noisemodel, dv, r, dat.f.lb.val, a, dat.f.f, ...
-                'v0', v, 'lam', model.v.l + opt.pg.geod, 'prm', opt.pg.prm, ...
+                'v0', v, 'lam', model.mixreg.w(1) * model.v.l + model.mixreg.w(2), 'prm', opt.pg.prm, ...
                 'itgr', opt.iter.itg, 'bnd', opt.pg.bnd, ...
                 'A', A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
                 'match', opt.match, ...
@@ -1207,7 +1332,7 @@ function dat = oneFitVelocity(dat, model, opt)
                 dat.f.lb.val  = result.match;
                 dat.v.v       = copyarray(result.v,    dat.v.v);
                 m = spm_diffeo('vel2mom', result.v, double([opt.tpl.vs opt.pg.prm]));
-                if opt.pg.geod
+                if model.mixreg.w(2)
                     dat.v.lb.regv = result.v(:)' * m(:);
                 end
                 dat.v.m       = copyarray(m, dat.v.m);
@@ -1273,16 +1398,19 @@ function dat = oneFitVelocity(dat, model, opt)
                     'debug', opt.ui.debug);
             end
         end
-        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.v.l + opt.pg.geod) * opt.pg.prm]));
+        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.prm]));
         dat.v.lb.tr = dat.v.lb.tr(1);
-        dat.v.lb.tr = dat.v.lb.tr / (model.v.l + opt.pg.geod);
+        dat.v.lb.tr = dat.v.lb.tr / (model.mixreg.w(1)*model.v.l + model.mixreg.w(2));
         
         % LogDet(P)
         % ---------
         % Approximation where all off-diagonal elements of L are zero
-        h(:,:,:,1) = h(:,:,:,1) * (model.v.l + opt.pg.geod) * opt.pg.ker(1);
-        h(:,:,:,2) = h(:,:,:,2) * (model.v.l + opt.pg.geod) * opt.pg.ker(2);
-        h(:,:,:,3) = h(:,:,:,3) * (model.v.l + opt.pg.geod) * opt.pg.ker(3);
+        h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(1);
+        h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(2);
+        h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(3);
+        if opt.model.dim == 2
+            h(:,:,:,3) = 1;
+        end
         h = spm_matcomp('Pointwise3', h, 'd');
         h(h <= 0) = nan;
         dat.v.lb.ld = sum(log(h(:)), 'omitnan');
@@ -1291,12 +1419,24 @@ function dat = oneFitVelocity(dat, model, opt)
         % KL divergence
         % -------------
         K = prod(opt.tpl.lat) * 3;
-        dat.v.lb.val = -0.5*( - K - K * spm_prob('Gamma', 'Elog', model.v.l, K) ...
-                              - opt.pg.ld + dat.v.lb.ld ...
+        dat.v.lb.ll1 = -0.5*( K*log(2*pi) ...
+                              - K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
+                              - opt.pg.ld ...
                               + model.v.l * dat.v.lb.reg ...
-                              + opt.pg.geod * dat.v.lb.regv ...
-                              + (model.v.l + opt.pg.geod) * dat.v.lb.tr ...
-                              + model.v.l * dat.v.lb.uncty );
+                              + model.v.l * dat.v.lb.uncty ...
+                              + model.v.l * dat.v.lb.tr );
+        dat.v.lb.ll2 = -0.5*( K * log(2*pi) ...
+                              - opt.pg.ld ...
+                              + dat.v.lb.regv ...
+                              + dat.v.lb.tr );
+        dat.v.lb.val = -0.5*( - K ...
+                              - model.mixreg.w(1) * K * spm_prob('Gamma', 'Elog', model.v.l, opt.v.N+opt.f.N+opt.v.n0, K) ...
+                              - dat.v.lb.ld + opt.pg.ld  ...
+                              + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
+                              + model.mixreg.w(2) * dat.v.lb.regv ...
+                              + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...
+                              + model.mixreg.w(2) * dat.v.lb.tr ...
+                              + model.mixreg.w(1) * model.v.l * dat.v.lb.uncty );
     
     end % < penalise previous failure
     
@@ -1430,27 +1570,33 @@ function dat = oneLB(dat, model, opt, which)
                     'bb', dat.f.bb, 'par', par, 'loop', loop, 'debug', opt.ui.debug);
             end
             
-        case 'precisionz'
-            dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                   - spm_prob('Wishart', 'ELogDet', model.z.A, opt.f.N+opt.v.N+opt.z.n0) ...
-                                   - spm_matcomp('LogDet', dat.z.S) ...
-                                   - opt.pg.K );
+        case 'precisionz'        
+            if opt.optimise.z.z
+                dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                                       - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                                       - spm_matcomp('LogDet', dat.z.S) ...
+                                       - opt.pg.K );
+            end
         
         case 'precisionq'
-            if opt.f.observed
+            if opt.f.observed && opt.optimise.q.q && opt.q.Mr
                 rind = opt.q.rind;
-                dat.q.lb.val = -0.5*( trace((dat.q.qq(rind,rind) + dat.q.S(rind,rind))*model.q.A) ...
-                                      - spm_prob('Wishart', 'ELogDet', model.q.A, opt.f.N + opt.q.n0) ...
-                                      - spm_matcomp('LogDet', dat.q.S(rind,rind)) ...
-                                      - opt.q.Mr );
+                qq   = dat.q.qq(rind,rind);
+                Sq   = dat.q.S(rind,rind);
+                dat.q.lb.type = 'kl';
+                dat.q.lb.val  = -0.5*( trace((Sq + qq) * model.q.A) ...
+                                       - spm_prob('Wishart', 'ELogDet', model.q.A, model.q.n, 'normal') ...
+                                       + spm_matcomp('LogDet', Sq) ...
+                                       - opt.q.Mr );
             end
         
         case 'orthogonalise'
-            % Here, no need to recompute terms depending on Wz
-            dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                   - spm_prob('Wishart', 'ELogDet', model.z.A, opt.f.N+opt.v.N+opt.z.n0) ...
-                                   - spm_matcomp('LogDet', dat.z.S) ...
-                                   - opt.pg.K );
+            if opt.optimise.z.z
+                dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                                       - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                                       - spm_matcomp('LogDet', dat.z.S) ...
+                                       - opt.pg.K );
+            end
         
         case 'subspace'
             wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
@@ -1461,43 +1607,125 @@ function dat = oneLB(dat, model, opt, which)
             dat.v.lb.reg = r(:)' * m(:);
             clear r m
             dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
-            dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                   - spm_prob('Wishart', 'ELogDet', model.z.A, opt.f.N+opt.v.N+opt.z.n0) ...
+            dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                                   - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
                                    - spm_matcomp('LogDet', dat.z.S) ...
                                    - opt.pg.K );
             K = prod(opt.tpl.lat) * 3;
             if dat.v.observed
-                dat.v.lb.val = -0.5*( K*log(2*pi) ...
-                                      - K*spm_prob('Gamma', 'Elog', model.v.l, K) ...
+                dat.v.lb.ll1 = -0.5*( K*log(2*pi) ...
+                                      - K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
                                       - opt.pg.ld ...
                                       + model.v.l * dat.v.lb.reg ...
-                                      + opt.pg.geod * dat.v.lb.regv ...
                                       + model.v.l * dat.v.lb.uncty );
+                dat.v.lb.ll2 = -0.5*( K * log(2*pi) ...
+                                      - opt.pg.ld ...
+                                      + dat.v.lb.regv );
+                dat.v.lb.val = model.mixreg.w(1) * dat.v.lb.ll1 + ...
+                               model.mixreg.w(2) * dat.v.lb.ll2;
             else
-                dat.v.lb.val = -0.5*( - K - K * spm_prob('Gamma', 'Elog', model.v.l, K) ...
-                                      - opt.pg.ld + dat.v.lb.ld ...
+                dat.v.lb.ll1 = -0.5*( K*log(2*pi) ...
+                                      - K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
+                                      - opt.pg.ld ...
                                       + model.v.l * dat.v.lb.reg ...
-                                      + opt.pg.geod * dat.v.lb.regv ...
-                                      + (model.v.l + opt.pg.geod) * dat.v.lb.tr ...
-                                      + model.v.l * dat.v.lb.uncty );
+                                      + model.v.l * dat.v.lb.uncty ...
+                                      + model.v.l * dat.v.lb.tr );
+                dat.v.lb.ll2 = -0.5*( K * log(2*pi) ...
+                                      - opt.pg.ld ...
+                                      + dat.v.lb.regv ...
+                                      + dat.v.lb.tr );
+                dat.v.lb.val = -0.5*( - K ...
+                                      - model.mixreg.w(1) * K * spm_prob('Gamma', 'Elog', model.v.l, opt.v.N+opt.f.N+opt.v.n0, K) ...
+                                      - dat.v.lb.ld + opt.pg.ld  ...
+                                      + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
+                                      + model.mixreg.w(2) * dat.v.lb.regv ...
+                                      + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...
+                                      + model.mixreg.w(2) * dat.v.lb.tr ...
+                                      + model.mixreg.w(1) * model.v.l * dat.v.lb.uncty );
             end
+            
+        case 'latent'
+            wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
+                                     'loop', loop, 'par', par);
+            r = numeric(dat.v.v) - wz;
+            clear wz
+            m = spm_diffeo('vel2mom', r, double([opt.tpl.vs opt.pg.prm]));
+            dat.v.lb.reg = r(:)' * m(:);
+            clear r m
+            dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
+            dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                                   - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                                   - spm_matcomp('LogDet', dat.z.S) ...
+                                   - opt.pg.K );
+            K = prod(opt.tpl.lat) * 3;
+            if dat.v.observed
+                dat.v.lb.ll1 = -0.5*( K*log(2*pi) ...
+                                      - K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
+                                      - opt.pg.ld ...
+                                      + model.v.l * dat.v.lb.reg ...
+                                      + model.v.l * dat.v.lb.uncty );
+                dat.v.lb.ll2 = -0.5*( K * log(2*pi) ...
+                                      - opt.pg.ld ...
+                                      + dat.v.lb.regv );
+                dat.v.lb.val = model.mixreg.w(1) * dat.v.lb.ll1 + ...
+                               model.mixreg.w(2) * dat.v.lb.ll2;
+            else
+                dat.v.lb.ll1 = -0.5*( K*log(2*pi) ...
+                                      - K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
+                                      - opt.pg.ld ...
+                                      + model.v.l * dat.v.lb.reg ...
+                                      + model.v.l * dat.v.lb.uncty ...
+                                      + model.v.l * dat.v.lb.tr );
+                dat.v.lb.ll2 = -0.5*( K * log(2*pi) ...
+                                      - opt.pg.ld ...
+                                      + dat.v.lb.regv ...
+                                      + dat.v.lb.tr );
+                dat.v.lb.val = -0.5*( - K ...
+                                      - model.mixreg.w(1) * K * spm_prob('Gamma', 'Elog', model.v.l, opt.v.N+opt.f.N+opt.v.n0, K) ...
+                                      - dat.v.lb.ld + opt.pg.ld  ...
+                                      + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
+                                      + model.mixreg.w(2) * dat.v.lb.regv ...
+                                      + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...
+                                      + model.mixreg.w(2) * dat.v.lb.tr ...
+                                      + model.mixreg.w(1) * model.v.l * dat.v.lb.uncty );
+            end
+            dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                                   - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                                   - spm_matcomp('LogDet', dat.z.S) ...
+                                   - opt.pg.K );
             
         case 'lambda'
             K = prod(opt.tpl.lat) * 3;
             if dat.v.observed
-                dat.v.lb.val = -0.5*( K*log(2*pi) ...
-                                      - K*spm_prob('Gamma', 'Elog', model.v.l, K) ...
+                dat.v.lb.ll1 = -0.5*( K*log(2*pi) ...
+                                      - K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
                                       - opt.pg.ld ...
                                       + model.v.l * dat.v.lb.reg ...
-                                      + opt.pg.geod * dat.v.lb.regv ...
                                       + model.v.l * dat.v.lb.uncty );
+                dat.v.lb.ll2 = -0.5*( K * log(2*pi) ...
+                                      - opt.pg.ld ...
+                                      + dat.v.lb.regv );
+                dat.v.lb.val = model.mixreg.w(1) * dat.v.lb.ll1 + ...
+                               model.mixreg.w(2) * dat.v.lb.ll2;
             else
-                dat.v.lb.val = -0.5*( - K - K * spm_prob('Gamma', 'Elog', model.v.l, K) ...
-                                      - opt.pg.ld + dat.v.lb.ld ...
+                dat.v.lb.ll1 = -0.5*( K*log(2*pi) ...
+                                      - K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
+                                      - opt.pg.ld ...
                                       + model.v.l * dat.v.lb.reg ...
-                                      + opt.pg.geod * dat.v.lb.regv ...
-                                      + (model.v.l + opt.pg.geod) * dat.v.lb.tr ...
-                                      + model.v.l * dat.v.lb.uncty );
+                                      + model.v.l * dat.v.lb.uncty ...
+                                      + model.v.l * dat.v.lb.tr );
+                dat.v.lb.ll2 = -0.5*( K * log(2*pi) ...
+                                      - opt.pg.ld ...
+                                      + dat.v.lb.regv ...
+                                      + dat.v.lb.tr );
+                dat.v.lb.val = -0.5*( - K ...
+                                      - model.mixreg.w(1) * K * spm_prob('Gamma', 'Elog', model.v.l, model.v.n, K) ...
+                                      - dat.v.lb.ld + opt.pg.ld  ...
+                                      + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
+                                      + model.mixreg.w(2) * dat.v.lb.regv ...
+                                      + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...
+                                      + model.mixreg.w(2) * dat.v.lb.tr ...
+                                      + model.mixreg.w(1) * model.v.l * dat.v.lb.uncty );
             end
             
     end
@@ -1515,14 +1743,14 @@ function [dat, model] = batchLB(which, dat, model, opt)
 
     % Init gradient/hessian
     % ---------------------
-    model.lb.m.val  = 0;
-    model.lb.z.val  = 0;
-    model.lb.q.val  = 0;
-    model.lb.v1.val = 0;
-    model.lb.v2.val = 0;
-    model.v.tr      = 0;
-    model.v.reg     = 0;
-    model.v.uncty   = 0;
+    if isfield(model.lb, 'm'),    model.lb.m.val  = 0; end
+    if isfield(model.lb, 'z'),    model.lb.z.val  = 0; end
+    if isfield(model.lb, 'q'),    model.lb.q.val  = 0; end
+    if isfield(model.lb, 'v1'),   model.lb.v1.val = 0; end
+    if isfield(model.lb, 'v2'),   model.lb.v2.val = 0; end
+    if isfield(model.v, 'tr'),    model.v.tr      = 0; end
+    if isfield(model.v, 'reg'),   model.v.reg     = 0; end
+    if isfield(model.v, 'uncty'), model.v.uncty   = 0; end
     
     N = numel(dat);
     
@@ -1542,16 +1770,16 @@ function [dat, model] = batchLB(which, dat, model, opt)
             
             % Add individual contributions
             % ----------------------------
-            model.lb.z.val  = model.lb.z.val + dat(n).z.lb.val;
-            model.v.reg     = model.v.reg    + dat(n).v.lb.reg;
-            model.v.uncty   = model.v.uncty  + dat(n).v.lb.uncty;
+            if isfield(model.lb, 'z'),    model.lb.z.val  = model.lb.z.val + dat(n).z.lb.val;   end
+            if isfield(model.v, 'reg'),   model.v.reg     = model.v.reg    + dat(n).v.lb.reg;   end
+            if isfield(model.v, 'uncty'), model.v.uncty   = model.v.uncty  + dat(n).v.lb.uncty; end
             if dat(n).v.observed
-                model.lb.v2.val = model.lb.v2.val + dat(n).v.lb.val;
+                if isfield(model.lb, 'v2'), model.lb.v2.val = model.lb.v2.val + dat(n).v.lb.val; end
             else % dat(n).f.observed
-                model.lb.m.val  = model.lb.m.val  + dat(n).f.lb.val;
-                model.lb.v1.val = model.lb.v1.val + dat(n).v.lb.val;
-                model.v.tr      = model.v.tr      + dat(n).v.lb.tr;
-                model.lb.q.val  = model.lb.q.val + dat(n).q.lb.val;
+                if isfield(model.lb, 'm'),  model.lb.m.val  = model.lb.m.val  + dat(n).f.lb.val; end
+                if isfield(model.lb, 'v1'), model.lb.v1.val = model.lb.v1.val + dat(n).v.lb.val; end
+                if isfield(model.v, 'tr'),  model.v.tr      = model.v.tr      + dat(n).v.lb.tr;  end
+                if isfield(model.lb, 'q'),  model.lb.q.val  = model.lb.q.val + dat(n).q.lb.val;  end
             end
             
         end
@@ -1563,33 +1791,33 @@ function [dat, model] = batchLB(which, dat, model, opt)
     % --------------------
     switch lower(which)
         case 'orthogonalise'
-            model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+            model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.n * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*log(model.pg.n));
             if opt.z.n0
                 model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
-                                            model.z.A,   opt.z.n0+opt.v.N+opt.f.N, ...
+                                            model.z.A,   model.z.n, ...
                                             opt.z.A0,    opt.z.n0, ...
                                             'normal');
             end
         case 'subspace'
-            model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+            model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.n * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*log(model.pg.n));
         case 'precisionz'
             if opt.z.n0
                 model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
-                                            model.z.A,   opt.z.n0+opt.v.N+opt.f.N, ...
+                                            model.z.A,   model.z.n, ...
                                             opt.z.A0,    opt.z.n0, ...
                                             'normal');
             end
         case 'precisionq'
             if opt.q.n0 && opt.q.Mr
                 model.lb.Aq.val = -spm_prob('Wishart', 'kl', ...
-                                            model.q.A,   opt.q.n0+opt.f.N, ...
+                                            model.q.A,   model.q.n, ...
                                             opt.q.A0,    opt.q.n0, ...
                                             'normal');
             end
         case 'lambda'
             if opt.v.n0
                 model.lb.l.val  = -spm_prob('Gamma', 'kl', ...
-                                            model.v.l, opt.v.N+opt.f.N+opt.v.n0, ...
+                                            model.v.l, model.v.n, ...
                                             opt.v.l0,  opt.v.n0, ...
                                             prod(opt.tpl.lat)*3, 'normal');
             end

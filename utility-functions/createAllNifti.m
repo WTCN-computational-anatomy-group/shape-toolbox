@@ -10,8 +10,8 @@ function createAllNifti(dat, model, opt)
     
     if isfield(model, 'Mmu')
         Mmu = model.Mmu;
-    elseif isfield(model, 'M')
-        Mmu = model.M;
+    elseif isfield(model, 'tpl') && isfield(model.tpl, 'M')
+        Mmu = model.tpl.M;
     else
         Mmu = eye(4);
     end

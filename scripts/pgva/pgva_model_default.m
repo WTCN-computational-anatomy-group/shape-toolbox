@@ -58,9 +58,13 @@ function opt = pgva_model_default(opt)
     end
     if opt.pg.K > opt.v.N + opt.f.N
         % Check not too many PGs
-        warning(['No point learning more than %d principal components. ' ...
-                 'Fixing it.'], opt.v.N + opt.f.N)
-        opt.pg.K = opt.v.N + opt.f.N;
+        if isfield(opt, 'optimise') && isfield(opt.optimise, 'pg') && ...
+                ((islogical(opt.optimise.pg) && opt.optimise.pg) || ...
+                 (isstruct(opt.optimise.pg) && isfield(opt.optimise.pg, 'w') && opt.optimise.pg.w))
+            warning(['No point learning more than %d principal components. ' ...
+                     'Fixing it.'], opt.v.N + opt.f.N)
+            opt.pg.K = opt.v.N + opt.f.N;
+        end
     end
     if ~isfield(opt.pg, 'prm')
         % Parameters of the differential operator
@@ -71,6 +75,7 @@ function opt = pgva_model_default(opt)
         % 5) Linear elastic energy - volume change
         opt.pg.prm = [0.0001 0.001 0.2 0.05 0.2];
     end
+    opt.pg.prm = opt.pg.prm(:)'; % always horizontal
     if ~isfield(opt.pg, 'bnd')
         % Boundary condition of the differential operator
         % 0 = Circulant (translation invariant)
@@ -79,8 +84,22 @@ function opt = pgva_model_default(opt)
         % 3 = Sliding   (rotation invariant)
         opt.pg.bnd = 0;
     end
-    if ~isfield(opt.pg, 'geod')
-        opt.pg.geod = true;
+    
+    
+    % ---------------------------------------------------------------------
+    % Mixture of regularisations
+    % ---------------------------------------------------------------------
+    if ~isfield(opt, 'mixreg')
+        opt.mixreg = struct;
+    end
+    if ~isfield(opt.mixreg, 'a0')
+        opt.mixreg.a0 = 0.5;
+    end
+    if ~isfield(opt.mixreg, 'n0')
+        opt.mixreg.n0 = 1e-4;
+    end
+    if ~isfield(opt.pg, 'geod') % TO REMOVE
+        opt.pg.geod = 0.5;
     end
     
     % ---------------------------------------------------------------------
@@ -107,6 +126,12 @@ function opt = pgva_model_default(opt)
     if ~isfield(opt.tpl, 'itrp')
         % Interpolation order when warping the template to subjects
         opt.tpl.itrp = 1;
+    end
+    if isfield(opt.tpl, 'vs')
+        opt.tpl.vs = opt.tpl.vs(:)'; % always horizontal
+    end
+    if isfield(opt.tpl, 'lat')
+        opt.tpl.lat = opt.tpl.lat(:)'; % always horizontal
     end
     
     % ---------------------------------------------------------------------
@@ -258,16 +283,22 @@ function opt = pgva_model_default(opt)
     if ~isfield(opt, 'split')
         opt.split = struct;
     end
-    if ~isfield(opt.split, 'par')
-        % Number of workers for parallel processing
-        % 0   = no parallelisation
-        % inf = Automatically set by Matlab
-        opt.split.par = inf;
-    end
     if ~isfield(opt.split, 'loop')
         % Along which dimension should processing be parallelised
         % 'none'/'subject'/'slice'
         opt.split.loop = 'subject';
+    end
+    if ~isfield(opt.split, 'par')
+        % Number of workers for parallel processing
+        % 0   = no parallelisation
+        % inf = Automatically set by Matlab
+        if usejava('jvm')
+            opt.split.par = inf;
+        elseif ~isempty(opt.dist.cluster.ip)
+            opt.split.par = true;
+        else
+            opt.split.par = false;
+        end
     end
     if ~isfield(opt.split, 'batch')
         % Batch size when distributing subjects
@@ -316,11 +347,20 @@ function opt = pgva_model_default(opt)
     if ~isfield(opt.optimise, 'pg')
         opt.optimise.pg = struct;
     end
+    if islogical(opt.optimise.pg)
+        [opt.optimise.pg, val] = deal(struct, opt.optimise.pg);
+        opt.optimise.pg.w = val;
+    end
     if ~isfield(opt.optimise.pg, 'w')
         opt.optimise.pg.w = true;
     end
     if ~isfield(opt.optimise, 'q')
         opt.optimise.q = struct;
+    end
+    if islogical(opt.optimise.q)
+        [opt.optimise.q, val] = deal(struct, opt.optimise.q);
+        opt.optimise.q.A = val;
+        opt.optimise.q.q = val;
     end
     if ~isfield(opt.optimise.q, 'A')
         opt.optimise.q.A = true;
@@ -331,6 +371,11 @@ function opt = pgva_model_default(opt)
     if ~isfield(opt.optimise, 'z')
         opt.optimise.z = struct;
     end
+    if islogical(opt.optimise.z)
+        [opt.optimise.z, val] = deal(struct, opt.optimise.z);
+        opt.optimise.z.A = val;
+        opt.optimise.z.z = val;
+    end
     if ~isfield(opt.optimise.z, 'A')
         opt.optimise.z.A = true;
     end
@@ -339,6 +384,11 @@ function opt = pgva_model_default(opt)
     end
     if ~isfield(opt.optimise, 'v')
         opt.optimise.v = struct;
+    end
+    if islogical(opt.optimise.v)
+        [opt.optimise.v, val] = deal(struct, opt.optimise.v);
+        opt.optimise.v.v = val;
+        opt.optimise.v.l = val;
     end
     if ~isfield(opt.optimise.v, 'l')
         opt.optimise.v.l = true;
@@ -349,8 +399,26 @@ function opt = pgva_model_default(opt)
     if ~isfield(opt.optimise, 'tpl')
         opt.optimise.tpl = struct;
     end
+    if islogical(opt.optimise.tpl)
+        [opt.optimise.tpl, val] = deal(struct, opt.optimise.tpl);
+        opt.optimise.tpl.a = val;
+    end
     if ~isfield(opt.optimise.tpl, 'a')
         opt.optimise.tpl.a = true;
+    end
+    if ~isfield(opt.optimise, 'mixreg')
+        opt.optimise.mixreg = struct;
+    end
+    if islogical(opt.optimise.mixreg)
+        [opt.optimise.mixreg, val] = deal(struct, opt.optimise.mixreg);
+        opt.optimise.mixreg.a = val;
+        opt.optimise.mixreg.w = val;
+    end
+    if ~isfield(opt.optimise.mixreg, 'a')
+        opt.optimise.mixreg.a = true;
+    end
+    if ~isfield(opt.optimise.mixreg, 'w')
+        opt.optimise.mixreg.w = true;
     end
     
     % =====================================================================

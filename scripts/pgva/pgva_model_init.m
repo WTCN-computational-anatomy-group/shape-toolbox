@@ -32,7 +32,8 @@ function [dat, model] = pgva_model_init(dat, model, opt)
         model.pg.ww = precisionZ(model.pg.w, opt.tpl.vs, opt.pg.prm);
     end
     if opt.optimise.pg.w
-        model.lb.w.val  = llPriorSubspace(model.pg.w, model.pg.ww, opt.pg.ld);
+        model.pg.n      = opt.f.N + opt.v.N;
+        model.lb.w.val  = llPriorSubspace(model.pg.w, model.pg.n * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*log(model.pg.n));
         model.lb.w.type = 'll';
         model.lb.w.name = 'Subspace prior';
     end
@@ -42,6 +43,7 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     if opt.f.N
         model.q.A = opt.q.A0;
         if opt.optimise.q.A
+            model.q.n = opt.q.n0 + opt.f.N;
             model.lb.Aq.val  = 0;
             model.lb.Aq.type = 'kl';
             model.lb.Aq.name = '-KL Affine precision';
@@ -52,6 +54,7 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     % ----------------
     model.z.A = opt.z.A0;
     if opt.optimise.z.A
+        model.z.n = opt.z.n0 + opt.f.N + opt.v.N;
         model.lb.Az.val  = 0;
         model.lb.Az.type = 'kl';
         model.lb.Az.name = '-KL Latent precision';
@@ -61,60 +64,29 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     % ------------------
     model.v.l = opt.v.l0;
     if opt.optimise.v.l
+        model.v.n = opt.v.n0 + opt.f.N + opt.v.N;
         model.lb.l.val  = 0;
         model.lb.l.type = 'kl';
         model.lb.l.name = '-KL Residual precision';
     end
     
-    % Initial push/pull
-    % -----------------
-    % We need to push observed images to template space to initialise the
-    % template and to pull (warp) the template to image space to initialise
-    % the matching term.
-    % It makes sense always keeping the pushed images/pulled template on
-    % disk as it can also be the case in unified segmentation (images are
-    % responsibilities in this case).
-    if opt.f.N
-        dat = pgva_batch('InitPush', dat, model, opt);
+    % Mixture prior
+    % -------------
+    model.mixreg.a = opt.mixreg.a0;
+    if opt.optimise.mixreg.a
+        model.mixreg.n = opt.mixreg.n0 + 1;
+        model.lb.ar.val  = 0;
+        model.lb.ar.type = 'kl';
+        model.lb.ar.name = '-KL Mixture prior';
     end
     
-    % Template
-    % --------
-    if opt.f.N
-        if opt.tpl.cat
-            if ~opt.tpl.provided
-                model.tpl.a = updateMuML(opt.model, dat, ...
-                                         'lat',    opt.tpl.lat,   ...
-                                         'par',    opt.split.par, ...
-                                         'debug',  opt.ui.debug,  ...
-                                         'output', model.tpl.a);
-            end
-            model.tpl.gmu = templateGrad(model.tpl.a,  ...
-                                         opt.tpl.itrp, ...
-                                         opt.tpl.bnd,  ...
-                                         'debug',  opt.ui.debug, ...
-                                         'output', model.tpl.gmu);
-            model.tpl.mu = reconstructProbaTemplate(model.tpl.a, ...
-                                                    'par',    opt.split.par, ...
-                                                    'debug',  opt.ui.debug,  ...
-                                                    'output', model.tpl.mu);
-        else
-            if ~opt.tpl.provided
-                model.tpl.mu = updateMuML(opt.model, dat, ...
-                                          'lat',    opt.tpl.lat,   ...
-                                          'par',    opt.split.par, ...
-                                          'debug',  opt.ui.debug,  ...
-                                          'output', model.tpl.mu);
-            end
-            model.tpl.gmu = templateGrad(model.tpl.mu, ...
-                                         opt.tpl.itrp, ...
-                                         opt.tpl.bnd, ...
-                                         'debug',  opt.ui.debug, ...
-                                         'output', model.tpl.gmu);
-        end
-    end
-    if strcmpi(opt.match, 'pull')
-        [dat, model] = pgva_batch('InitPull', dat, model, opt);
+    % Mixture weight
+    % --------------
+    model.mixreg.w = [model.mixreg.a (1-model.mixreg.a)];
+    if opt.optimise.mixreg.w
+        model.lb.wr.val  = 0;
+        model.lb.wr.type = 'kl';
+        model.lb.wr.name = '-KL Mixture weight';
     end
     
     % ---------------------------------------------------------------------
@@ -157,17 +129,85 @@ function [dat, model] = pgva_model_init(dat, model, opt)
         model.lb.v2.name = 'Velocity likelihood';
     end
     
-    % Matching term
-    % -------------
-    if strcmpi(opt.match, 'push')
-        [dat, model] = pgva_batch('LB', 'Matching', dat, model, opt);
-    end
-    if opt.f.N
-        model.lb.m.type = 'll';
-        model.lb.m.name = 'Matching likelihood';
-    end
+    % ---------------------------------------------------------------------
+    %    Transforms/Template
+    % ---------------------------------------------------------------------
+    % These parameters depend on the above parameters
+    % ---------------------------------------------------------------------
     
-    % Lower Bound
-    % -----------
+    if opt.f.N
+
+        % Initial push/pull
+        % -----------------
+        % - We need to push observed images to template space to initialise 
+        %   the template and to pull (warp) the template to image space to 
+        %   initialise the matching term.
+        % - It makes sense always keeping the pushed images/pulled template on
+        %   disk as it can also be the case in unified segmentation (images 
+        %   are responsibilities in this case).
+        % - This step also writes ipsi (= iphi(ixi), inverse complete
+        %   transform), if they are supposed to be written on disk. It is
+        %   usually the case when match = 'pull', since ipsi is needed to
+        %   update all warped templates after template update.
+        dat = pgva_batch('InitPush', dat, model, opt);
+
+        % Template
+        % --------
+        if opt.tpl.cat
+            if ~opt.tpl.provided
+                model.tpl.a = updateMuML(opt.model, dat, ...
+                                         'lat',    opt.tpl.lat,   ...
+                                         'par',    opt.split.par, ...
+                                         'debug',  opt.ui.debug,  ...
+                                         'output', model.tpl.a);
+            end
+            model.tpl.gmu = templateGrad(model.tpl.a,  ...
+                                         opt.tpl.itrp, ...
+                                         opt.tpl.bnd,  ...
+                                         'debug',  opt.ui.debug, ...
+                                         'output', model.tpl.gmu);
+            model.tpl.mu = reconstructProbaTemplate(model.tpl.a, ...
+                                                    'par',    opt.split.par, ...
+                                                    'debug',  opt.ui.debug,  ...
+                                                    'output', model.tpl.mu);
+        else
+            if ~opt.tpl.provided
+                model.tpl.mu = updateMuML(opt.model, dat, ...
+                                          'lat',    opt.tpl.lat,   ...
+                                          'par',    opt.split.par, ...
+                                          'debug',  opt.ui.debug,  ...
+                                          'output', model.tpl.mu);
+            end
+            model.tpl.gmu = templateGrad(model.tpl.mu, ...
+                                         opt.tpl.itrp, ...
+                                         opt.tpl.bnd, ...
+                                         'debug',  opt.ui.debug, ...
+                                         'output', model.tpl.gmu);
+        end
+
+        % Matching term
+        % -------------
+        if strcmpi(opt.match, 'pull')
+            [dat, model] = pgva_batch('InitPull', dat, model, opt);
+        else
+            [dat, model] = pgva_batch('LB', 'Matching', dat, model, opt);
+        end
+        if opt.f.N
+            model.lb.m.type = 'll';
+            model.lb.m.name = 'Matching likelihood';
+        end
+        
+    end % < opt.f.N
+        
+    % Laplace approximation + lower bound stuff
+    % -----------------------------------------
+    % To compute the KL divergence of distributions estimated by
+    % Gauss-Newton, we need images to be pushed or pulled, which can only
+    % be done after velocities were initialised
+    [dat, model] = pgva_batch('InitLowerBound', dat, model, opt);
+    
+    % ---------------------------------------------------------------------
+    %    Update lower bound
+    % ---------------------------------------------------------------------
     model = updateLowerBound(model);    % Accumulate lower bound parts
 end

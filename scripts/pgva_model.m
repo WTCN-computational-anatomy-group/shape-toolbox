@@ -59,6 +59,8 @@ function [model, dat, opt] = pgva_model(varargin)
 % pg.prm   - Parameters of the geodesic operator [1e-4 1e-3 0.2 0.05 0.2]
 % pg.bnd   - Boundary conditions for the geodesic operator [1 = circulant]
 % pg.geod  - Additional geodesic prior on velocity fields [true]
+% mixreg.a0- Prior expected value of the mixture weight [0.5]
+% mixreg.n0- Prior DF of the mixture weight [1e-4]
 % tpl.vs   - Lattice voxel size [auto]
 % tpl.lat  - Lattice dimensions [auto]
 % tpl.prm  - Parameters of the field operator [1e-3  1e-1 0]
@@ -76,14 +78,16 @@ function [model, dat, opt] = pgva_model(varargin)
 % q.hapx   - Approximate affine hessian [true]
 % f.M      - Force same voxel-to-world to all images [read from file]
 %
-% optimise.pg.w  - Optimise subspace [true] or keep if fixed (false)
-% optimise.z.z   - Optimise latent coordinates [true]
-% optimise.z.A   - Optimise latent precision [true]
-% optimise.q.q   - Optimise affine coordinates [true]
-% optimise.q.A   - Optimise affine precision [true]
-% optimise.v.v   - Optimise velocity fields [true]
-% optimise.v.l   - Optimise residual precision [true]
-% optimise.tpl.a - Optimise template [true]
+% optimise.pg.w     - Optimise subspace [true] or keep if fixed (false)
+% optimise.z.z      - Optimise latent coordinates [true]
+% optimise.z.A      - Optimise latent precision [true]
+% optimise.q.q      - Optimise affine coordinates [true]
+% optimise.q.A      - Optimise affine precision [true]
+% optimise.v.v      - Optimise velocity fields [true]
+% optimise.v.l      - Optimise residual precision [true]
+% optimise.tpl.a    - Optimise template [true]
+% optimise.mixreg.w - Optimise mixture weight [true]
+% optimise.mixreg.a - Optimise mixture weight prior [true]
 %
 % PROCESSING
 % ----------
@@ -92,6 +96,7 @@ function [model, dat, opt] = pgva_model(varargin)
 % iter.gn      - Maximum number of Gauss-Newton iterations [1]
 % iter.ls      - Maximum number of line search iterations [6]
 % iter.itg     - Number of integration steps for geodesic shooting [auto]
+% iter.pena    - Penalise Gauss-Newton failures [true]
 % lb.threshold - Convergence criterion (lower bound gain) [1e-5]
 % lb.moving    - Moving average over LB gain [3]
 % split.loop   - How to split array processing: 'none'/'slice'/['subject']
@@ -250,8 +255,7 @@ function [model, dat, opt] = pgva_model(varargin)
             opt.ui.ftrack = ftrack;
         end
         plotAll(model, opt);
-        if ~isempty(opt.fnames.fig)
-            % Save figure
+        if ~isempty(opt.fnames.fig) && (~islogical(opt.ui.ftrack) || opt.ui.ftrack)
             saveas(gcf, fullfile(opt.dir.model, opt.fnames.fig));
         end
         
@@ -285,21 +289,23 @@ function [model, dat, opt] = pgva_model(varargin)
         % -----------------------------------------------------------------
         %    Affine
         % -----------------------------------------------------------------
-        if opt.optimise.q.q && model.q.active && opt.f.N
+        if model.q.active && opt.f.N
         
-            % Update parameters
-            % -----------------
-            [dat, model] = pgva_batch('FitAffine', dat, model, opt);
+            if opt.optimise.q.q
+                % Update parameters
+                % -----------------
+                [dat, model] = pgva_batch('FitAffine', dat, model, opt);
 
-            % -----------
-            % Lower bound
-            model           = updateLowerBound(model);
-            plotAll(model, opt);
-            % -----------
+                % -----------
+                % Lower bound
+                model           = updateLowerBound(model);
+                plotAll(model, opt);
+                % -----------
+            end
             
-            % Update prior
-            % ------------
             if opt.optimise.q.A && opt.q.Mr
+                % Update prior
+                % ------------
                 rind = opt.q.rind;
                 model.q.A = spm_prob('Wishart', 'up', ...
                                      opt.f.N, 0, model.q.qq(rind,rind) + model.q.S(rind,rind), ...
@@ -341,10 +347,11 @@ function [model, dat, opt] = pgva_model(varargin)
             % Update precision
             % ----------------
             if opt.optimise.v.l
+                old_l = model.v.l;
                 K = 3*prod(opt.tpl.lat);
-                model.v.l = opt.v.n0/opt.v.l0 + (1/K)*(model.v.uncty + model.v.tr + model.v.reg);
-                model.v.l = (opt.f.N+opt.v.N+opt.v.n0)/model.v.l;
-                if opt.ui.verbose, fprintf('%10s | %10g\n', 'Lambda', model.v.l); end
+                model.v.l = opt.v.n0/opt.v.l0 + (model.mixreg.w(1)/K)*(model.v.uncty + model.v.tr + model.v.reg);
+                model.v.l = model.v.n/model.v.l;
+                if opt.ui.verbose, fprintf('%10s | %10s | %8.6g -> %8.6g\n', 'Lambda', '', old_l, model.v.l); end
 
                 % -----------
                 % Lower bound
@@ -366,7 +373,7 @@ function [model, dat, opt] = pgva_model(varargin)
             if opt.optimise.pg.w
                 
                 if opt.ui.verbose, fprintf('%10s | %10s ', 'PG', ''); tic; end
-                M = model.z.S + model.z.zz + eye(opt.pg.K) / model.v.l;
+                M = model.z.S + model.z.zz + model.pg.n * eye(opt.pg.K) / (model.v.l*model.mixreg.w(1));
                 M = spm_matcomp('Inv', M);
                 P = model.z.Z' * M;
                 for k=1:opt.pg.K
@@ -417,10 +424,10 @@ function [model, dat, opt] = pgva_model(varargin)
                 % Rescale
                 % -------
                 if opt.ui.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
-               [Q, iQ] = gnScalePG(iU' * model.pg.ww * iU, ...
+               [Q, iQ] = gnScalePG(iU' * model.pg.ww * iU * model.pg.n / model.mixreg.w(1), ...
                                    U   * model.z.zz  * U', ...
                                    U   * model.z.S   * U', ...
-                                   opt.z.A0, opt.z.n0, opt.f.N+opt.v.N);
+                                   opt.z.A0, opt.z.n0, model.pg.n);
                 if opt.ui.verbose, fprintf('| %6.3fs\n', toc); end
                 Q  = Q  * U;
                 iQ = iU * iQ;
@@ -496,11 +503,61 @@ function [model, dat, opt] = pgva_model(varargin)
             if opt.ui.verbose, fprintf('| %6.3s\n', toc); end
             % -----------
             % Lower bound
-            [dat, model] = pgva_batch('LB', 'Matching', dat, model, opt);
+            [dat, model] = pgva_batch('LB', 'Template', dat, model, opt);
             model        = updateLowerBound(model);
             plotAll(model, opt);
             % -----------
         end
+        
+        % -----------------------------------------------------------------
+        %    Mixture
+        % -----------------------------------------------------------------
+        if opt.optimise.mixreg.w
+            old_w = model.mixreg.w(1);
+            N = model.mixreg.n;
+            A = model.mixreg.a;
+            dg = spm_prob('DiGamma', N*A) - spm_prob('DiGamma', N);
+            rho1 = dg;
+            rho2 = -dg;
+            for n=1:numel(dat)
+                rho1 = rho1 + dat(n).v.lb.ll1;
+                rho2 = rho2 + dat(n).v.lb.ll2;
+            end
+            model.mixreg.w(1) = 1/(1+exp(rho2-rho1));
+            model.mixreg.w(2) = 1 - model.mixreg.w(1);
+            if opt.ui.verbose, fprintf('%10s | %10s | %8.6g -> %8.6g\n', 'Mix W', '', old_w, model.mixreg.w(1)); end
+        end
+        if opt.optimise.mixreg.a
+            old_a = model.mixreg.a;
+            N0 = opt.mixreg.n0;
+            A0 = opt.mixreg.a0;
+            model.mixreg.a = (N0*A0 + model.mixreg.w(1))/(N0+1);
+            if opt.ui.verbose, fprintf('%10s | %10s | %8.6g -> %8.6g\n', 'Mix A', '', old_a, model.mixreg.a); end
+        end
+        if opt.optimise.mixreg.w || opt.optimise.mixreg.a
+            N = model.mixreg.n;
+            A = model.mixreg.a;
+            dg = spm_prob('DiGamma', N*A) - spm_prob('DiGamma', N);
+            dig = spm_prob('DiGamma', N*(1-A)) - spm_prob('DiGamma', N);
+        end
+        if opt.optimise.mixreg.w
+            W1 = model.mixreg.w(1);
+            W2 = model.mixreg.w(2);
+            model.lb.wr.val = W1*(log(W1+eps) - dg) + W2*(log(W2+eps) + dg);
+            model.lb.wr.type = '-kl';
+        end
+        if opt.optimise.mixreg.a
+            model.lb.ar.val =   (N*A - N0*A0) * dg ...
+                              + (N*(1-A) - N0*(1-A0)) * dig...
+                              + beta_norm(N0*A0,N0*(1-A0)) ...
+                              - beta_norm(N*A,N*(1-A));
+            model.lb.ar.type = '-kl';
+        end
+        % -----------
+        % Lower bound
+        model        = updateLowerBound(model);
+        plotAll(model, opt);
+        % -----------
     end
 end
 % =========================================================================
@@ -714,4 +771,8 @@ function plotAll(model, opt)
         drawnow
     end
 
+end
+
+function b = beta_norm(a,b)
+    b = gammaln(a) + gammaln(b) - gammaln(a+b);
 end
