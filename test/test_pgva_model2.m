@@ -1,7 +1,7 @@
 %function test_pgva_model_2
 
 N = inf;
-input_dir = '/Users/balbasty/Desktop/model/input';
+input_dir = '/Users/balbasty/Desktop/IXI_2D/input';
 files     = spm_select('List', input_dir, '\.img$');
 if ~isfinite(N)
     N         = size(files, 1);
@@ -18,13 +18,13 @@ input   = struct;
 input.f = fnames(1:N);
 
 opt = struct;
-opt.dir.model  = '/Users/balbasty/Desktop/model/outputvel2';
+opt.dir.model  = '/Users/balbasty/Desktop/IXI_2D/outputvel2';
 opt.dir.dat    = opt.dir.model;
 opt.model      = struct('name', 'categorical');
 opt.pg.K       = 19;
 opt.pg.prm     = [0 0.001 0.02 0.0025 0.005];
 opt.split.par  = 0;
-opt.pg.pgprior = true;
+opt.iter.gn    = 2;
 
 % cluster
 % opt.dist.server.ip      = '';

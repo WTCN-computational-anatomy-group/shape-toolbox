@@ -172,8 +172,6 @@ function [opt, dat, model] = pgva_model_input(input, opt)
             opt.tpl.vs  = sqrt(sum(n.mat0(1:3,1:3).^2));
         end
     end
-    
-    opt.tpl.provided = false;
     if isfield(input, 'mu') && numel(input.mu) > 0
         if ~exist(input.mu, 'file')
             warning('Template %s does not exist. We''ll remove it.', input.mu)
