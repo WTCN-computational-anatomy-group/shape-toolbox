@@ -8,6 +8,8 @@ This repository contains core functions and executable scripts written in Matlab
 
 ## Standalone release
 
+> TODO - there's no such release yet
+
 We provided compiled command line routines that can be used without Matlab license. To use them, you must:
 - Install [Matlab runtime](https://uk.mathworks.com/products/compiler/matlab-runtime.html)
 - Download your [platform release](https://github.com/WTCN-computational-anatomy-group/shape-toolbox/releases)
@@ -32,19 +34,19 @@ This work relies on a generative model of shape in which individual images (of b
 Inputs can be binary or categorical images (_i.e._, segmentations), in which case a Bernoulli or Categorical data term is used, or multimodal intensity images, in which case a uniform Gaussian or Laplace noise data term is used.
 
 All considered, the following variables are infered:
-- <tt>W = [w1 .. wK]</tt>: the principal subspace of deformation, made of K _principal geodesics_ ;
-- <tt>z</tt>: transformation coordinates in the principal subspace, which is a low-dimensional representation of each subject in terms of deformation of the template ;
-- <tt>A</tt>: the precision matrix (_i.e._, inverse covariance) of the latent coordinates. At the optimum, it should be a diagonal matrix that contains the variance along each principal component, or in other words, their scale ;
-- <tt>v</tt>: the velocity field of each subject. It is only an explicit random variable in the PGVA model, in which case the residual field, <tt>r = v - Wz</tt>, can be recovered by substracting the principal representation ;
-- <tt>r</tt>: alternatively, the residual field can be explicitely infered, as is the case in the PGRA model. Then, the initial velocity is reconstructed according to <tt>v = Wz + r</tt> ;
-- <tt>lam</tt>: the precision of the residual field, also named _anatomical noise_ ;
-- <tt>q</tt>: parameters of the rigid-body transform. Note that there are options to use different kind of affine transforms instead, however it is not advised, as differences in size should be captured by the shape model.
+- `W = [w1 .. wK]`: the principal subspace of deformation, made of K _principal geodesics_ ;
+- `z`: transformation coordinates in the principal subspace, which is a low-dimensional representation of each subject in terms of deformation of the template ;
+- `A`: the precision matrix (_i.e._, inverse covariance) of the latent coordinates. At the optimum, it should be a diagonal matrix that contains the variance along each principal component, or in other words, their scale ;
+- `v`: the velocity field of each subject. It is only an explicit random variable in the PGVA model, in which case the residual field, `r = v - Wz`, can be recovered by substracting the principal representation ;
+- `r`: alternatively, the residual field can be explicitely infered, as is the case in the PGRA model. Then, the initial velocity is reconstructed according to `v = Wz + r` ;
+- `lam`: the precision of the residual field, also named _anatomical noise_ ;
+- `q`: parameters of the rigid-body transform. Note that there are options to use different kind of affine transforms instead, however it is not advised, as differences in size should be captured by the shape model.
 
 The following parameters are manually set and impact the model's behaviour:
-- <tt>K</tt>: the number of principal components ;
-- <tt>L</tt>: a Riemannian metric, in the form of a mixture of membrane, bending and linear-elastic energies. A small penalty on absolute displacements should also be set in order to ensure the diffeomorphism to be invertible and that it can be _shot_ with a low number of  integration steps ;
-- <tt>A0</tt> and <tt>n0</tt>: the prior expected value of the latent precision matrix and its degrees of freedom, which should be seen as the virtual number of subjects that weight this prior belief ;
-- <tt>l0</tt> and <tt>n0</tt>: the prior expected value of the residual precision matrix and its degrees of freedom, which should be seen as the virtual number of subjects that weight this prior belief ;
+- `K`: the number of principal components ;
+- `L`: a Riemannian metric, in the form of a mixture of membrane, bending and linear-elastic energies. A small penalty on absolute displacements should also be set in order to ensure the diffeomorphism to be invertible and that it can be _shot_ with a low number of  integration steps ;
+- `A0` and `n0`: the prior expected value of the latent precision matrix and its degrees of freedom, which should be seen as the virtual number of subjects that weight this prior belief ;
+- `l0` and `n0`: the prior expected value of the residual precision matrix and its degrees of freedom, which should be seen as the virtual number of subjects that weight this prior belief ;
 
 ### PGVA vs PGRA
 
@@ -76,13 +78,13 @@ If you use compiled routines or their Matlab equivalents ([pgra_train](scripts/p
 If you directly use the main scripts in Matlab, inputs are structures.
 
 Regarding of the above choice, there are one mandatory input and one optional one:
-- <tt>input</tt>: \[mandatory\] a dictionary of filenames with fields:
-  * <tt>'f'</tt>: observed images (list or matrix, the first dimension is for subjectsm the second for classes or modalities) ;
-  * <tt>'v'</tt>: \[PGVA only\]  observed velocity fields (list)
-  * <tt>'w'</tt>: principal subspace to use or initialise with
-  * <tt>'a'</tt>: \[Bernoulli/Categorical only\] log-template to use or initialise with
-  * <tt>'mu'</tt>: \[Gaussian/Laplace only\] template to use or initialise with
-- <tt>opt</tt>: \[optional\] a dictionary of options
+- `input`: \[mandatory\] a dictionary of filenames with fields:
+  * `'f'`: observed images (list or matrix, the first dimension is for subjectsm the second for classes or modalities) ;
+  * `'v'`: \[PGVA only\]  observed velocity fields (list)
+  * `'w'`: principal subspace to use or initialise with
+  * `'a'`: \[Bernoulli/Categorical only\] log-template to use or initialise with
+  * `'mu'`: \[Gaussian/Laplace only\] template to use or initialise with
+- `opt`: \[optional\] a dictionary of options
   * All possible fields are provided below.
 
 ### Options
@@ -127,8 +129,8 @@ optimise.q.A   - Optimise affine precision                                  - [t
 optimise.v.v   - Optimise velocity fields                                   - [true]
 optimise.v.l   - Optimise residual precision                                - [true]
 optimise.tpl.a - Optimise template                                          - [true]
-  "  .mixreg.w - Optimise regularisation weight                             - [true]
-  "  .mixreg.a - Optimise regularisation prior weight                       - [true]
+"    .mixreg.w - Optimise regularisation weight                             - [true]
+"    .mixreg.a - Optimise regularisation prior weight                       - [true]
 ```
 
 #### Processing
@@ -165,44 +167,44 @@ ondisk.dat     - "      "       "       "       "       "
 
 ## Content of the repository
 
-- [<tt>backward-compatibility</tt>](backward-compatibility): A few basic Matlab functions that only appeared in recent versions of Matlab and that were reimplemented for backward compatibility.
-- [<tt>core</tt>](core): Core functions. Their signature is as straightforward as possible, so they can be used in other contexts as some sort of library. They should in general work on both numerical arrays and SPM's <tt>file_array</tt> (_i.e._, memory mapped arrays).
-  * [<tt>core/register</tt>](core/register) contains functions related to the registration of single subjects.
-  * [<tt>core/shape</tt>](core/shape) contains functions related to population parameters learning (template, principal subspace...).
-- [<tt>scripts</tt>](scripts): Executable functions that implement the complete model.
-  * [<tt>pgva_model.m</tt>](scripts/pgva_model.m) implements a purely variational model based on a Riemannian PCA applied to fitted velocity fields. It can also work with known (observed) velocity fields,
-  * [<tt>pgra_model.m</tt>](scripts/pgra_model.m) implements a _direct fit_ version, where all shape parameters (latent coordinates, principal subspace, residual field) are obtained by maximising the data term using Gauss-Newton optimisation.
+- [`backward-compatibility`](backward-compatibility): A few basic Matlab functions that only appeared in recent versions of Matlab and that were reimplemented for backward compatibility.
+- [`core`](core): Core functions. Their signature is as straightforward as possible, so they can be used in other contexts as some sort of library. They should in general work on both numerical arrays and SPM's `file_array` (_i.e._, memory mapped arrays).
+  * [`core/register`](core/register) contains functions related to the registration of single subjects.
+  * [`core/shape`](core/shape) contains functions related to population parameters learning (template, principal subspace...).
+- [`scripts`](scripts): Executable functions that implement the complete model.
+  * [`pgva_model.m`](scripts/pgva_model.m) implements a purely variational model based on a Riemannian PCA applied to fitted velocity fields. It can also work with known (observed) velocity fields,
+  * [`pgra_model.m`](scripts/pgra_model.m) implements a _direct fit_ version, where all shape parameters (latent coordinates, principal subspace, residual field) are obtained by maximising the data term using Gauss-Newton optimisation.
 
   Both models use a set of subfunctions that have the same organisation:
-  * <tt>*_input.m</tt> deals with input files (individual images, eventually some parameters of the model...),
-  * <tt>*_default.m</tt> sets all default parameters,
-  * <tt>*_data.m</tt> sets all working data structures,
-  * <tt>*_init.m</tt> initialises the model.
+  * `*_input.m` deals with input files (individual images, eventually some parameters of the model...),
+  * `*_default.m` sets all default parameters,
+  * `*_data.m` sets all working data structures,
+  * `*_init.m` initialises the model.
   
-- [<tt>utility-functions</tt>](utility-functions): Various very basic utility functions. Some of them might get moved to the [<tt>auxiliary-functions</tt> toolbox](https://github.com/WTCN-computational-anatomy-group/auxiliary-functions) in the future.
+- [`utility-functions`](utility-functions): Various very basic utility functions. Some of them might get moved to the [`auxiliary-functions` toolbox](https://github.com/WTCN-computational-anatomy-group/auxiliary-functions) in the future.
 
 ## Dependencies
 
-This project has strong dependencies to SPM12 and its <tt>Shoot</tt> toolbox. Both of them should be added to Matlab's path. SPM can be downloaded at [www.fil.ion.ucl.ac.uk/spm](http://www.fil.ion.ucl.ac.uk/spm/).
+This project has strong dependencies to SPM12 and its `Shoot` toolbox. Both of them should be added to Matlab's path. SPM can be downloaded at [www.fil.ion.ucl.ac.uk/spm](http://www.fil.ion.ucl.ac.uk/spm/).
 
-Core functions also depend on our [<tt>auxiliary-functions</tt> toolbox](https://github.com/WTCN-computational-anatomy-group/auxiliary-functions), which gathers lots of low-level functions.
+Core functions also depend on our [`auxiliary-functions` toolbox](https://github.com/WTCN-computational-anatomy-group/auxiliary-functions), which gathers lots of low-level functions.
 
-Furthermore, executable scripts depend on our [<tt>distributed-computing</tt> toolbox](https://github.com/WTCN-computational-anatomy-group/distributed-computing), which helps parallelising parts of the code either on the local workstation (using Matlab's parallel processing toolbox) or on a computing cluster (see the toolbox help file for use cases and limitations).
+Furthermore, executable scripts depend on our [`distributed-computing` toolbox](https://github.com/WTCN-computational-anatomy-group/distributed-computing), which helps parallelising parts of the code either on the local workstation (using Matlab's parallel processing toolbox) or on a computing cluster (see the toolbox help file for use cases and limitations).
 
 Note that if these toolboxes are all located in the same folder, _i.e._:
-* <tt>./shape-toolbox</tt>
-* <tt>./auxiliary-functions</tt>
-* <tt>./distributed-computing</tt>
+* `./shape-toolbox`
+* `./auxiliary-functions`
+* `./distributed-computing`
 
-a call to [<tt>setpath.m</tt>](setpath.m) adds all necessary folders to Matlab's path.
+a call to [`setpath.m`](setpath.m) adds all necessary folders to Matlab's path.
 
 ## Contributors
 
 This software was developed under the [_Human Brain Project_](https://www.humanbrainproject.eu) (SP2) flagship by John Ashburner's [Computational Anatomy Group](http://www.fil.ion.ucl.ac.uk/Ashburner/) at the [Wellcome Centre for Human Neuroimaging](http://www.fil.ion.ucl.ac.uk/) in UCL.
 - The shape toolbox was mainly developed by Yaël Balbastre with invaluable help from John Ashburner.
-- The <tt>auxiliary-functions</tt> and <tt>distributed-computing</tt> toolboxes were developed by Mikael Brudfors and Yaël Balbastre.
+- The `auxiliary-functions` and `distributed-computing` toolboxes were developed by Mikael Brudfors and Yaël Balbastre.
 
-If you encounter any difficulty, please shoot an email to <tt>y.balbastre</tt> or <tt>j.ashburner</tt> _at_ <tt>ucl.ac.uk</tt>
+If you encounter any difficulty, please shoot an email to `y.balbastre` or `j.ashburner` _at_ `ucl.ac.uk`
 
 ## License
 
