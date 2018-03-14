@@ -27,6 +27,72 @@ We provided compiled command line routines that can be used without Matlab licen
   ./run_pgva_fit /path/to/matlab/runtime input.json option.json
   ```
 
+### Basic use cases
+
+The illustrative JSON files are commented. However, comments are not allowed in JSON, so they should be removed from any _real_ file.
+
+**Learn a shape model from grey and white matter segmentations obtained with SPM's _New Segment_**
+
+`input.json`
+```
+{"f": [["rc1_sub001.nii","rc2_sub001.nii"],     // Grey and white classes for the first subject
+       ["rc1_sub002.nii","rc2_sub002.nii"],
+       ["rc1_sub003.nii","rc2_sub003.nii"],
+       ...
+       ["rc1_sub100.nii","rc2_sub100.nii"]]}    // Grey and white classes for the last subject
+```
+
+`option.json`
+```
+{"dir":   {"model": "~/my_shape_model/",        // Write all (model and subject) data in the same folder
+           "dat":   "~/my_shape_model/"},
+ "model": {"name": "categorical",               // Observed images are segmentations
+           "nc":   3},                          // There are 3 classes, even though only 2 were provided.
+                                                //   This allows the third class to be automatically created 
+                                                //   by "filling probabilities up to one"
+ "pg":    {"K": 32},                            // Use 32 principal components
+ "split": {"par": 0}                            // Do not use parallelisation 
+ }
+```
+
+Command line
+```shell
+./run_pgra_train /path/to/matlab/runtime input.json option.json
+```
+
+**Apply a shape model to grey and white matter segmentations obtained with SPM's _New Segment_**
+
+`input.json`
+```
+{"f": [["rc1_sub101.nii","rc2_sub101.nii"],     // Grey and white classes for the first subject
+       ["rc1_sub102.nii","rc2_sub102.nii"],
+       ["rc1_sub103.nii","rc2_sub103.nii"],
+       ...
+       ["rc1_sub200.nii","rc2_sub200.nii"]],    // Grey and white classes for the last subject
+ "w": "~/my_shape_model/subspace.nii",          // Learnt principal subspace
+ "a": "~/my_shape_model/log_template.nii"}      // Learnt log-template
+```
+
+`option.json`
+```
+{"dir":   {"model": "~/normalised_images/",     // Write all (model and subject) data in the same folder
+           "dat":   "~/normalised_images/"},
+ "model": {"name": "categorical",               // Observed images are segmentations
+           "nc":   3},                          // There are 3 classes, even though only 2 were provided.
+                                                //   This allows the third class to be automatically created 
+                                                //   by "filling probabilities up to one"
+ "pg":    {"K": 32},                            // Use 32 principal components
+ "z":     {"A0": [0.0016, 0.0030, ...]},        // Diagonal elements of the latent precision matrix
+ "r":     {"l0": 18.8378},                      // Residual precision
+ "split": {"par": 0}                            // Do not use parallelisation 
+ }
+```
+
+Command line
+```shell
+./run_pgra_fit /path/to/matlab/runtime input.json option.json
+```
+
 ## The model
 
 This work relies on a generative model of shape in which individual images (of brains, in particular) are assumed to be generated from a mean shape &ndash; commonly named template &ndash; deformed according to a transformation of the coordinate space. Here, these transformations are diffeomorphisms, _i.e._, one-to-one invertible mappings that allow for very large deformations. By using the _geodesic shooting_ framework, we parameterise these transformations by their _initial velocity_, which can be seen as an infinitesimal (very small) deformation. The _a posteriori_ covariance structure of these velocity fields is infered by making use of a technique related to the well-known _principal component analysis_, adapted to the particular structure of the space on which lie velocity fields, called a Riemannian manifold. Our model also includes a rigid-body transform, whose role is to factor out all deformations induces by brains misalignment.
@@ -96,6 +162,7 @@ Options will be provided in their Matlab structure form. Their JSON equivalent a
 ```
 model.name     - Generative data model ('normal'/'categorical'/'bernoulli') - ['normal']
 model.sigma2   - If normal model: initial noise variance estimate           - [1]
+model.nc       - [categorical only] Number of classes                       - [from input]
 pg.K           - Number of principal geodesics                              - [32]
 pg.prm         - Parameters of the geodesic operator                        - [1e-4 1e-3 0.2 0.05 0.2]
 pg.bnd         - Boundary conditions for the geodesic operator              - [1 = circulant]
