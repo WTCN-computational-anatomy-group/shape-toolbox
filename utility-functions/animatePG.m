@@ -62,7 +62,7 @@ function frames = animatePG(varargin)
     x     = p.Results.x;
     n     = p.Results.n;
     
-    A   = model.z.A + opt.pg.geod * model.pg.ww;
+    A   = model.z.A; % + opt.pg.geod * model.pg.ww;
     w   = model.pg.w;
     vs  = opt.tpl.vs;
     prm = opt.pg.prm;
