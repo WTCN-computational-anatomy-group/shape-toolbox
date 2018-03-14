@@ -4,7 +4,7 @@
 
 This software implements a statistical shape model based on diffeomorphic transforms.
 
-Learning shape parameters &ndash; _i.e._, a mean shape (or template) and a principal space of deformation &ndash; from a series of 2D or 3D images is cast as a maximum _a posterori_ inferrence problem in a graphical model.
+Learning shape parameters &ndash; _i.e._, a mean shape (or template) and a principal space of deformation &ndash; from a series of 2D or 3D images is cast as a maximum _a posterori_ inference problem in a graphical model.
 
 This repository contains core functions and executable scripts written in Matlab.
 
