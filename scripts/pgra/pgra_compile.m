@@ -1,4 +1,4 @@
-function pgra_compile
+function pgra_compile(compile_dir)
 % Script for compiling the MATLAB code for the Shape & Appearance models.
 %__________________________________________________________________________
 % Copyright (C) 2017 Wellcome Trust Centre for Neuroimaging
@@ -6,7 +6,9 @@ function pgra_compile
 % John Ashburner
 % $Id$
 
-compile_dir = fullfile(tempdir,'compiled');
+if nargin < 1
+    compile_dir = fullfile(tempdir,'compiled');
+end
 
 if ~exist('spm','file')
     error('SPM not on search path.');

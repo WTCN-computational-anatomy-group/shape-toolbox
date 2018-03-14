@@ -375,8 +375,8 @@ function opt = pgra_model_default(opt)
     end
     if islogical(opt.optimise.r)
         [opt.optimise.r, val] = deal(struct, opt.optimise.r);
-        opt.optimise.r.A = val;
-        opt.optimise.r.q = val;
+        opt.optimise.r.l = val;
+        opt.optimise.r.r = val;
     end
     if ~isfield(opt.optimise.r, 'l')
         opt.optimise.r.l = true;
