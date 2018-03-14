@@ -10,9 +10,23 @@ This repository contains core functions and executable scripts written in Matlab
 
 ## The model
 
-### PGVA
+This work relies on a generative model of shape in which individual images (of brains, in particular) are assumed to be generated from a mean shape &ndash; commonly named template &ndash; deformed according to a transformation of the coordinate space. Here, these transformations are diffeomorphisms, _i.e._, one-to-one invertible mappings that allow for very large deformations. By using the _geodesic shooting_ framework, we parameterise these transformations by their _initial velocity_, which can be seen as an infinitesimal (very small) deformation. The _a posteriori_ covariance structure of these velocity fields is infered by making use of a technique related to the well-known _principal component analysis_, adapted to the particular structure of the space on which lie velocity fields, called a Riemannian manifold. Our model also includes a rigid-body transform, whose role is to factor out all deformations induces by brains misalignment.
 
-### PGRA
+All considered, the following variables are infered:
+- <tt>W = [w1 .. wK]</tt>: the principal subspace of deformation, made of K _principal geodesics_ ;
+- <tt>z</tt>: transformation coordinates in the principal subspace, which is a low-dimensional representation of each subject in terms of deformation of the template ;
+- <tt>A</tt>: precision matrix (_i.e._, inverse covariance) of the latent coordinates. At the optimum, it should be a diagonal matrix that contains the variance along each principal component, or in other words, their scale ;
+- <tt>v</tt>: the velocity field of each subject. It is only an explicit random variable in the PGVA model, in which case the residual field, <tt>r = v - Wz</tt>, can be recovered by substracting the principal representation ;
+- <tt>r</tt>: alternatively, the residual field can be explicitely infered, as is the case in the PGRA model. Then, the initial velocity is reconstructed according to <tt>v = Wz + r</tt> ;
+- <tt>lam</tt>: precision of the residual field, also named _anatomical noise_ ;
+- <tt>q</tt>: parameters of the rigid-body transform. Note that there are options to use different kind of affine transforms instead, however it is not advised, as differences in size should be captured by the shape model.
+
+The following parameters are manually set and impact the model's behaviour:
+- <tt>A0</tt> and <tt>n0</tt>: prior expected value of the latent precision matrix and its degrees of freedom, which should be seen as the virtual number of subjects that weight this prior belief ;
+- <tt>l0</tt> and <tt>n0</tt>: prior expected value of the residual precision matrix and its degrees of freedom, which should be seen as the virtual number of subjects that weight this prior belief ;
+
+### PGRA vs PGVA
+
 
 ## User documentation
 
