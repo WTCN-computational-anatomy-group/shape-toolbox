@@ -1,5 +1,7 @@
 # Diffeomorphic shape modelling
 
+<img align="right" src="doc/pg1_axial.gif">
+
 This software implements a statistical shape model based on diffeomorphic transforms.
 
 Learning shape parameters &ndash; _i.e._, a mean shape (or template) and a principal space of deformation &ndash; from a series of 2D or 3D images is cast as a maximum _a posterori_ inferrence problem in a graphical model.
