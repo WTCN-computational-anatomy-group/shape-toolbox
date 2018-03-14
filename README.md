@@ -6,6 +6,16 @@ Learning shape parameters &ndash; _i.e._, a mean shape (or template) and a princ
 
 This repository contains core functions and executable scripts written in Matlab.
 
+## Standalone release
+
+## The model
+
+### PGVA
+
+### PGRA
+
+## User documentation
+
 ## Content of the repository
 
 - [<tt>backward-compatibility</tt>](backward-compatibility): A few basic Matlab functions that only appeared in recent versions of Matlab and that were reimplemented for backward compatibility.
@@ -38,3 +48,15 @@ Note that if these toolboxes are all located in the same folder, _i.e._:
 * <tt>./distributed-computing</tt>
 
 a call to [<tt>setpath.m</tt>](setpath.m) adds all necessary folders to Matlab's path.
+
+## Contributors
+
+This software was developed under the [_Human Brain Project_](https://www.humanbrainproject.eu) (SP2) flagship by John Ashburner's [Computational Anatomy Group](http://www.fil.ion.ucl.ac.uk/Ashburner/) at the [Wellcome Centre for Human Neuroimaging](http://www.fil.ion.ucl.ac.uk/) in UCL.
+- The shape toolbox was mainly developed by Yaël Balbastre with invaluable help from John Ashburner
+- The <tt>auxiliary-functions</tt> and <tt>distributed-computing</tt> toolboxes were developed by Mikael Brudfors and Yaël Balbastre
+
+## License
+
+[TL;DR: GPL v3](https://tldrlegal.com/license/gnu-general-public-license-v3-(gpl-3))
+
+This software is released under the [GNU General Public License version 3](LICENSE) (GPL v3). As a result, you may copy, distribute and modify the software as long as you track changes/dates in source files. Any modifications to or software including (via compiler) GPL-licensed code must also be made available under the GPL along with build & install instructions.
