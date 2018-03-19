@@ -21,7 +21,8 @@ function model = updateLowerBound(model, gain)
         if isempty(model.lb.lb.list)
             model.lb.lb.gain = inf;
         else
-            model.lb.lb.gain = (model.lb.lb.val - model.lb.lb.list(end))/abs(model.lb.lb.list(end));
+            minval = min(model.lb.lb.list);
+            model.lb.lb.gain = (model.lb.lb.val - model.lb.lb.list(end))/abs(model.lb.lb.list(end)-minval);
         end
         model.lb.lb.gainlist = [model.lb.lb.gainlist model.lb.lb.gain];
         model.lb.lb.list     = [model.lb.lb.list model.lb.lb.curlist];
