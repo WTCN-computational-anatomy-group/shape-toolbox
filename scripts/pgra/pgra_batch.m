@@ -29,7 +29,7 @@ function varargout = pgra_batch(id, varargin)
 %   Initialise latent coordinates ('zero'/'rand') + lower bound
 %   If random, insure they are zero-centered and orthogonal.
 %
-% FORMAT [dat, model] = pgra_batch('InitLaplace', dat, model, opt)
+% FORMAT [dat, model] = pgra_batch('InitLowerBound', dat, model, opt)
 %   Initialise covariance for Laplace approximations + lower bound
 %
 % ---
@@ -73,7 +73,7 @@ function varargout = pgra_batch(id, varargin)
 % FORMAT dat = pgra_batch('OneInitPush',     dat, model, opt)
 % FORMAT dat = pgra_batch('OneInitPull',     dat, model, opt)
 % FORMAT dat = pgra_batch('OneInitResidual', dat, model, opt, mode)
-% FORMAT dat = pgra_batch('OneInitLaplace',  dat, model, opt)
+% FORMAT dat = pgra_batch('OneInitLowerBound', dat, model, opt)
 % FORMAT dat = pgra_batch('OneFitAffine',    dat, model, opt)
 % FORMAT dat = pgra_batch('OneFitLatent',    dat, model, opt)
 % FORMAT dat = pgra_batch('OneFitResidual',  dat, model, opt)
@@ -95,8 +95,8 @@ function varargout = pgra_batch(id, varargin)
             [varargout{1:nargout}] = batchInitLatent(varargin{:});
         case 'initresidual'
             [varargout{1:nargout}] = batchInitResidual(varargin{:});
-        case 'initlaplace'
-            [varargout{1:nargout}] = batchInitLaplace(varargin{:});
+        case 'initlowerbound'
+            [varargout{1:nargout}] = batchInitLowerBound(varargin{:});
         case 'rotatesubspace'
             [varargout{1:nargout}] = batchRotateSubspace(varargin{:});
         case 'fitaffine'
@@ -118,8 +118,8 @@ function varargout = pgra_batch(id, varargin)
             [varargout{1:nargout}] = oneInitPull(varargin{:});
         case 'oneinitresidual'
             [varargout{1:nargout}] = oneInitResidual(varargin{:});
-        case 'oneinitlaplace'
-            [varargout{1:nargout}] = oneInitLaplace(varargin{:});
+        case 'oneinitlowerbound'
+            [varargout{1:nargout}] = oneInitLowerBound(varargin{:});
         case 'onefitaffine'
             [varargout{1:nargout}] = oneFitAffine(varargin{:});
         case 'onefitlatent'
@@ -297,7 +297,7 @@ end
 %    Init Laplace
 % -------------------------------------------------------------------------
 
-function dat = oneInitLaplace(dat, model, opt)
+function dat = oneInitLowerBound(dat, model, opt)
 
     % --- Detect parallelisation scheme
     if strcmpi(opt.split.loop, 'subject')
@@ -320,6 +320,10 @@ function dat = oneInitLaplace(dat, model, opt)
     % --------------
     if opt.optimise.r.r
     
+        % Wz uncertainty
+        % --------------
+        dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
+        
         % Hessian
         % -------
         if strcmpi(opt.match, 'pull')
@@ -338,16 +342,19 @@ function dat = oneInitLaplace(dat, model, opt)
 
         % Trace
         % -----
-        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.r.l + opt.pg.geod)*opt.pg.prm]));
+        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.r.l + model.mixreg.w(2))*opt.pg.prm]));
         dat.v.lb.tr = dat.v.lb.tr(1);
-        dat.v.lb.tr = dat.v.lb.tr / (model.r.l + opt.pg.geod);
+        dat.v.lb.tr = dat.v.lb.tr / (model.mixreg.w(1)*model.r.l + model.mixreg.w(2));
 
         % LogDet(P)
         % ---------
         % Approximation where all off-diagonal elements of L are zero
-        h(:,:,:,1) = h(:,:,:,1) * (model.r.l + opt.pg.geod) * opt.pg.ker(1);
-        h(:,:,:,2) = h(:,:,:,2) * (model.r.l + opt.pg.geod) * opt.pg.ker(2);
-        h(:,:,:,3) = h(:,:,:,3) * (model.r.l + opt.pg.geod) * opt.pg.ker(3);
+        h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(1);
+        h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(2);
+        h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(3);
+        if opt.model.dim == 2
+            h(:,:,:,3) = 1;
+        end
         h = spm_matcomp('Pointwise3', h, 'd');
         h(h <= 0) = nan;
         dat.v.lb.ld = sum(log(h(:)), 'omitnan');
@@ -360,21 +367,91 @@ function dat = oneInitLaplace(dat, model, opt)
         % prior:     mean = 0 ,   precision = (l+w)*L
         K = prod(opt.tpl.lat)*3;
         dat.v.lb.val = -0.5*( - K ...
-                              + K*spm_prob('Gamma', 'Elog', model.r.l, opt.N+opt.r.n0, K) ...
+                              - K * model.mixreg.w(2) * log(2*pi) ...
+                              - K * spm_prob('Gamma', 'Elog', model.r.l, model.r.n, K) ...
                               - opt.pg.ld + dat.v.lb.ld ...
-                              + model.r.l * dat.v.lb.reg ...
-                              + (model.r.l + opt.pg.geod) * dat.v.lb.tr );
+                              + model.mixreg.w(1) * model.r.l * dat.v.lb.reg ...
+                              + model.mixreg.w(1) * model.r.l * dat.v.lb.tr );
+        dat.v.lb.geod = -0.5*model.mixreg.w(2)*( ...
+                                  K * log(2*pi) ...
+                                - opt.pg.ld ...
+                                + dat.v.lb.regv ...
+                                + dat.v.lb.tr ...
+                                + dat.v.lb.uncty );
         dat.v.lb.type = 'kl';
     else
-        dat.v.lb.val = 0;
-        dat.v.lb.tr  = 0;
-        dat.v.lb.reg = 0;
+        dat.v.lb.val   = 0;
+        dat.v.lb.tr    = 0;
+        dat.v.lb.uncty = 0;
+        dat.v.lb.reg   = 0;
+        dat.v.lb.regv  = 0;
+        dat.v.lb.type  = '';
     end
         
+    % ------------
+    %    Latent
+    % ------------
+    if opt.optimise.z.z
+        dat.z.lb.type = 'kl';
+        dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                               - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                               - spm_matcomp('LogDet', dat.z.S) ...
+                               - opt.pg.K );
+    else
+        dat.z.lb.val  = 0;
+        dat.z.lb.type = '';
+    end
+    
+    % ------------
+    %    Affine
+    % ------------
+    if opt.optimise.q.q && opt.q.Mr
+        rind = opt.q.rind;
+        qq   = dat.q.qq(rind,rind);
+        Sq   = dat.q.S(rind,rind);
+        dat.q.lb.type = 'kl';
+        dat.q.lb.val  = -0.5*( trace((Sq + qq) * model.q.A) ...
+                               - spm_prob('Wishart', 'ELogDet', model.q.A, model.q.n, 'normal') ...
+                               + spm_matcomp('LogDet', Sq) ...
+                               - opt.q.Mr );
+    else
+        dat.q.lb.type = '';
+        dat.q.lb.val  = 0;
+    end
+
+    
+    % --------------
+    %    Mixture
+    % --------------
+    if opt.optimise.mixreg.w || opt.optimise.mixreg.a
+        N = model.mixreg.n;
+        A = model.mixreg.a;
+        N0 = opt.mixreg.n0;
+        A0 = opt.mixreg.a0;
+        dg = spm_prob('DiGamma', N*A) - spm_prob('DiGamma', N);
+        dig = spm_prob('DiGamma', N*(1-A)) - spm_prob('DiGamma', N);
+    end
+    if opt.optimise.mixreg.w
+        W1 = model.mixreg.w(1);
+        W2 = model.mixreg.w(2);
+        model.lb.wr.val = W1*(log(W1) - dg) + W2*(log(W2) + dg);
+        model.lb.wr.type = '-kl';
+    end
+    if opt.optimise.mixreg.a
+        model.lb.ar.val =   (N*A - N0*A0) * dg ...
+                          + (N*(1-A) - N0*(1-A0)) * dig...
+                          + beta_norm(N0*A0,N0*(1-A0)) ...
+                          - beta_norm(N*A,N*(1-A));
+        model.lb.ar.type = '-kl';
+    end
 
 end
 
-function [dat, model] = batchInitLaplace(dat, model, opt)
+function b = beta_norm(a,b)
+    b = gammaln(a) + gammaln(b) - gammaln(a+b);
+end
+
+function [dat, model] = batchInitLowerBound(dat, model, opt)
 
     % --- Detect parallelisation scheme
     if strcmpi(opt.split.loop, 'subject') && opt.split.par > 0
@@ -387,8 +464,12 @@ function [dat, model] = batchInitLaplace(dat, model, opt)
     % -------------------
     if isfield(model.lb, 'q'),   model.lb.q.val  = 0; end
     if isfield(model.lb, 'z'),   model.lb.z.val  = 0; end
-    if isfield(model.lb, 'r'),   model.lb.r.val  = 0; end
+    if isfield(model.lb, 'r'),   model.lb.r.val  = 0; end % KL Residual
+    if isfield(model.lb, 'v'),   model.lb.v.val  = 0; end % LL "Geodesic"
     if isfield(model.r,  'tr'),  model.r.tr      = 0; end
+    model.r.tr      = 0;
+    model.r.uncty   = 0;
+    model.r.reg     = 0;
     
     % --- Batch processing
     N = numel(dat);
@@ -399,16 +480,19 @@ function [dat, model] = batchInitLaplace(dat, model, opt)
 
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
-        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgra_batch', 'OneInitLaplace', 'inplace', dat(n1:ne), model, opt);
+        [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgra_batch', 'OneInitLowerBound', 'inplace', dat(n1:ne), model, opt);
         
         for n=n1:ne
             
             % Add individual contributions
             % ----------------------------
-            if isfield(model.lb, 'q'),   model.lb.q.val  = model.lb.q.val  + dat(n).q.lb.val; end
-            if isfield(model.lb, 'z'),   model.lb.z.val  = model.lb.z.val  + dat(n).z.lb.val; end
-            if isfield(model.lb, 'r'),   model.lb.r.val  = model.lb.r.val  + dat(n).v.lb.val; end
-            if isfield(model.r,  'tr'),  model.r.tr      = model.r.tr      + dat(n).v.lb.tr;  end
+            if isfield(model.lb, 'q'),    model.lb.q.val = model.lb.q.val + dat(n).q.lb.val;   end
+            if isfield(model.lb, 'z'),    model.lb.z.val = model.lb.z.val + dat(n).z.lb.val;   end
+            if isfield(model.lb, 'r'),    model.lb.r.val = model.lb.r.val + dat(n).v.lb.val;   end
+            if isfield(model.lb, 'v'),    model.lb.v.val = model.lb.v.val + dat(n).v.lb.geod;  end
+            if isfield(model.r,  'tr'),   model.r.tr     = model.r.tr     + dat(n).v.lb.tr;    end
+            if isfield(model.r, 'uncty'), model.r.uncty  = model.r.uncty  + dat(n).v.lb.uncty; end
+            if isfield(model.r, 'reg'),   model.r.reg    = model.r.reg    + dat(n).v.lb.reg;   end
         end
         
     end
@@ -437,7 +521,6 @@ function [dat, model] = batchInitAffine(mode, dat, model, opt)
     model.q.q  = zeros(opt.q.M, 1);
     model.q.qq = zeros(opt.q.M);
     model.q.S  = zeros(opt.q.M);
-    model.lb.q.val = 0;
     
     % Init subjects
     % -------------
@@ -455,18 +538,6 @@ function [dat, model] = batchInitAffine(mode, dat, model, opt)
         model.q.qq  = model.q.qq + dat(n).q.qq;
         dat(n).q.ok  = 1; % for GN failure tracking
         dat(n).q.ok2 = 0; % for GN failure tracking
-        if opt.q.Mr
-            rind = opt.q.rind;
-            dat(n).q.lb.type = 'kl';
-            dat(n).q.lb.val  = -0.5*( trace((dat(n).q.S(rind,rind) + dat(n).q.qq(rind,rind)) * model.q.A) ...
-                                      - spm_prob('Wishart', 'ELogDet', model.q.A, opt.N + opt.q.n0) ...
-                                      - spm_matcomp('LogDet', dat(n).q.S(rind,rind)) ...
-                                      - opt.q.Mr );
-        else
-            dat(n).q.lb.type = '';
-            dat(n).q.lb.val = 0;
-        end
-        model.lb.q.val = model.lb.q.val + dat(n).q.lb.val;
     end
     if opt.ui.verbose, plotBatchEnd; end
 
@@ -518,14 +589,21 @@ function dat = oneInitResidual(dat, model, opt, mode)
     if opt.pg.provided
         wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
                                  'loop', loop, 'par', par);
-        dat.v.v(:,:,:,:) = r + wz;
+        v = r + wz;
         clear wz
+        dat.v.v(:,:,:,:) = v;
     else
         dat.v.v(:) = r;
+        v = r;
     end
     clear r
-    
-    
+    if ~opt.pg.provided && strcmpi(mode, 'zero')
+        dat.v.lb.regv = 0;
+    else
+        m = spm_diffeo('vel2mom', v, double([opt.tpl.vs opt.pg.prm]));
+        dat.v.lb.regv = v(:)'*m(:);
+    end
+    clear v
 
 end
 
@@ -552,13 +630,6 @@ function [dat, model] = batchInitResidual(mode, dat, model, opt)
         if opt.ui.verbose, before = plotBatch(i, batch, N, 50, before); end
     
         [opt.dist, dat(n1:ne)] = distribute(opt.dist, 'pgra_batch', 'OneInitResidual', 'inplace', dat(n1:ne), model, opt, mode);
-        
-        for n=n1:ne
-            
-            % Add individual contributions
-            % ----------------------------
-            model.r.reg     = model.r.reg     + dat(n).v.lb.reg;
-        end
         
     end
     if opt.ui.verbose, plotBatchEnd; end
@@ -603,7 +674,7 @@ function [dat, model] = batchInitLatent(mode, dat, model, opt)
         z = create([opt.pg.K, 1]);
         dat(n).z.z   = z;
         dat(n).z.zz  = z*z';
-        dat(n).z.S   = inv(opt.pg.geod * model.pg.ww + model.z.A);
+        dat(n).z.S   = inv(model.mixreg.w(2) * model.pg.ww + model.z.A);
         dat(n).z.ok  = 1;
         dat(n).z.ok2 = 0;
         model.z.z    = model.z.z  + dat(n).z.z;
@@ -653,22 +724,6 @@ function [dat, model] = batchInitLatent(mode, dat, model, opt)
         if opt.ui.verbose, plotBatchEnd; end
         
     end
-    
-    % Lower bound
-    % -----------
-    model.lb.z.val = 0;
-    if opt.ui.verbose, before = plotBatchBegin('LB Z'); end
-    for n=1:N
-        if opt.ui.verbose, before = plotBatch(n, 1, N, 50, before); end
-        dat(n).z.lb.type = 'kl';
-        dat(n).z.lb.val  = -0.5*( trace(dat(n).z.zz * model.z.A) ...
-                                  + trace(dat(n).z.S * (model.z.A + opt.pg.geod * model.pg.ww)) ...                              
-                                  - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
-                                  - spm_matcomp('LogDet', dat(n).z.S) ...
-                                  - opt.pg.K );
-        model.lb.z.val = model.lb.z.val + dat(n).z.lb.val;
-    end
-    if opt.ui.verbose, plotBatchEnd; end
 
 end
 
@@ -901,11 +956,16 @@ function dat = oneFitAffine(dat, model, opt)
     
         % Lower bound
         % -----------
-        rind = opt.q.rind;
-        dat.q.lb.val = -0.5*( trace((dat.q.qq(rind,rind) + dat.q.S(rind,rind))*model.q.A) ...
-                              - spm_prob('Wishart', 'ELogDet', model.q.A, opt.N + opt.q.n0) ...
-                              - spm_matcomp('LogDet', dat.q.S(rind,rind)) ...
-                              - opt.q.Mr );
+        if opt.q.Mr
+            rind = opt.q.rind;
+            qq   = dat.q.qq(rind,rind);
+            Sq   = dat.q.S(rind,rind);
+            dat.q.lb.type = 'kl';
+            dat.q.lb.val  = -0.5*( trace((Sq + qq) * model.q.A) ...
+                                   - spm_prob('Wishart', 'ELogDet', model.q.A, model.q.n, 'normal') ...
+                                   + spm_matcomp('LogDet', Sq) ...
+                                   - opt.q.Mr );
+        end
                       
     end % < cumok
     
@@ -1034,17 +1094,17 @@ function dat = oneFitLatent(dat, model, opt)
                     'par', par, 'debug', opt.ui.debug);
             end
 
-            [gz, hz] = ghPriorLatent(dat.z.z, model.z.A + opt.pg.geod * model.pg.ww, 'debug', opt.ui.debug);
+            [gz, hz] = ghPriorLatent(dat.z.z, model.z.A + model.mixreg.w(2) * model.pg.ww, 'debug', opt.ui.debug);
             g = g + gz;
             h = h + hz;
             clear gz hz
 
             % Part of geodesic prior
-            if opt.pg.geod && checkarray(dat.v.r)
+            if model.mixreg.w(1) > 0 && checkarray(dat.v.r)
                 m = spm_diffeo('vel2mom', single(numeric(dat.v.r)), double([opt.tpl.vs opt.pg.prm]));
                 for k=1:opt.pg.K
                     w1 = single(model.pg.w(:,:,:,:,k));
-                    g(k) = g(k) + opt.pg.geod * w1(:)' * m(:);
+                    g(k) = g(k) + model.mixreg.w(1) * w1(:)' * m(:);
                 end
                 clear w1
             end
@@ -1066,7 +1126,7 @@ function dat = oneFitLatent(dat, model, opt)
             result = lsLatent(...
                 noisemodel, dz, dat.z.z, dat.v.v, dat.f.lb.val, ...
                 model.pg.w, a, dat.f.f, ...
-                'regz', model.z.A, 'geod', opt.pg.geod, ...
+                'regz', model.z.A, 'geod', model.mixreg.w(2), ...
                 'A', A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
                 'nit', opt.iter.ls, 'itgr', opt.iter.itg, ...
                 'prm', opt.pg.prm, 'bnd', opt.pg.bnd, ...
@@ -1084,6 +1144,11 @@ function dat = oneFitLatent(dat, model, opt)
                 dat.z.zz      = result.z * result.z';
                 dat.f.lb.val  = result.llm;
                 dat.v.v       = copyarray(result.v,    dat.v.v);
+                if model.mixreg.w(2)
+                    m = spm_diffeo('vel2mom', result.v, double([opt.tpl.vs opt.pg.prm]));
+                    dat.v.lb.regv = result.v(:)' * m(:);
+                    clear m
+                end
                 dat.v.iphi    = copyarray(result.iphi, dat.v.iphi);
                 dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
                 dat.f.pf      = copyarray(result.pf,   dat.f.pf);
@@ -1093,7 +1158,6 @@ function dat = oneFitLatent(dat, model, opt)
                     dat.tpl.wmu = copyarray(result.wmu, dat.tpl.wmu);
                     rmarray(result.wa);
                 end
-                v = result.v;
             else
                 break
             end
@@ -1119,16 +1183,6 @@ function dat = oneFitLatent(dat, model, opt)
         
         % Prior / KL divergence
         % ---------------------
-        
-        % Geodesic term
-        % -------------
-        if opt.pg.geod
-            dat.v.lb.geod = llPriorVelocity(v, ...
-                'vs', opt.tpl.vs, 'prm', opt.pg.prm, ...
-                'bnd', opt.pg.bnd, 'logdet', opt.pg.ld);
-            dat.v.lb.geod = dat.v.lb.geod * opt.pg.geod;
-        end
-        clear v
 
         % Hessian (Laplace approximation)
         % -------------------------------
@@ -1145,7 +1199,7 @@ function dat = oneFitLatent(dat, model, opt)
                     'loop', loop, 'par', par, 'debug', opt.ui.debug);
             end
 
-            [~, hz] = ghPriorLatent(dat.z.z, model.z.A + opt.pg.geod * model.pg.ww);
+            [~, hz] = ghPriorLatent(dat.z.z, model.z.A + model.mixreg.w(2) * model.pg.ww);
             h = h + hz;
             clear hz
 
@@ -1154,14 +1208,6 @@ function dat = oneFitLatent(dat, model, opt)
         end
         dat.z.S = inv(h);
         clear h
-
-        % Lower bound
-        % -----------
-        dat.z.lb.val  = -0.5*( trace(dat.z.zz * model.z.A) ...
-                               + trace(dat.z.S * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                               - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
-                               - spm_matcomp('LogDet', dat.z.S) ...
-                               - opt.pg.K );
     
     end % cumok               
     
@@ -1183,9 +1229,6 @@ function [dat, model] = batchFitLatent(dat, model, opt)
 
     % Init gradient/hessian
     % ---------------------
-    model.lb.z.val = 0;
-    model.lb.m.val = 0;
-    if opt.pg.geod, model.lb.g.val = 0; end
     model.z.z      = zeros(opt.pg.K, 1);
     model.z.zz     = zeros(opt.pg.K);
     model.z.S      = zeros(opt.pg.K);
@@ -1217,9 +1260,6 @@ function [dat, model] = batchFitLatent(dat, model, opt)
             model.z.z      = model.z.z      + dat(n).z.z;
             model.z.zz     = model.z.zz     + dat(n).z.zz;
             model.z.S      = model.z.S      + dat(n).z.S;
-            model.lb.z.val = model.lb.z.val + dat(n).z.lb.val;
-            model.lb.m.val = model.lb.m.val + dat(n).f.lb.val;
-            if opt.pg.geod, model.lb.g.val = model.lb.g.val + dat(n).v.lb.geod; end
         end
         
     end
@@ -1296,17 +1336,17 @@ function dat = oneFitResidual(dat, model, opt)
             end
             v = numeric(dat.v.v);
             r = numeric(dat.v.r);
-            g = g + ghPriorVel(r, opt.tpl.vs, (model.r.l + opt.pg.geod) * opt.pg.prm, opt.pg.bnd);
+            g = g + ghPriorVel(r, opt.tpl.vs, (model.mixreg.w(1) * model.r.l + model.mixreg.w(2)) * opt.pg.prm, opt.pg.bnd);
 
             % Part of geodesic prior
-            if opt.pg.geod
-               g = g + opt.pg.geod * spm_diffeo('vel2mom', single(v-r), double([opt.tpl.vs opt.pg.prm]));
+            if model.mixreg.w(2)
+               g = g + model.mixreg.w(2) * spm_diffeo('vel2mom', single(v-r), double([opt.tpl.vs opt.pg.prm]));
             end
             
             % Compute search direction
             % ------------------------
             dv = -spm_diffeo('fmg', single(h), single(g), ...
-                double([opt.tpl.vs (model.r.l + opt.pg.geod) * opt.pg.prm 2 2]));
+                double([opt.tpl.vs (model.mixreg.w(1) * model.r.l + model.mixreg.w(2)) * opt.pg.prm 2 2]));
             clear g
 
             % Line search
@@ -1318,7 +1358,7 @@ function dat = oneFitResidual(dat, model, opt)
             end
             result = lsVelocity(...
                 noisemodel, dv, r, dat.f.lb.val, a, dat.f.f, ...
-                'v0', v, 'lam', model.r.l, 'geod', opt.pg.geod, ...
+                'v0', v, 'lam', model.r.l, 'geod', model.mixreg.w(2), ...
                 'prm', opt.pg.prm, 'itgr', opt.iter.itg, 'bnd', opt.pg.bnd, ...
                 'A', A, 'Mf', dat.f.M, 'Mmu', model.tpl.M, ...
                 'match', opt.match, ...
@@ -1333,6 +1373,11 @@ function dat = oneFitResidual(dat, model, opt)
             if result.ok
                 dat.f.lb.val  = result.match;
                 dat.v.v       = copyarray(result.v,    dat.v.v);
+                if model.mixreg.w(2)
+                    m = spm_diffeo('vel2mom', result.v, double([opt.tpl.vs opt.pg.prm]));
+                    dat.v.lb.regv = result.v(:)' * m(:);
+                    clear m
+                end
                 dat.v.r       = copyarray(result.r,    dat.v.r);
                 dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
                 dat.f.pf      = copyarray(result.pf,   dat.f.pf);
@@ -1371,19 +1416,6 @@ function dat = oneFitResidual(dat, model, opt)
         % -----------
         % Lower bound
         % -----------
-        % KL divergence between multivariate normal distributions
-        % posterior: mean = v,    precision = H + l*L
-        % prior:     mean = W*z , precision = l*L
-        
-        % Geodesic term
-        % -------------
-        if opt.pg.geod
-            dat.v.lb.geod = llPriorVelocity(v, ...
-                'vs', opt.tpl.vs, 'prm', opt.pg.prm, ...
-                'bnd', opt.pg.bnd, 'logdet', opt.pg.ld);
-            dat.v.lb.geod = dat.v.lb.geod * opt.pg.geod;
-        end
-        clear v
         
         % Regularisation part
         % -------------------
@@ -1410,16 +1442,19 @@ function dat = oneFitResidual(dat, model, opt)
             end
         end
         clear ipsi
-        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.r.l + opt.pg.geod) * opt.pg.prm]));
+        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.prm]));
         dat.v.lb.tr = dat.v.lb.tr(1);
-        dat.v.lb.tr = dat.v.lb.tr / (model.r.l + opt.pg.geod);
+        dat.v.lb.tr = dat.v.lb.tr / (model.mixreg.w(1)*model.r.l + model.mixreg.w(2));
         
         % LogDet(P)
         % ---------
         % Approximation where all off-diagonal elements of L are zero
-        h(:,:,:,1) = h(:,:,:,1) * (model.r.l + opt.pg.geod) * opt.pg.ker(1);
-        h(:,:,:,2) = h(:,:,:,2) * (model.r.l + opt.pg.geod) * opt.pg.ker(2);
-        h(:,:,:,3) = h(:,:,:,3) * (model.r.l + opt.pg.geod) * opt.pg.ker(3);
+        h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(1);
+        h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(2);
+        h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(3);
+        if opt.model.dim == 2
+            h(:,:,:,3) = 1;
+        end
         h = spm_matcomp('Pointwise3', h, 'd');
         h(h <= 0) = nan;
         dat.v.lb.ld = sum(log(h(:)), 'omitnan');
@@ -1427,11 +1462,19 @@ function dat = oneFitResidual(dat, model, opt)
         
         % KL divergence
         % -------------
-        K = prod(opt.tpl.lat) * 3;
-        dat.v.lb.val = -0.5*( - K - K*spm_prob('Gamma', 'Elog', model.r.l, opt.N+opt.r.n0, K) ...
+        K = prod(opt.tpl.lat)*3;
+        dat.v.lb.val = -0.5*( - K ...
+                              - K * model.mixreg.w(2) * log(2*pi) ...
+                              - K * spm_prob('Gamma', 'Elog', model.r.l, model.r.n, K) ...
                               - opt.pg.ld + dat.v.lb.ld ...
-                              + model.r.l * dat.v.lb.reg ...
-                              + (model.r.l + opt.pg.geod) * dat.v.lb.tr );
+                              + model.mixreg.w(1) * model.r.l * dat.v.lb.reg ...
+                              + model.mixreg.w(1) * model.r.l * dat.v.lb.tr );
+        dat.v.lb.geod = -0.5*model.mixreg.w(2)*( ...
+                                  K * log(2*pi) ...
+                                - opt.pg.ld ...
+                                + dat.v.lb.regv ...
+                                + dat.v.lb.tr ...
+                                + dat.v.lb.uncty );
     
     end % < cumok
     
@@ -1455,7 +1498,7 @@ function [dat, model] = batchFitResidual(dat, model, opt)
     % ---------------------
     model.lb.m.val  = 0;
     model.lb.r.val  = 0;
-    if opt.pg.geod, model.lb.g.val  = 0; end
+    model.lb.v.val  = 0;
     model.r.tr      = 0;
     model.r.reg     = 0;
     
@@ -1489,7 +1532,7 @@ function [dat, model] = batchFitResidual(dat, model, opt)
             model.r.tr      = model.r.tr     + dat(n).v.lb.tr;
             model.lb.r.val  = model.lb.r.val + dat(n).v.lb.val;
             model.lb.m.val  = model.lb.m.val + dat(n).f.lb.val;
-            if opt.pg.geod, model.lb.g.val  = model.lb.g.val + dat(n).v.lb.geod; end
+            model.lb.v.val  = model.lb.v.val + dat(n).v.lb.geod;
             
         end
         
@@ -1583,19 +1626,21 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
         
         % Add individual contributions
         % ----------------------------
-        for k=1:opt.pg.K
-            gw = model.pg.g(:,:,:,:,k);
-            hw = model.pg.h(:,:,:,:,k);
-            for n=n1:ne
-                gv = numeric(dat(n).v.g);
-                hv = numeric(dat(n).v.h);
-                gw = gw + gv * opt.pg.geod * single(dat(n).z.z(k));
-                hw = hw + hv * opt.pg.geod * single(dat(n).z.z(k))^2;
-                clear gv hv
+        if model.mixreg.w(2)
+            for k=1:opt.pg.K
+                gw = model.pg.g(:,:,:,:,k);
+                hw = model.pg.h(:,:,:,:,k);
+                for n=n1:ne
+                    gv = numeric(dat(n).v.g);
+                    hv = numeric(dat(n).v.h);
+                    gw = gw + gv * model.mixreg.w(2) * single(dat(n).z.z(k));
+                    hw = hw + hv * model.mixreg.w(2) * single(dat(n).z.z(k))^2;
+                    clear gv hv
+                end
+                model.pg.g(:,:,:,:,k) = gw;
+                model.pg.h(:,:,:,:,k) = hw;
+                clear gw hw
             end
-            model.pg.g(:,:,:,:,k) = gw;
-            model.pg.h(:,:,:,:,k) = hw;
-            clear gw hw
         end
         
         % Clear individual grad/hess
@@ -1610,7 +1655,7 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
 
     % Total residual momentum
     % -----------------------
-    if opt.pg.geod
+    if model.mixreg.w(2)
         if opt.ui.verbose, before = plotBatchBegin('GH PGr'); end
         m = zeros([opt.tpl.lat 3], 'single');
         for n=1:opt.N
@@ -1625,10 +1670,10 @@ function [dat, model] = batchGradHessSubspace(dat, model, opt)
                         
     % Regularisation gradient
     % -----------------------
-    reg = opt.pg.geod * (model.z.zz + model.z.S) + opt.N * eye(opt.pg.K);
+    reg = model.mixreg.w(2) * (model.z.zz + model.z.S) + opt.N * eye(opt.pg.K);
     for k=1:opt.pg.K
         lw = spm_diffeo('vel2mom', single(model.pg.w(:,:,:,:,k)), [opt.tpl.vs, opt.pg.prm]);
-        model.pg.g(:,:,:,:,k) = model.pg.g(:,:,:,:,k) + reg(k,k) * lw + opt.pg.geod * model.z.z(k) * m;
+        model.pg.g(:,:,:,:,k) = model.pg.g(:,:,:,:,k) + reg(k,k) * lw + model.mixreg.w(2) * model.z.z(k) * m;
         clear lw
     end
     clear m
@@ -1688,29 +1733,36 @@ function dat = oneLB(dat, model, opt, which)
             end
             
         case 'precisionz'
-            dat.z.lb.val = -0.5*( trace(dat.z.zz * model.z.A) ...
-                                  + trace(dat.z.S * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                  - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
-                                  - spm_matcomp('LogDet', dat.z.S) ...
-                                  - opt.pg.K );
+            if opt.optimise.z.z
+                dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                                       - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                                       - spm_matcomp('LogDet', dat.z.S) ...
+                                       - opt.pg.K );
+            end
     
         case 'precisionq'
-            rind = opt.q.rind;
-            dat.q.lb.val = -0.5*( trace((dat.q.qq(rind,rind) + dat.q.S(rind,rind))*model.q.A) ...
-                                  - spm_prob('Wishart', 'ELogDet', model.q.A, opt.f.N + opt.q.n0) ...
-                                  - spm_matcomp('LogDet', dat.q.S(rind,rind)) ...
-                                  - opt.q.Mr );
+            if opt.f.observed && opt.optimise.q.q && opt.q.Mr
+                rind = opt.q.rind;
+                qq   = dat.q.qq(rind,rind);
+                Sq   = dat.q.S(rind,rind);
+                dat.q.lb.type = 'kl';
+                dat.q.lb.val  = -0.5*( trace((Sq + qq) * model.q.A) ...
+                                       - spm_prob('Wishart', 'ELogDet', model.q.A, model.q.n, 'normal') ...
+                                       + spm_matcomp('LogDet', Sq) ...
+                                       - opt.q.Mr );
+            end
                               
         case 'orthogonalise'
-            % Here, no need to recompute terms depending on Wz
-            dat.z.lb.val = -0.5*( trace(dat.z.zz * model.z.A) ...
-                                  + trace(dat.z.S * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                  - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
-                                  - spm_matcomp('LogDet', dat.z.S) ...
-                                  - opt.pg.K );
+            if opt.optimise.z.z
+                dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                                       - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                                       - spm_matcomp('LogDet', dat.z.S) ...
+                                       - opt.pg.K );
+            end
                                
         case 'subspace'
-            
+            % I only need to reconstruct velocity of line search failed.
+            % I should find a way to avoid doing it when not necessary
             v = reconstructVelocity('latent', dat.z.z, ...
                                     'subspace', model.pg.w, ...
                                     'residual', dat.v.r, ...
@@ -1719,13 +1771,9 @@ function dat = oneLB(dat, model, opt, which)
                                         'itgr', opt.iter.itg, 'vs', opt.tpl.vs, ...
                                         'prm', opt.pg.prm, 'bnd', opt.pg.bnd);
             dat.v.v = copyarray(v, dat.v.v);
-            if opt.pg.geod
-                dat.v.lb.geod = llPriorVelocity(v, ...
-                    'vs', opt.tpl.vs, 'prm', opt.pg.prm, ...
-                    'bnd', opt.pg.bnd, 'logdet', opt.pg.ld);
-                dat.v.lb.geod = dat.v.lb.geod * opt.pg.geod;
-            end
-            clear v
+            m = spm_diffeo('vel2mom', v, double([opt.tpl.vs opt.pg.prm]));
+            dat.v.lb.regv = v(:)'*m(:);
+            clear m v
             if isfield(dat, 'q') && isfield(dat.q, 'A'),  A = dat.q.A;
             else,                                         A = eye(4);  end
             ipsi = reconstructIPsi(A, iphi, 'lat', opt.tpl.lat, ...
@@ -1756,17 +1804,47 @@ function dat = oneLB(dat, model, opt, which)
                 dat.f.lb.val = llMatching(noisemodel, model.tpl.mu, dat.f.pf, dat.f.c, ...
                     'bb', dat.f.bb, 'par', par, 'loop', loop, 'debug', opt.ui.debug);
             end
-            dat.z.lb.val = -0.5*( trace(dat.z.zz * model.z.A) ...
-                                  + trace(dat.z.S * (model.z.A + opt.pg.geod * model.pg.ww)) ...
-                                  - spm_prob('Wishart', 'ELogDet', model.z.A, opt.N+opt.z.n0) ...
-                                  - spm_matcomp('LogDet', dat.z.S) ...
-                                  - opt.pg.K );
+            K = prod(opt.tpl.lat) * 3;
+            dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
+            dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                                   - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                                   - spm_matcomp('LogDet', dat.z.S) ...
+                                   - opt.pg.K );
+            dat.v.lb.val = -0.5*( - K ...
+                                  - K * model.mixreg.w(2) * log(2*pi) ...
+                                  - K * spm_prob('Gamma', 'Elog', model.r.l, model.r.n, K) ...
+                                  - opt.pg.ld + dat.v.lb.ld ...
+                                  + model.mixreg.w(1) * model.r.l * dat.v.lb.reg ...
+                                  + model.mixreg.w(1) * model.r.l * dat.v.lb.tr );
+            dat.v.lb.geod = -0.5*model.mixreg.w(2)*( ...
+                                      K * log(2*pi) ...
+                                    - opt.pg.ld ...
+                                    + dat.v.lb.regv ...
+                                    + dat.v.lb.tr ...
+                                    + dat.v.lb.uncty );
+                               
+        case 'latent'
+            K = prod(opt.tpl.lat) * 3;
+            dat.v.lb.uncty = trace(dat.z.S * model.pg.ww);
+            dat.z.lb.val  = -0.5*( trace((dat.z.S + dat.z.zz) * model.z.A) ...
+                                   - spm_prob('Wishart', 'ELogDet', model.z.A, model.z.n, 'normal') ...
+                                   - spm_matcomp('LogDet', dat.z.S) ...
+                                   - opt.pg.K );
+            dat.v.lb.geod = -0.5*model.mixreg.w(2)*( ...
+                                      K * log(2*pi) ...
+                                    - opt.pg.ld ...
+                                    + dat.v.lb.regv ...
+                                    + dat.v.lb.tr ...
+                                    + dat.v.lb.uncty );
+            
         case 'lambda'
             K = prod(opt.tpl.lat) * 3;
-            dat.v.lb.val = -0.5*( - K - K*spm_prob('Gamma', 'Elog', model.r.l, opt.N+opt.r.n0, K) ...
+            dat.v.lb.val = -0.5*( - K ...
+                                  - K * model.mixreg.w(2) * log(2*pi) ...
+                                  - K * spm_prob('Gamma', 'Elog', model.r.l, model.r.n, K) ...
                                   - opt.pg.ld + dat.v.lb.ld ...
-                                  + model.r.l * dat.v.lb.reg ...
-                                  + (model.r.l + opt.pg.geod) * dat.v.lb.tr );
+                                  + model.mixreg.w(1) * model.r.l * dat.v.lb.reg ...
+                                  + model.mixreg.w(1) * model.r.l * dat.v.lb.tr );
 
     end
 
@@ -1787,6 +1865,7 @@ function [dat, model] = batchLB(which, dat, model, opt)
     if isfield(model.lb, 'z'),   model.lb.z.val  = 0; end
     if isfield(model.lb, 'q'),   model.lb.q.val  = 0; end
     if isfield(model.lb, 'r'),   model.lb.r.val  = 0; end
+    if isfield(model.lb, 'v'),   model.lb.v.val  = 0; end
     if isfield(model.lb, 'g'),   model.lb.g.val  = 0; end
     if isfield(model.r,  'tr'),  model.r.tr      = 0; end
     if isfield(model.r,  'reg'), model.r.reg     = 0; end
@@ -1813,6 +1892,7 @@ function [dat, model] = batchLB(which, dat, model, opt)
             if isfield(model.lb, 'z'),   model.lb.z.val  = model.lb.z.val + dat(n).z.lb.val; end
             if isfield(model.lb, 'q'),   model.lb.q.val  = model.lb.q.val + dat(n).q.lb.val; end
             if isfield(model.lb, 'r'),   model.lb.r.val  = model.lb.r.val + dat(n).v.lb.val; end
+            if isfield(model.lb, 'v'),   model.lb.v.val  = model.lb.v.val + dat(n).v.lb.geod; end
             if isfield(model.lb, 'g'),   model.lb.g.val  = model.lb.g.val + dat(n).v.lb.geod; end
             if isfield(model.r,  'tr'),  model.r.tr      = model.r.tr     + dat(n).v.lb.tr;  end
             if isfield(model.r,  'reg'), model.r.reg     = model.r.reg    + dat(n).v.lb.reg; end
@@ -1831,32 +1911,32 @@ function [dat, model] = batchLB(which, dat, model, opt)
             end
             if opt.z.n0 && isfield(model.lb, 'Az')
                 model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
-                                           model.z.A,   opt.z.n0+opt.N, ...
+                                           model.z.A,   model.z.n, ...
                                            opt.z.A0,    opt.z.n0, ...
                                            'normal');
             end
         case 'subspace'
             if isfield(model.lb, 'w')
-                model.lb.w.val = llPriorSubspace(model.pg.w, opt.N * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*log(opt.N));
+                model.lb.w.val = llPriorSubspace(model.pg.w, model.pg.n * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*log(model.pg.n));
             end
         case 'precisionz'
             if opt.z.n0 && isfield(model.lb, 'Az')
                 model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
-                                            model.z.A,   opt.z.n0+opt.N, ...
+                                            model.z.A,   model.z.n, ...
                                             opt.z.A0,    opt.z.n0, ...
                                             'normal');
             end
         case 'precisionq'
             if opt.q.n0 && opt.q.Mr && isfield(model.lb, 'Aq')
                 model.lb.Aq.val = -spm_prob('Wishart', 'kl', ...
-                                            model.q.A,   opt.q.n0+opt.N, ...
+                                            model.q.A,   model.q.n, ...
                                             opt.q.A0,    opt.q.n0, ...
                                             'normal');
             end
         case 'lambda'
             if opt.r.n0 && isfield(model.lb, 'l')
                 model.lb.l.val  = -spm_prob('Gamma', 'kl', ...
-                                            model.r.l, opt.N+opt.r.n0, ...
+                                            model.r.l, model.r.n, ...
                                             opt.r.l0,  opt.r.n0, ...
                                             prod(opt.tpl.lat)*3, 'normal');
             end

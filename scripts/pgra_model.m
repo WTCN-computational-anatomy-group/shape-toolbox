@@ -55,7 +55,8 @@ function [model, dat, opt] = pgra_model(varargin)
 % pg.K     - Number of principal geodesics [32]
 % pg.prm   - Parameters of the geodesic operator [1e-4 1e-3 0.2 0.05 0.2]
 % pg.bnd   - Boundary conditions for the geodesic operator [1 = circulant]
-% pg.geod  - Additional geodesic prior on velocity fields [true]
+% mixreg.a0- Prior expected value of the mixture weight [0.5]
+% mixreg.n0- Prior DF of the mixture weight [1e-4]
 % tpl.vs   - Lattice voxel size [auto]
 % tpl.lat  - Lattice dimensions [auto]
 % tpl.prm  - Parameters of the field operator [1e-3  1e-1 0]
@@ -73,14 +74,16 @@ function [model, dat, opt] = pgra_model(varargin)
 % q.hapx   - Approximate affine hessian [true]
 % f.M      - Force same voxel-to-world to all images [read from file]
 %
-% optimise.pg.w  - Optimise subspace [true] or keep if fixed (false)
-% optimise.z.z   - Optimise latent coordinates [true]
-% optimise.z.A   - Optimise latent precision [true]
-% optimise.q.q   - Optimise affine coordinates [true]
-% optimise.q.A   - Optimise affine precision [true]
-% optimise.r.r   - Optimise reidual fields [true]
-% optimise.r.l   - Optimise residual precision [true]
-% optimise.tpl.a - Optimise template [true]
+% optimise.pg.w     - Optimise subspace [true] or keep if fixed (false)
+% optimise.z.z      - Optimise latent coordinates [true]
+% optimise.z.A      - Optimise latent precision [true]
+% optimise.q.q      - Optimise affine coordinates [true]
+% optimise.q.A      - Optimise affine precision [true]
+% optimise.r.r      - Optimise reidual fields [true]
+% optimise.r.l      - Optimise residual precision [true]
+% optimise.tpl.a    - Optimise template [true]
+% optimise.mixreg.w - Optimise mixture weight [true]
+% optimise.mixreg.a - Optimise mixture weight prior [true]
 %
 % PROCESSING
 % ----------
@@ -220,8 +223,8 @@ function [model, dat, opt] = pgra_model(varargin)
         % -----------------------------------------------------------------
         model.emit      = 1;
         model.q.active  = true;
-        model.pg.active = false;
-        model.r.active  = false;
+        model.pg.active = true;
+        model.r.active  = true;
         model.pg.ok     = 1;
         model.pg.ok2    = 0;
         model.pg.armijo = 1;
@@ -346,7 +349,7 @@ function [model, dat, opt] = pgra_model(varargin)
 
                     % Factor of the prior : ln p(z|W) + ln p(W)
                     % -------------------
-                    reg = diag(opt.pg.geod * (model.z.zz + model.z.S) + opt.N * eye(opt.pg.K));
+                    reg = diag(model.mixreg.w(2) * (model.z.zz + model.z.S) + model.pg.n * eye(opt.pg.K));
 
                     model.pg.d = prepareOnDisk(model.pg.d, size(model.pg.w));
                     for k=1:opt.pg.K
@@ -388,6 +391,7 @@ function [model, dat, opt] = pgra_model(varargin)
 
                 % -----------
                 % Lower bound
+                [dat, model] = pgra_batch('LB', 'Latent', dat, model, opt);
                 model = updateLowerBound(model);
                 pgra_plot_all(model, opt);
                 % -----------
@@ -406,10 +410,10 @@ function [model, dat, opt] = pgra_model(varargin)
                 % Rescale
                 % -------
                 if opt.ui.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
-                [Q, iQ] = gnScalePG(iU' * model.pg.ww * iU * opt.N, ...
+                [Q, iQ] = gnScalePG(iU' * model.pg.ww * iU * model.pg.n, ...
                                     U   * model.z.zz  * U', ...
                                     U   * model.z.S   * U', ...
-                                    opt.z.A0, opt.z.n0, opt.N);
+                                    opt.z.A0, opt.z.n0, model.pg.n);
                 if opt.ui.verbose, fprintf('| %6.3fs\n', toc); end
                 Q  = Q  * U;
                 iQ = iU * iQ;
@@ -471,8 +475,8 @@ function [model, dat, opt] = pgra_model(varargin)
             % ----------------
             if opt.optimise.r.l
                 K = 3*prod(opt.tpl.lat);
-                model.r.l = opt.r.n0/opt.r.l0 + (1/K)*(model.r.tr + model.r.reg);
-                model.r.l = (opt.N+opt.r.n0)/model.r.l;
+                model.r.l = opt.r.n0/opt.r.l0 + (model.mixreg.w(1)/K)*(model.r.tr + model.r.reg);
+                model.r.l = model.r.n/model.r.l;
                 if opt.ui.verbose, fprintf('%10s | %10g\n', 'Lambda', model.r.l); end
 
                 % -----------
@@ -529,8 +533,18 @@ function goodbye(global_start)
     str_end_1 = sprintf('%s || PGRA model ended.', datestr(now));
     fprintf(['| ' str_end_1 repmat(' ', 1, 80-3-length(str_end_1)) '|\n']);
     str_end_2 = sprintf('%20s || ', 'Elapsed time');
-    elapsed = round(datevec(global_end./(60*60*24)));
-    units   = {'year' 'month' 'day' 'hour' 'minute' 'second'};
+    % Convert to units
+    dur = duration(0,0,global_end);
+    elapsed = floor(years(dur));
+    dur = dur - years(elapsed(end));
+    elapsed = [elapsed floor(days(dur))];
+    dur = dur - days(elapsed(end));
+    elapsed = [elapsed floor(hours(dur))];
+    dur = dur - hours(elapsed(end));
+    elapsed = [elapsed floor(minutes(dur))];
+    dur = dur - minutes(elapsed(end));
+    elapsed = [elapsed floor(seconds(dur))];
+    units   = {'year' 'day' 'hour' 'minute' 'second'};
     for i=1:numel(elapsed)
         if elapsed(i) > 0
             str_end_2 = [str_end_2 sprintf('%d %s', elapsed(i), units{i})];

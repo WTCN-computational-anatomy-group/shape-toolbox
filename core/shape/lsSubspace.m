@@ -39,11 +39,7 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
     llm0 = model.lb.m.val;
     llz0 = model.lb.z.val;
     llw0 = model.lb.w.val;
-    if opt.pg.geod
-        llg0 = model.lb.g.val;
-    else
-        llg0 = 0;
-    end
+    llg0 = model.lb.v.val;
     ll0  = llm0 + llz0 + llg0 + llw0;
     ok   = false;
     
@@ -70,11 +66,7 @@ function [ok, model, dat] = lsSubspace(dw, model, dat, opt)
         llm = model.lb.m.val;
         llz = model.lb.z.val;
         llw = model.lb.w.val;
-        if opt.pg.geod
-            llg = model.lb.g.val;
-        else
-            llg = 0;
-        end
+        llg = model.lb.v.val;
         ll = llm + llz + llw + llg;
         
         if opt.ui.verbose, printInfo(armijo, ll0, llm, llz + llg, llw); end
