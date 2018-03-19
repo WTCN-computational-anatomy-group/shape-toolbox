@@ -13,7 +13,7 @@ end
     
 %%
 
-N       = 20;
+N       = 100;
 input   = struct;
 input.f = fnames(1:N);
 
@@ -22,9 +22,7 @@ opt.dir.model  = '/Users/balbasty/Desktop/IXI_2D/outputvel2';
 opt.dir.dat    = opt.dir.model;
 opt.model      = struct('name', 'categorical');
 opt.pg.K       = 19;
-opt.pg.prm     = [0 0.001 0.02 0.0025 0.005];
 opt.split.par  = 0;
-opt.iter.gn    = 2;
 
 % cluster
 % opt.dist.server.ip      = '';
