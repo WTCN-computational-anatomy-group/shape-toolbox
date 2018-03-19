@@ -187,12 +187,12 @@ function result = lsVelocity(model, dv, r0, match0, mu, f, varargin)
         vs = sqrt(sum(Mmu(1:3,1:3).^2)); 
     end
     if isnan(reg0)
-        reg0 = llPriorVelocity(r0, 'fast', 'debug', debug);
+        reg0 = (1-geod) * llPriorVelocity(r0, 'fast', 'vs', vs, 'prm', prm, 'bnd', bnd, 'debug', debug);
 
     end 
     if isnan(vel0)
         if geod
-            vel0 = geod * llPriorVelocity(v0, 'fast', 'vs', vs, 'prm', prm, 'bnd', bnd);
+            vel0 = geod * llPriorVelocity(v0, 'fast', 'vs', vs, 'prm', prm, 'bnd', bnd, 'debug', debug);
         else
             vel0 = 0;
         end
@@ -229,9 +229,9 @@ function result = lsVelocity(model, dv, r0, match0, mu, f, varargin)
             match = llMatching(model, wmu, f, 'par', par, 'loop', loop, 'debug', debug);
         end
         r = r0 + dv / armijo;
-        reg = llPriorVelocity(r,  'fast', 'vs', vs, 'prm', lam*prm, 'bnd', bnd, 'debug', debug);
+        reg = (1-geod) * llPriorVelocity(r,  'fast', 'vs', vs, 'prm', lam*prm, 'bnd', bnd, 'debug', debug);
         if geod
-            vel = geod * llPriorVelocity(v, 'fast', 'vs', vs, 'prm', prm, 'bnd', bnd);
+            vel = geod * llPriorVelocity(v, 'fast', 'vs', vs, 'prm', prm, 'bnd', bnd, 'debug', debug);
         else
             vel = 0;
         end
