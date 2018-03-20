@@ -55,6 +55,20 @@ function pgra_fit(jsn_input,jsn_opt)
             opt.optimise.r.r = value;
         end
     end
+    if isfield(opt, 'z') && isfield(opt.z, 'A0')
+        if ischar(opt.z.A0) && exist(opt.z.A0, 'file')
+            opt.z.A0 = load(opt.z.A0);
+        elseif isnumeric(opt.z.A0) && isvector(opt.z.A0)
+            opt.z.A0 = diag(opt.z.A0);
+        end
+    end
+    if isfield(opt, 'q') && isfield(opt.z, 'A0')
+        if ischar(opt.q.A0) && exist(opt.q.A0, 'file')
+            opt.q.A0 = load(opt.q.A0);
+        elseif isnumeric(opt.q.A0) && isvector(opt.q.A0)
+            opt.q.A0 = diag(opt.q.A0);
+        end
+    end
     
     if nargin == 0 || (ischar(jsn_input) && ...
             (strcmp(jsn_input,'--help') || ...

@@ -1,5 +1,7 @@
 function pgra_compile(compile_dir)
-% Script for compiling the MATLAB code for the Shape & Appearance models.
+% FORMAT pgra_compile(compile_dir)
+%
+% Script for compiling the MATLAB code for the PGRA shape model
 %__________________________________________________________________________
 % Copyright (C) 2017 Wellcome Trust Centre for Neuroimaging
 

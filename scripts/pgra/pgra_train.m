@@ -24,6 +24,20 @@ function pgra_train(jsn_input,jsn_opt)
         show_instructions;
     else
         input = spm_jsonread(jsn_input);
+        if isfield(opt, 'z') && isfield(opt.z, 'A0')
+            if ischar(opt.z.A0) && exist(opt.z.A0, 'file')
+                opt.z.A0 = load(opt.z.A0);
+            elseif isnumeric(opt.z.A0) && isvector(opt.z.A0)
+                opt.z.A0 = diag(opt.z.A0);
+            end
+        end
+        if isfield(opt, 'q') && isfield(opt.z, 'A0')
+            if ischar(opt.q.A0) && exist(opt.q.A0, 'file')
+                opt.q.A0 = load(opt.q.A0);
+            elseif isnumeric(opt.q.A0) && isvector(opt.q.A0)
+                opt.q.A0 = diag(opt.q.A0);
+            end
+        end
         pgra_model(input,opt);
     end
 
