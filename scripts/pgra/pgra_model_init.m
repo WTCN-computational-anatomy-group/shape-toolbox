@@ -76,7 +76,8 @@ function [dat, model] = pgra_model_init(dat, model, opt)
         model.pg.ww = precisionZ(model.pg.w, opt.tpl.vs, opt.pg.prm);
     end
     if opt.optimise.pg.w
-        model.lb.w.val  = llPriorSubspace(model.pg.w, opt.N * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*log(opt.N));
+        model.pg.n      = opt.N;
+        model.lb.w.val  = llPriorSubspace(model.pg.w, model.pg.n * model.pg.ww, opt.pg.ld + prod(opt.tpl.lat)*3*log(model.pg.n));
         model.lb.w.type = 'll';
         model.lb.w.name = 'Subspace prior';
     end
@@ -85,6 +86,7 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     % ----------------
     model.q.A = opt.q.A0;
     if opt.optimise.q.A
+        model.q.n        = opt.q.n0 + opt.N;
         model.lb.Aq.val  = 0;
         model.lb.Aq.type = 'kl';
         model.lb.Aq.name = '-KL Affine precision';
@@ -94,6 +96,7 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     % ----------------
     model.z.A = opt.z.A0;
     if opt.optimise.z.A
+        model.z.n        = opt.z.n0 + opt.N;
         model.lb.Az.val  = 0;
         model.lb.Az.type = 'kl';
         model.lb.Az.name = '-KL Latent precision';
@@ -103,9 +106,29 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     % ------------------
     model.r.l = opt.r.l0;
     if opt.optimise.r.l
+        model.r.n       = opt.r.n0 + opt.N;
         model.lb.l.val  = 0;
         model.lb.l.type = 'kl';
         model.lb.l.name = '-KL Residual precision';
+    end
+    
+    % Mixture prior
+    % -------------
+    model.mixreg.a = opt.mixreg.a0;
+    if opt.optimise.mixreg.a
+        model.mixreg.n = opt.mixreg.n0 + 1;
+        model.lb.ar.val  = 0;
+        model.lb.ar.type = 'kl';
+        model.lb.ar.name = '-KL Mixture prior';
+    end
+    
+    % Mixture weight
+    % --------------
+    model.mixreg.w = [model.mixreg.a (1-model.mixreg.a)];
+    if opt.optimise.mixreg.w
+        model.lb.wr.val  = 0;
+        model.lb.wr.type = 'kl';
+        model.lb.wr.name = '-KL Mixture weight';
     end
     
     % ---------------------------------------------------------------------
@@ -140,16 +163,10 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     
     % Velocity (Geodesic prior)
     % -------------------------
-    if opt.pg.geod
-        model.lb.g.val = 0;
-        for n=1:opt.N
-            dat(n).v.lb.geod = llPriorVelocity(dat(n).v.v, ...
-                'vs', opt.tpl.vs, 'prm', opt.pg.prm, ...
-                'bnd', opt.pg.bnd, 'logdet', opt.pg.ld);
-            model.lb.g.val = model.lb.g.val + dat(n).v.lb.geod;
-        end
-        model.lb.g.type = 'll';
-        model.lb.g.name = 'Geodesic prior';
+    if model.mixreg.w(2)
+        model.lb.v.val  = 0;
+        model.lb.v.type = 'll';
+        model.lb.v.name = 'Geodesic prior';
     end
     
     
@@ -222,7 +239,7 @@ function [dat, model] = pgra_model_init(dat, model, opt)
     % To compute the KL divergence of distributions estimated by
     % Gauss-Newton, we need images to be pushed or pulled, which can only
     % be done after velocities were initialised
-    [dat, model] = pgra_batch('InitLaplace', dat, model, opt);
+    [dat, model] = pgra_batch('InitLowerBound', dat, model, opt);
     
     % ---------------------------------------------------------------------
     %    Update lower bound

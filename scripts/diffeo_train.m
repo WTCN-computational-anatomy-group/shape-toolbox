@@ -1,20 +1,14 @@
-function pgra_fit(input,opt)
-% FORMAT pgra_fit(input,opt)
+function diffeo_train(input,opt)
+% FORMAT diffeo_train(input,opt)
 % input - Matlab structure or JSON file containing input filenames
 % opt   - Matlab structure or JSON file containing option values
 %
-% Fit a PGRA shape model on new data. This is a wrapper around the
-% `pgra_model` function that can take JSON files as inputs and that can be
-% compiled and used on command line.
+% Build a template from a set of observed images. This function relies on
+% "simple" diffeomorphic transforms, without using shape modelling.
 %
 % Both json should contain structured values (equivalent to a a maltab
-% structure). Type `help pgra_model` for details on these structures and
+% structure). Type `help pgva_model` for details on these structures and
 % their fields.
-%
-% A few pgra_model options are overriden so that the model is in 'fit' 
-% mode. In particular, optimise.pg, optimise.tpl, optimise.z.A, 
-% optimise.r.l and optimise.q.A are all set to false (i.e., they are 
-% fixed model parameters).
 
     if nargin > 1
         if ischar(opt)
@@ -48,55 +42,25 @@ function pgra_fit(input,opt)
     
     % Force values to forbid learning population parameters
     opt.optimise.pg  = false;
-    opt.optimise.tpl = false;
-    if isfield(opt.optimise, 'z')
-        if isstruct(opt.optimise.z)
-            opt.optimise.z.A = false;
+    opt.optimise.z   = false;
+    if isfield(opt.optimise, 'v')
+        if isstruct(opt.optimise.v)
+            opt.optimise.v.l = false;
         else
-            value = opt.optimise.z;
-            opt.optimise.z = struct;
-            opt.optimise.z.A = false;
-            opt.optimise.z.z = value;
+            value = opt.optimise.v;
+            opt.optimise.v = struct;
+            opt.optimise.v.l = false;
+            opt.optimise.v.r = value;
         end
     else
-        opt.optimise.z.A = false;
-    end
-    if isfield(opt.optimise, 'q')
-        if isstruct(opt.optimise.q)
-            opt.optimise.q.A = false;
-        else
-            value = opt.optimise.q;
-            opt.optimise.q = struct;
-            opt.optimise.q.A = false;
-            opt.optimise.q.q = value;
-        end
-    else
-        opt.optimise.q.A = false;
-    end
-    if isfield(opt.optimise, 'r')
-        if isstruct(opt.optimise.r)
-            opt.optimise.r.l = false;
-        else
-            value = opt.optimise.r;
-            opt.optimise.r = struct;
-            opt.optimise.r.l = false;
-            opt.optimise.r.r = value;
-        end
-    else
-        opt.optimise.r.l = false;
+        opt.optimise.v.l = false;
     end
     opt.optimise.mixreg.w = false;
     opt.optimise.mixreg.a = false;
     opt.mixreg.a0 = 1;
+    opt.v.l0      = 1;
     
     % Convert some inputs
-    if isfield(opt, 'z') && isfield(opt.z, 'A0')
-        if ischar(opt.z.A0) && exist(opt.z.A0, 'file')
-            opt.z.A0 = load(opt.z.A0);
-        elseif isnumeric(opt.z.A0) && isvector(opt.z.A0)
-            opt.z.A0 = diag(opt.z.A0);
-        end
-    end
     if isfield(opt, 'q') && isfield(opt.q, 'A0')
         if ischar(opt.q.A0) && exist(opt.q.A0, 'file')
             opt.q.A0 = load(opt.q.A0);
@@ -104,15 +68,16 @@ function pgra_fit(input,opt)
             opt.q.A0 = diag(opt.q.A0);
         end
     end
-
+    
     % Run algorithm
-    pgra_model(input,opt);
+    pgva_model(input,opt);
+
 end
 
 % Temporary help
 function show_instructions
-    descr_str = 'Apply a shape model to a set of 2D or 3D images (PGRA)';
-    usg_str   = 'Usage: pgra_fit input.json opt.json';
+    descr_str = 'Build a template from a set of 2D or 3D images';
+    usg_str   = 'Usage: diffeo_train input.json opt.json';
     cpr_str   = 'Copyright (C) 2018 Wellcome Centre for Human Neuroimaging';
     help_str  = ['' ...
 'INPUT\n' ...
@@ -124,10 +89,8 @@ function show_instructions
 'two-dimensional, the second dimension (i.e., the most nested one)\n' ...
 'should contain different classes (or modalities) of the same subject.\n' ...
 '\n' ...
-'Additionally, the keys "w" and "mu" (''normal'' model) or "a"\n' ...
-'(''categorical''/''bernoulli'' model) must contain the filenames of\n' ...
-'learned parameters (usually, `subspace.nii` and `template.nii` or\n' ...
-'`log_template.nii`).\n' ...
+'Optionally, the  "mu" or "a" can be used to provide an initial\n' ...
+'value for, respectively, the principal subspace, template or log-template.\n' ...
 '\n' ...
 'OPTIONS\n' ...
 '-------\n' ...
@@ -137,19 +100,11 @@ function show_instructions
 '(key1.key2 should be written {"k1":{"k2":value}} in JSON).\n' ...
 'A complete list can be found in the online documentation or README file.\n' ...
 '\n' ...
-'"mandatory" options\n' ...
-'-------------------\n' ...
-'These options reflect parameters obtained during model learning and are\n' ...
-'thus part of the model.\n' ...
 'model.name   - Data type/model:      ''categorical''/''bernoulli''/[''normal'']\n' ...
-'z.A0         - Latent precision matrix                         [identity]\n' ...
-'r.l0         - Anatomical noise precision                      [17]\n' ...
-'pg.K         - Number of principal geodesics                   [32]\n' ...
-'pg.prm       - Parameters of the geodesic operator             [0.001 0 10 0.1 0.2]\n' ...
-'\n' ...
-'"optional" options\n' ...
-'------------------\n' ...
 'model.nc     - (categorical only) Number of classes            [from input]\n' ...
+'pg.prm       - Parameters of the geodesic operator             [0.001 0 10 0.1 0.2]\n' ...
+'tpl.vs       - Template lattice voxel size                     [auto]\n' ...
+'tpl.lat      - Template lattice dimensions                     [auto]\n' ...
 'f.M          - Force same voxel-to-world to all images         [from file]\n' ...
 'lb.threshold - Convergence criterion (lower bound gain)        [1e-3]\n' ...
 'split.par    - Parallelise processing (number of workers): 0/n/[auto]\n' ...

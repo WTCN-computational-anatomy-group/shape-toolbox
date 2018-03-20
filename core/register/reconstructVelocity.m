@@ -17,9 +17,9 @@ function v = reconstructVelocity(varargin)
     % --- Parse inputs
     p = inputParser;
     p.FunctionName = 'reconstructVelocity';
-    p.addParameter('latent',   [],    @checkarray);
-    p.addParameter('subspace', [],    @checkarray);
-    p.addParameter('residual', [],    @checkarray);
+    p.addParameter('latent',   [],    @(X) isnumeric(X) || isa(X,'file_array'));
+    p.addParameter('subspace', [],    @(X) isnumeric(X) || isa(X,'file_array'));
+    p.addParameter('residual', [],    @(X) isnumeric(X) || isa(X,'file_array'));
     p.addParameter('sigma',    1,     @isscalar);
     p.addParameter('loop',     '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'none', ''})));
     p.addParameter('par',      false, @isscalar);
@@ -38,9 +38,9 @@ function v = reconstructVelocity(varargin)
     if debug, fprintf('* reconstructVelocity\n'); end
     
     % --- Check that there are enough arguments
-    if checkarray(z) + checkarray(W) == 1
-        error('latent and subspace keywords must be used together')
-    end
+%     if checkarray(z) + checkarray(W) == 1
+%         error('latent and subspace keywords must be used together')
+%     end
     if ~checkarray(z) && ~checkarray(r)
         error('No argument provided')
     end
@@ -74,7 +74,7 @@ function v = reconstructVelocity(varargin)
     v(:,:,:,:) = 0;
     
     % --- Compute linear combination
-    if checkarray(z)
+    if checkarray(z) && checkarray(W)
         if strcmpi(loop, 'none')
             v(:,:,:,:) = lat2vel(z, W);
         elseif strcmpi(loop, 'slice')

@@ -1,7 +1,7 @@
-function pgra_compile(compile_dir)
-% FORMAT pgra_compile(compile_dir)
+function pgva_compile(compile_dir)
+% FORMAT pgva_compile(compile_dir)
 %
-% Script for compiling the MATLAB code for the PGRA shape model
+% Script for compiling the MATLAB code for the PGVA shape model
 %__________________________________________________________________________
 % Copyright (C) 2017 Wellcome Trust Centre for Neuroimaging
 
@@ -26,13 +26,13 @@ spm_file  = which('spm');
 addpath(pth);
 addpath(fullfile(pth,'toolbox','Shoot'));
 
-setpath('pgra');
+setpath('pgva');
 
 [ok,message] = mkdir(compile_dir);
 if ok
     fprintf('Compiled results should be in "%s"\n', compile_dir)
-    mcc('-m','pgra_train',   '-v','-d',compile_dir);
-    mcc('-m','pgra_fit','-v','-d',compile_dir); 
+    mcc('-m','pgva_train',   '-v','-d',compile_dir);
+    mcc('-m','pgva_fit','-v','-d',compile_dir); 
     disp('Done.');
 else
     error(message);

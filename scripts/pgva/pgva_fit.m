@@ -1,19 +1,19 @@
-function pgra_fit(input,opt)
-% FORMAT pgra_fit(input,opt)
+function pgva_fit(input,opt)
+% FORMAT pgva_fit(input,opt)
 % input - Matlab structure or JSON file containing input filenames
 % opt   - Matlab structure or JSON file containing option values
 %
-% Fit a PGRA shape model on new data. This is a wrapper around the
-% `pgra_model` function that can take JSON files as inputs and that can be
+% Fit a PGVA shape model on new data. This is a wrapper around the
+% `pgva_model` function that can take JSON files as inputs and that can be
 % compiled and used on command line.
 %
 % Both json should contain structured values (equivalent to a a maltab
-% structure). Type `help pgra_model` for details on these structures and
+% structure). Type `help pgva_model` for details on these structures and
 % their fields.
 %
-% A few pgra_model options are overriden so that the model is in 'fit' 
+% A few pgva_model options are overriden so that the model is in 'fit' 
 % mode. In particular, optimise.pg, optimise.tpl, optimise.z.A, 
-% optimise.r.l and optimise.q.A are all set to false (i.e., they are 
+% optimise.v.l and optimise.q.A are all set to false (i.e., they are 
 % fixed model parameters).
 
     if nargin > 1
@@ -42,11 +42,11 @@ function pgra_fit(input,opt)
         catch
             error('Error reading the input JSON file')
         end
-    elseif ~isstruct(opt)
+    elseif ~isstruct(json_opt)
         error('Argument `input` should be either a Matlab structure or a JSON file')
     end
     
-    % Force values to forbid learning population parameters
+
     opt.optimise.pg  = false;
     opt.optimise.tpl = false;
     if isfield(opt.optimise, 'z')
@@ -73,17 +73,17 @@ function pgra_fit(input,opt)
     else
         opt.optimise.q.A = false;
     end
-    if isfield(opt.optimise, 'r')
-        if isstruct(opt.optimise.r)
-            opt.optimise.r.l = false;
+    if isfield(opt.optimise, 'v')
+        if isstruct(opt.optimise.v)
+            opt.optimise.v.l = false;
         else
-            value = opt.optimise.r;
-            opt.optimise.r = struct;
-            opt.optimise.r.l = false;
-            opt.optimise.r.r = value;
+            value = opt.optimise.v;
+            opt.optimise.v = struct;
+            opt.optimise.v.l = false;
+            opt.optimise.v.r = value;
         end
     else
-        opt.optimise.r.l = false;
+        opt.optimise.v.l = false;
     end
     opt.optimise.mixreg.w = false;
     opt.optimise.mixreg.a = false;
@@ -104,15 +104,15 @@ function pgra_fit(input,opt)
             opt.q.A0 = diag(opt.q.A0);
         end
     end
-
+    
     % Run algorithm
-    pgra_model(input,opt);
+    pgva_model(input,opt);
 end
 
 % Temporary help
 function show_instructions
-    descr_str = 'Apply a shape model to a set of 2D or 3D images (PGRA)';
-    usg_str   = 'Usage: pgra_fit input.json opt.json';
+    descr_str = 'Apply a shape model to a set of 2D or 3D images (PGVA)';
+    usg_str   = 'Usage: pgva_fit input.json opt.json';
     cpr_str   = 'Copyright (C) 2018 Wellcome Centre for Human Neuroimaging';
     help_str  = ['' ...
 'INPUT\n' ...
@@ -143,7 +143,7 @@ function show_instructions
 'thus part of the model.\n' ...
 'model.name   - Data type/model:      ''categorical''/''bernoulli''/[''normal'']\n' ...
 'z.A0         - Latent precision matrix                         [identity]\n' ...
-'r.l0         - Anatomical noise precision                      [17]\n' ...
+'v.l0         - Anatomical noise precision                      [17]\n' ...
 'pg.K         - Number of principal geodesics                   [32]\n' ...
 'pg.prm       - Parameters of the geodesic operator             [0.001 0 10 0.1 0.2]\n' ...
 '\n' ...

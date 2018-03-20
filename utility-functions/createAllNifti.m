@@ -41,8 +41,8 @@ function createDat(dat, prm, Mf)
             else
                 if ~strcmpi(field, 'f')
                     switch field
-                        case 'v',    descrip = sprintf('Initial velocity (%f %f %f %f %f)', prm);
-                        case 'r',    descrip = sprintf('Residual velocity (%f %f %f %f %f)', prm);
+                        case 'v',    descrip = sprintf('Initial velocity (%g %g %g %g %g)', prm);
+                        case 'r',    descrip = sprintf('Residual velocity (%g %g %g %g %g)', prm);
                         case 'iphi', descrip = 'Inverse diffeomorphism';
                         case 'phi',  descrip = 'Direct diffeomophism';
                         case 'jac',  descrip = 'Direct Jacobian';
@@ -82,7 +82,7 @@ function createModel(model, prm, Mmu)
             createModel(model.(field), prm, Mmu);
         else
             switch field
-                case 'w',    descrip = sprintf('Principal geodesic (%f %f %f %f %f)', prm);
+                case 'w',    descrip = sprintf('Principal geodesic (%g %g %g %g %g)', prm);
                 case 'a',    descrip = 'Log-template';
                 case 'mu',   descrip = 'Template';
                 case 'gmu',  descrip = 'Template gradients';

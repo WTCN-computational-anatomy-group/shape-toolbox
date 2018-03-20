@@ -73,7 +73,7 @@ function opt = pgva_model_default(opt)
         % 3) Bending energy
         % 4) Linear elastic energy - length change
         % 5) Linear elastic energy - volume change
-        opt.pg.prm = [0.0001 0.001 0.2 0.05 0.2];
+        opt.pg.prm = [0.001 0 10 0.1 0.2];
     end
     opt.pg.prm = opt.pg.prm(:)'; % always horizontal
     if ~isfield(opt.pg, 'bnd')
@@ -89,6 +89,7 @@ function opt = pgva_model_default(opt)
     % ---------------------------------------------------------------------
     % Mixture of regularisations
     % ---------------------------------------------------------------------
+    
     if ~isfield(opt, 'mixreg')
         opt.mixreg = struct;
     end
@@ -97,9 +98,6 @@ function opt = pgva_model_default(opt)
     end
     if ~isfield(opt.mixreg, 'n0')
         opt.mixreg.n0 = 1e-4;
-    end
-    if ~isfield(opt.pg, 'geod') % TO REMOVE
-        opt.pg.geod = 0.5;
     end
     
     % ---------------------------------------------------------------------
@@ -261,7 +259,7 @@ function opt = pgva_model_default(opt)
     end
     if ~isfield(opt.lb,  'threshold')
         % Gain threshold under which convergence is assumed
-        opt.lb.threshold = 1e-5;
+        opt.lb.threshold = 1e-3;
     end
     if ~isfield(opt.lb,  'moving')
         % Number of EM iterations to take into account for moving average
