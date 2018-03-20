@@ -22,7 +22,7 @@ function pgva_plot_all(model, opt)
         % --- Line 1
         
         % Template
-        if opt.f.N
+        if opt.f.N && opt.optimise.tpl.a
             i = i + 1;
             subplot(nh, nw, i)
             tpl = catToColor(model.tpl.mu(:,:,ceil(size(model.tpl.mu,3)/2),:));
@@ -56,18 +56,22 @@ function pgva_plot_all(model, opt)
                 title('template')
             end
         end 
-        % PG
-        for k=1:npg
-            i = i + 1;
-            subplot(nh,nw,i)
-            pg = defToColor(model.pg.w(:,:,ceil(size(model.pg.w,3)/2),:,k));
-            dim = [size(pg) 1 1];
-            pg = permute(reshape(pg, [dim(1:2) dim(4)]), [2 1 3]);
-            asp = 1./[opt.tpl.vs(2) opt.tpl.vs(1) 1];
-            image(pg(end:-1:1,:,:));
-            daspect(asp);
-            axis off
-            title(sprintf('PG %d', k))
+        if opt.optimise.pg.w
+            % PG
+            for k=1:npg
+                i = i + 1;
+                subplot(nh,nw,i)
+                pg = defToColor(model.pg.w(:,:,ceil(size(model.pg.w,3)/2),:,k));
+                dim = [size(pg) 1 1];
+                pg = permute(reshape(pg, [dim(1:2) dim(4)]), [2 1 3]);
+                asp = 1./[opt.tpl.vs(2) opt.tpl.vs(1) 1];
+                image(pg(end:-1:1,:,:));
+                daspect(asp);
+                axis off
+                title(sprintf('PG %d', k))
+            end
+        else
+            i = i + npg;
         end
         
         % --- Line 2
@@ -89,24 +93,28 @@ function pgva_plot_all(model, opt)
         else
             i = i +1;
         end
-        % PG prior
-        i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.w.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.w.name)
+        if opt.optimise.pg.w
+            % PG prior
+            i = i + 1;
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.w.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.w.name)
+        else
+            i = i +1;
+        end
         
         % --- Line 3
         
-        if opt.q.Mr
+        if opt.q.Mr && opt.optimise.q.q
             % KL affine
             i = i + 1;
             subplot(nh,nw,i)
             plot([model.lb.lb.it model.lb.lb.curit], model.lb.q.list, ...
                  colors(mod(i, length(colors))+1))
             title(model.lb.q.name)
-        elseif opt.v.N
-            % LL residual
+        elseif opt.v.N && opt.optimise.v.v
+            % LL velocity
             i = i + 1;
             subplot(nh,nw,i)
             plot([model.lb.lb.it model.lb.lb.curit], model.lb.v2.list, ...
@@ -115,8 +123,8 @@ function pgva_plot_all(model, opt)
         else
             i = i + 1;
         end
-        if opt.f.N
-            % KL residual
+        if opt.f.N && opt.optimise.v.v
+            % KL velocity
             i = i + 1;
             subplot(nh,nw,i)
             plot([model.lb.lb.it model.lb.lb.curit], model.lb.v1.list, ...
@@ -125,17 +133,21 @@ function pgva_plot_all(model, opt)
         else
             i = i + 1;
         end
-        % KL latent
-        i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.z.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.z.name)
+        if opt.optimise.z.z
+            % KL latent
+            i = i + 1;
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.z.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.z.name)
+        else
+            i = i + 1;
+        end
         
         
         % --- Line 4
         
-        if opt.q.Mr
+        if opt.q.Mr && opt.optimise.q.A
             % KL affine precision
             i = i + 1;
             subplot(nh,nw,i)
@@ -145,36 +157,56 @@ function pgva_plot_all(model, opt)
         else
             i = i + 1;
         end
-        % KL residual precision
-        i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.l.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.l.name)
-        % KL latent precision
-        i = i + 1;
-        subplot(nh,nw,i)
-        plot([model.lb.lb.it model.lb.lb.curit], model.lb.Az.list, ...
-             colors(mod(i, length(colors))+1))
-        title(model.lb.Az.name)
+        if opt.optimise.v.l
+            % KL residual precision
+            i = i + 1;
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.l.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.l.name)
+        else
+            i = i + 1;
+        end
+        if opt.optimise.z.A
+            % KL latent precision
+            i = i + 1;
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.Az.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.Az.name)
+        else
+            i = i + 1;
+        end
         
         % --- Line 5
         
-        % WW
-        i = i + 1;
-        subplot(nh,nw,i)
-        imagesc(model.pg.ww), colorbar;
-        title('W''LW')
-        % Sample covariance
-        i = i + 1;
-        subplot(nh,nw,i)
-        imagesc(model.z.S + model.z.zz), colorbar;
-        title('Sample covariance E[ZZ]')
-        % Precision matrix
-        i = i + 1;
-        subplot(nh,nw,i)
-        imagesc(model.z.A), colorbar;
-        title('Latent precision E[A]')
+        if opt.optimise.pg.w
+            % WW
+            i = i + 1;
+            subplot(nh,nw,i)
+            imagesc(model.pg.ww), colorbar;
+            title('W''LW')
+        else
+            i = i + 1;
+        end
+        if opt.optimise.z.z
+            % Sample covariance
+            i = i + 1;
+            subplot(nh,nw,i)
+            imagesc(model.z.S + model.z.zz), colorbar;
+            title('Sample covariance E[ZZ]')
+        else
+            i = i + 1;
+        end
+        if opt.optimise.z.A || opt.optimise.z.z
+            % Precision matrix
+            i = i + 1;
+            subplot(nh,nw,i)
+            imagesc(model.z.A), colorbar;
+            title('Latent precision E[A]')
+        else
+            i = i + 1;
+        end
         
         drawnow
     end
