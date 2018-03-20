@@ -52,8 +52,9 @@ function [model, dat, opt] = pgra_model(varargin)
 % -----
 % model.name   - Generative data model ['normal']/'categorical'/'bernoulli'
 % model.sigma2 - If normal model: initial noise variance estimate [1]
+% model.nc     - (categorical only) Number of classes [from input]
 % pg.K     - Number of principal geodesics [32]
-% pg.prm   - Parameters of the geodesic operator [1e-4 1e-3 0.2 0.05 0.2]
+% pg.prm   - Parameters of the geodesic operator [0.001 0 10 0.1 0.2]
 % pg.bnd   - Boundary conditions for the geodesic operator [1 = circulant]
 % mixreg.a0- Prior expected value of the mixture weight [0.5]
 % mixreg.n0- Prior DF of the mixture weight [1e-4]
@@ -93,7 +94,7 @@ function [model, dat, opt] = pgra_model(varargin)
 % iter.ls      - Maximum number of line search iterations [6]
 % iter.itg     - Number of integration steps for geodesic shooting [auto]
 % iter.pena    - Penalise Gauss-Newton failures [true]
-% lb.threshold - Convergence criterion (lower bound gain) [1e-5]
+% lb.threshold - Convergence criterion (lower bound gain) [1e-3]
 % lb.moving    - Moving average over LB gain [3]
 % split.loop   - How to split array processing: 'none'/'slice'/['subject']
 % split.par    - Parallelise processing (number of workers): 0/n/[inf]
@@ -108,7 +109,7 @@ function [model, dat, opt] = pgra_model(varargin)
 % dir.model     - Directory where to store model arrays and workspace ['.']
 % dir.dat       - Directory where to store data array [next to input]
 % fnames.result - Filename for the result environment saved after each EM
-%                 iteration ['pg_result.mat']
+%                 iteration ['pgra_model.mat']
 % fnames.model  - Structure of filenames for all file arrays
 % fnames.dat    - Structure of filenames for all file arrays
 % ondisk.model  - Structure of logical for temporary array [default_ondisk]
@@ -152,16 +153,15 @@ function [model, dat, opt] = pgra_model(varargin)
 % [ ] = fixed parameter
 % _________________________________________________________________________
 
-    global_start = tic;
-    fprintf([' ' repmat('-',1,78) ' \n']);
-    str_started = sprintf('%20s || PGRA model started...', datestr(now));
-    fprintf(['| ' str_started repmat(' ', 1, 80-3-length(str_started)) '|\n']);
-    fprintf([' ' repmat('-',1,78) ' \n\n']);
-    cleanupObj = onCleanup(@() goodbye(global_start));
+    cleanupObj = hello('PGRA model');
         
     % -----------
     % Parse input
     % -----------
+    if nargin == 0
+        help pgra_model
+        error('At least one input argument is needed.')
+    end
     if nargin >= 3
         opt   = varargin{1};
         dat   = varargin{2};
@@ -521,43 +521,5 @@ function [model, dat, opt] = pgra_model(varargin)
             % -----------
         end
     end
-    
-end
-
-% =========================================================================
-function goodbye(global_start)
-    
-    global_end = toc(global_start);
-    fprintf('\n');
-    fprintf([' ' repmat('-',1,78) ' \n']);
-    str_end_1 = sprintf('%s || PGRA model ended.', datestr(now));
-    fprintf(['| ' str_end_1 repmat(' ', 1, 80-3-length(str_end_1)) '|\n']);
-    str_end_2 = sprintf('%20s || ', 'Elapsed time');
-    % Convert to units
-    dur = duration(0,0,global_end);
-    elapsed = floor(years(dur));
-    dur = dur - years(elapsed(end));
-    elapsed = [elapsed floor(days(dur))];
-    dur = dur - days(elapsed(end));
-    elapsed = [elapsed floor(hours(dur))];
-    dur = dur - hours(elapsed(end));
-    elapsed = [elapsed floor(minutes(dur))];
-    dur = dur - minutes(elapsed(end));
-    elapsed = [elapsed floor(seconds(dur))];
-    units   = {'year' 'day' 'hour' 'minute' 'second'};
-    for i=1:numel(elapsed)
-        if elapsed(i) > 0
-            str_end_2 = [str_end_2 sprintf('%d %s', elapsed(i), units{i})];
-            if elapsed(i) > 1
-                str_end_2 = [str_end_2 's'];
-            end
-            if sum(elapsed(i+1:end)) > 0
-                str_end_2 = [str_end_2 ', '];
-            end
-        end
-    end
-    fprintf(['| ' str_end_2 repmat(' ', 1, 80-3-length(str_end_2)) '|\n']);
-    fprintf([' ' repmat('-',1,78) ' \n\n']);
-    diary off
     
 end
