@@ -23,8 +23,6 @@ function test_diffeo_train
     % Special stuff for Holly
     opt.split.par    = 0;
     opt.split.batch  = N;
-    opt.ondisk.dat.v.g = true;
-    opt.ondisk.dat.v.h = true;
-
+    
     diffeo_train(input, opt);
     

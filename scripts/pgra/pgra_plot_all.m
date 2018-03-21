@@ -108,11 +108,11 @@ function pgra_plot_all(model, opt)
             end
         else
             % LL geodesic
-            if isfield(model.lb, 'g')
+            if isfield(model.lb, 'v')
                 subplot(nh,nw,i)
-                plot([model.lb.lb.it model.lb.lb.curit], model.lb.g.list, ...
+                plot([model.lb.lb.it model.lb.lb.curit], model.lb.v.list, ...
                      colors(mod(i, length(colors))+1))
-                title(model.lb.g.name)
+                title(model.lb.v.name)
             end
         end
         % KL residual
