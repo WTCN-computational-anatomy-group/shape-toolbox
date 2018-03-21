@@ -13,8 +13,8 @@ function frames = animatePG(varargin)
 %
 % OPTIONAL
 % --------
-% pg     - Principal geodesic along which to shoot (1, 2, ..., K)
-% fname  - Filename of the output video (.avi, .gif) [do not write video]
+% pg     - Principal geodesic along which to shoot ([1], 2, ..., K)
+% fname  - Filename of the output video (.mp4, .avi, .gif) [do not write]
 %
 % KEYWORD ARGUMENTS
 % -----------------
@@ -124,6 +124,9 @@ function frames = animatePG(varargin)
     if endsWith(fname, 'avi')
         vid = VideoWriter(fname);
         open(vid);
+    elseif endsWith(fname, 'mp4')
+        vid = VideoWriter(fname, 'MPEG-4');
+        open(vid);
     end
     for i=[ceil(n/2):n n:-1:1 1:ceil(n/2)]
         fprintf('z: %f\n', allz(i));
@@ -134,11 +137,11 @@ function frames = animatePG(varargin)
             else
                 imwrite(imind, cm, fname, 'gif', 'WriteMode', 'append'); 
             end
-        elseif endsWith(fname, 'avi')
+        elseif endsWith(fname, 'avi') || endsWith(fname, 'mp4') 
             writeVideo(vid, frames(i));
         end
     end
-    if endsWith(fname, 'avi')
+    if endsWith(fname, 'avi') || endsWith(fname, 'mp4') 
         close(vid);
     end
 
