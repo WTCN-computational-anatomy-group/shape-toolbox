@@ -42,9 +42,12 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     % ----------------
     if opt.f.N
         model.q.A = opt.q.A0;
-        if opt.optimise.q.A
+        if opt.optimise.q.A && opt.q.n0 && opt.q.Mr
             model.q.n = opt.q.n0 + opt.f.N;
-            model.lb.Aq.val  = 0;
+            model.lb.Aq.val = -spm_prob('Wishart', 'kl', ...
+                                        model.q.A,   model.q.n, ...
+                                        opt.q.A0,    opt.q.n0, ...
+                                        'normal');
             model.lb.Aq.type = 'kl';
             model.lb.Aq.name = '-KL Affine precision';
         end
@@ -53,21 +56,14 @@ function [dat, model] = pgva_model_init(dat, model, opt)
     % Latent precision
     % ----------------
     model.z.A = opt.z.A0;
-    if opt.optimise.z.A
+    if opt.optimise.z.A && opt.z.n0
         model.z.n = opt.z.n0 + opt.f.N + opt.v.N;
-        model.lb.Az.val  = 0;
+        model.lb.Az.val = -spm_prob('Wishart', 'kl', ...
+                                    model.z.A,   model.z.n, ...
+                                    opt.z.A0,    opt.z.n0, ...
+                                    'normal');
         model.lb.Az.type = 'kl';
         model.lb.Az.name = '-KL Latent precision';
-    end
-    
-    % Residual precision
-    % ------------------
-    model.v.l = opt.v.l0;
-    if opt.optimise.v.l
-        model.v.n = opt.v.n0 + opt.f.N + opt.v.N;
-        model.lb.l.val  = 0;
-        model.lb.l.type = 'kl';
-        model.lb.l.name = '-KL Residual precision';
     end
     
     % Mixture prior
@@ -87,6 +83,19 @@ function [dat, model] = pgva_model_init(dat, model, opt)
         model.lb.wr.val  = 0;
         model.lb.wr.type = 'kl';
         model.lb.wr.name = '-KL Mixture weight';
+    end
+    
+    % Residual precision
+    % ------------------
+    model.v.l = opt.v.l0;
+    if opt.optimise.v.l && opt.v.n0
+        model.v.n = model.mixreg.w(1)*(opt.v.N+opt.f.N) + opt.v.n0;
+        model.lb.l.val  = -spm_prob('Gamma', 'kl', ...
+                                    model.v.l, model.v.n, ...
+                                    opt.v.l0,  opt.v.n0, ...
+                                    prod(opt.tpl.lat)*3, 'normal');
+        model.lb.l.type = 'kl';
+        model.lb.l.name = '-KL Residual precision';
     end
     
     % ---------------------------------------------------------------------

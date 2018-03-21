@@ -348,6 +348,7 @@ function [model, dat, opt] = pgva_model(varargin)
             if opt.optimise.v.l
                 old_l = model.v.l;
                 K = 3*prod(opt.tpl.lat);
+                model.v.n = opt.v.n0 + model.mixreg.w(1) * (opt.v.N+opt.f.N);
                 model.v.l = opt.v.n0/opt.v.l0 + (model.mixreg.w(1)/K)*(model.v.uncty + model.v.tr + model.v.reg);
                 model.v.l = model.v.n/model.v.l;
                 if opt.ui.verbose, fprintf('%10s | %10s | %8.6g -> %8.6g\n', 'Lambda', '', old_l, model.v.l); end
@@ -412,8 +413,9 @@ function [model, dat, opt] = pgva_model(varargin)
 
             % Orthogonalisation
             % -------------------------------------------------------------
-            if opt.optimise.z.z && opt.optimise.pg.w && opt.optimise.z.A
-            
+            [~,p] = chol(model.pg.ww); % Check pos-def
+            if opt.optimise.z.z && opt.optimise.pg.w && opt.optimise.z.A && p == 0
+                
                 % Orthogonalise
                 % -------------
                 if opt.ui.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
@@ -423,10 +425,10 @@ function [model, dat, opt] = pgva_model(varargin)
                 % Rescale
                 % -------
                 if opt.ui.verbose, fprintf('%10s | %10s ', 'Rescale', ''); tic; end
-               [Q, iQ] = gnScalePG(iU' * model.pg.ww * iU * model.pg.n, ...
-                                   U   * model.z.zz  * U', ...
-                                   U   * model.z.S   * U', ...
-                                   opt.z.A0, opt.z.n0, model.pg.n);
+                [Q, iQ] = gnScalePG(iU' * model.pg.ww * iU * model.pg.n, ...
+                                    U   * model.z.zz  * U', ...
+                                    U   * model.z.S   * U', ...
+                                    opt.z.A0, opt.z.n0, model.pg.n);
                 if opt.ui.verbose, fprintf('| %6.3fs\n', toc); end
                 Q  = Q  * U;
                 iQ = iU * iQ;
@@ -553,6 +555,7 @@ function [model, dat, opt] = pgva_model(varargin)
             end
             % -----------
             % Lower bound
+            [dat, model] = pgva_batch('LB', 'Mixture', dat, model, opt);
             model = updateLowerBound(model);
             pgva_plot_all(model, opt);
             % -----------
