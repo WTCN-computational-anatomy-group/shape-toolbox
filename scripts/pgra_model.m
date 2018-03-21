@@ -404,7 +404,7 @@ function [model, dat, opt] = pgra_model(varargin)
                 % Orthogonalise
                 % -------------
                 if opt.ui.verbose, fprintf('%10s | %10s ', 'Ortho', ''); tic; end
-                [U, iU] = orthogonalisationMatrix(spm_matcomp('LoadDiag', model.z.zz), spm_matcomp('LoadDiag', model.pg.ww));
+                [U, iU] = orthogonalisationMatrix(model.z.zz, model.pg.ww);
                 if opt.ui.verbose, fprintf('| %6.3fs\n', toc); end
 
                 % Rescale
@@ -474,14 +474,16 @@ function [model, dat, opt] = pgra_model(varargin)
             % Update precision
             % ----------------
             if opt.optimise.r.l
+                old_l = model.r.l;
                 K = 3*prod(opt.tpl.lat);
+                model.r.n = opt.r.n0 + model.mixreg.w(1) * opt.N;
                 model.r.l = opt.r.n0/opt.r.l0 + (model.mixreg.w(1)/K)*(model.r.tr + model.r.reg);
                 model.r.l = model.r.n/model.r.l;
-                if opt.ui.verbose, fprintf('%10s | %10g\n', 'Lambda', model.r.l); end
+                if opt.ui.verbose, fprintf('%10s | %10s | %8.6g -> %8.6g\n', 'Lambda', '', old_l, model.r.l); end
 
                 % -----------
                 % Lower bound
-                [dat, model]    = pgra_batch('LB', 'Lambda', dat, model, opt);
+                [dat, model] = pgra_batch('LB', 'Lambda', dat, model, opt);
                 model = updateLowerBound(model);
                 pgra_plot_all(model, opt);
                 % -----------
@@ -520,6 +522,7 @@ function [model, dat, opt] = pgra_model(varargin)
             pgra_plot_all(model, opt);
             % -----------
         end
+        
     end
     
 end
