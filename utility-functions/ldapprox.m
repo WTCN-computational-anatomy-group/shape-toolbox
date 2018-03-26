@@ -78,9 +78,12 @@ function ld = ldapprox(varargin)
     % empty Hessian?
     if isempty(H) || numel(H) == 1
         if isempty(dim)
-            lat = [size(L, 1) 1];
-            nc  = 1;
+            dimh = [size(L, 1) 1 1];
+        else
+            dimh = [dim 1 1];
         end
+        lat  = dimh(1:3);
+        nc   = dimh(4);
         ulam = 0;
     else
         dimh = [size(H) 1 1];
