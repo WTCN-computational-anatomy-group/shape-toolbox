@@ -342,22 +342,24 @@ function dat = oneInitLowerBound(dat, model, opt)
 
         % Trace
         % -----
-        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.r.l + model.mixreg.w(2))*opt.pg.prm]));
-        dat.v.lb.tr = dat.v.lb.tr(1);
+%         dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.r.l + model.mixreg.w(2))*opt.pg.prm]));
+%         dat.v.lb.tr = dat.v.lb.tr(1);
+                dat.v.lb.tr = trapprox((model.mixreg.w(1)*model.r.l + model.mixreg.w(2))*opt.pg.prm, h, 'vs', opt.tpl.vs);
         dat.v.lb.tr = dat.v.lb.tr / (model.mixreg.w(1)*model.r.l + model.mixreg.w(2));
 
         % LogDet(P)
         % ---------
-        % Approximation where all off-diagonal elements of L are zero
-        h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(1);
-        h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(2);
-        h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(3);
-        if opt.model.dim == 2
-            h(:,:,:,3) = 1;
-        end
-        h = spm_matcomp('Pointwise3', h, 'd');
-        h(h <= 0) = nan;
-        dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+%         % Approximation where all off-diagonal elements of L are zero
+%         h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(1);
+%         h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(2);
+%         h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(3);
+%         if opt.model.dim == 2
+%             h(:,:,:,3) = 1;
+%         end
+%         h = spm_matcomp('Pointwise3', h, 'd');
+%         h(h <= 0) = nan;
+%         dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+        dat.v.lb.ld = ldapprox((model.mixreg.w(1)*model.r.l + model.mixreg.w(2))*opt.pg.prm, h, 'vs', opt.tpl.vs);
         clear h
 
         % Lower bound
@@ -1457,22 +1459,24 @@ function dat = oneFitResidual(dat, model, opt)
             end
         end
         clear ipsi
-        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.prm]));
-        dat.v.lb.tr = dat.v.lb.tr(1);
+%         dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.prm]));
+%         dat.v.lb.tr = dat.v.lb.tr(1);
+        dat.v.lb.tr = trapprox((model.mixreg.w(1)*model.r.l + model.mixreg.w(2))*opt.pg.prm, h, 'vs', opt.tpl.vs);
         dat.v.lb.tr = dat.v.lb.tr / (model.mixreg.w(1)*model.r.l + model.mixreg.w(2));
         
         % LogDet(P)
         % ---------
-        % Approximation where all off-diagonal elements of L are zero
-        h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(1);
-        h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(2);
-        h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(3);
-        if opt.model.dim == 2
-            h(:,:,:,3) = 1;
-        end
-        h = spm_matcomp('Pointwise3', h, 'd');
-        h(h <= 0) = nan;
-        dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+%         % Approximation where all off-diagonal elements of L are zero
+%         h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(1);
+%         h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(2);
+%         h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.r.l + model.mixreg.w(2)) * opt.pg.ker(3);
+%         if opt.model.dim == 2
+%             h(:,:,:,3) = 1;
+%         end
+%         h = spm_matcomp('Pointwise3', h, 'd');
+%         h(h <= 0) = nan;
+%         dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+        dat.v.lb.ld = ldapprox((model.mixreg.w(1)*model.r.l + model.mixreg.w(2))*opt.pg.prm, h, 'vs', opt.tpl.vs);
         clear h
         
         % KL divergence
