@@ -413,23 +413,25 @@ function dat = oneInitLowerBound(dat, model, opt)
 
         % Trace of inv(post)*prior
         % ------------------------
-        % Approximation where all off-diagonal elements of L are zero
-        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.v.l + model.mixreg.w(2))*opt.pg.prm]));
-        dat.v.lb.tr = dat.v.lb.tr(1);
+%         % Approximation where all off-diagonal elements of L are zero
+%         dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.v.l + model.mixreg.w(2))*opt.pg.prm]));
+%         dat.v.lb.tr = dat.v.lb.tr(1);
+        dat.v.lb.tr = trapprox((model.mixreg.w(1)*model.v.l + model.mixreg.w(2))*opt.pg.prm, h, 'vs', opt.tpl.vs);
         dat.v.lb.tr = dat.v.lb.tr / (model.mixreg.w(1)*model.v.l + model.mixreg.w(2));
 
         % LogDet of posterior precision
         % -----------------------------
-        % Approximation where all off-diagonal elements of L are zero
-        h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(1);
-        h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(2);
-        h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(3);
-        if opt.model.dim == 2
-            h(:,:,:,3) = 1;
-        end
-        h = spm_matcomp('Pointwise3', h, 'd');
-        h(h <= 0) = nan;
-        dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+%         % Approximation where all off-diagonal elements of L are zero
+%         h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(1);
+%         h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(2);
+%         h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(3);
+%         if opt.model.dim == 2
+%             h(:,:,:,3) = 1;
+%         end
+%         h = spm_matcomp('Pointwise3', h, 'd');
+%         h(h <= 0) = nan;
+%         dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+        dat.v.lb.ld = ldapprox((model.mixreg.w(1)*model.v.l + model.mixreg.w(2))*opt.pg.prm, h, 'vs', opt.tpl.vs);
         clear h
 
         % Lower bound
@@ -458,7 +460,8 @@ function dat = oneInitLowerBound(dat, model, opt)
                               + dat.v.lb.tr );
         dat.v.lb.val = -0.5*( - K ...
                               - model.mixreg.w(1) * K * loglam ...
-                              - dat.v.lb.ld + opt.pg.ld  ...
+                              - opt.pg.ld  ...
+                              + dat.v.lb.ld ...
                               + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
                               + model.mixreg.w(2) * dat.v.lb.regv ...
                               + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...
@@ -1316,12 +1319,17 @@ function dat = oneFitVelocity(dat, model, opt)
                         'loop', loop, 'par', par, 'debug', opt.ui.debug);
             end
 
-            wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
-                                     'loop', loop, 'par', par);
-            g = g - spm_diffeo('vel2mom', single(wz), double([opt.tpl.vs (model.mixreg.w(1) * model.v.l * opt.pg.prm)]));
-            v = numeric(dat.v.v);
-            r = v - wz;
-            clear wz
+            if checkarray(model.pg.w) && all(dat.z.z ~= 0)
+                wz = reconstructVelocity('latent', dat.z.z, 'subspace', model.pg.w, ...
+                                         'loop', loop, 'par', par);
+                g = g - spm_diffeo('vel2mom', single(wz), double([opt.tpl.vs (model.mixreg.w(1) * model.v.l * opt.pg.prm)]));
+                v = numeric(dat.v.v);
+                r = v - wz;
+                clear wz
+            else
+                r = dat.v.v;
+                v = dat.v.v;
+            end
             g = g + ghPriorVel(v, opt.tpl.vs, (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.prm, opt.pg.bnd);
 
             % Compute search direction
@@ -1399,7 +1407,7 @@ function dat = oneFitVelocity(dat, model, opt)
         
         % Regularisation part
         % -------------------
-        m = spm_diffeo('vel2mom', r, double([opt.tpl.vs opt.pg.prm]));
+        m = spm_diffeo('vel2mom', single(numeric(r)), double([opt.tpl.vs opt.pg.prm]));
         dat.v.lb.reg = r(:)' * m(:);
         clear r m
         
@@ -1421,22 +1429,24 @@ function dat = oneFitVelocity(dat, model, opt)
                     'debug', opt.ui.debug);
             end
         end
-        dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.prm]));
-        dat.v.lb.tr = dat.v.lb.tr(1);
+%         dat.v.lb.tr = spm_diffeo('trapprox', h, double([opt.tpl.vs (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.prm]));
+%         dat.v.lb.tr = dat.v.lb.tr(1);
+        dat.v.lb.tr = trapprox((model.mixreg.w(1)*model.v.l + model.mixreg.w(2))*opt.pg.prm, h, 'vs', opt.tpl.vs);
         dat.v.lb.tr = dat.v.lb.tr / (model.mixreg.w(1)*model.v.l + model.mixreg.w(2));
         
         % LogDet(P)
         % ---------
-        % Approximation where all off-diagonal elements of L are zero
-        h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(1);
-        h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(2);
-        h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(3);
-        if opt.model.dim == 2
-            h(:,:,:,3) = 1;
-        end
-        h = spm_matcomp('Pointwise3', h, 'd');
-        h(h <= 0) = nan;
-        dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+%         % Approximation where all off-diagonal elements of L are zero
+%         h(:,:,:,1) = h(:,:,:,1) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(1);
+%         h(:,:,:,2) = h(:,:,:,2) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(2);
+%         h(:,:,:,3) = h(:,:,:,3) * (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.ker(3);
+%         if opt.model.dim == 2
+%             h(:,:,:,3) = 1;
+%         end
+%         h = spm_matcomp('Pointwise3', h, 'd');
+%         h(h <= 0) = nan;
+%         dat.v.lb.ld = sum(log(h(:)), 'omitnan');
+        dat.v.lb.ld = ldapprox((model.mixreg.w(1)*model.v.l + model.mixreg.w(2))*opt.pg.prm, h, 'vs', opt.tpl.vs);
         clear h
         
         % KL divergence
@@ -1459,7 +1469,8 @@ function dat = oneFitVelocity(dat, model, opt)
                               + dat.v.lb.tr );
         dat.v.lb.val = -0.5*( - K ...
                               - model.mixreg.w(1) * K * loglam ...
-                              - dat.v.lb.ld + opt.pg.ld  ...
+                              - opt.pg.ld  ...
+                              + dat.v.lb.ld ...
                               + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
                               + model.mixreg.w(2) * dat.v.lb.regv ...
                               + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...
@@ -1689,7 +1700,8 @@ function dat = oneLB(dat, model, opt, which)
                                       + dat.v.lb.tr );
                 dat.v.lb.val = -0.5*( - K ...
                                       - model.mixreg.w(1) * K * loglam ...
-                                      - dat.v.lb.ld + opt.pg.ld  ...
+                                      - opt.pg.ld  ...
+                                      + dat.v.lb.ld ...
                                       + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
                                       + model.mixreg.w(2) * dat.v.lb.regv ...
                                       + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...
@@ -1745,7 +1757,8 @@ function dat = oneLB(dat, model, opt, which)
                                       + dat.v.lb.tr );
                 dat.v.lb.val = -0.5*( - K ...
                                       - model.mixreg.w(1) * K * loglam ...
-                                      - dat.v.lb.ld + opt.pg.ld  ...
+                                      - opt.pg.ld  ...
+                                      + dat.v.lb.ld ...
                                       + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
                                       + model.mixreg.w(2) * dat.v.lb.regv ...
                                       + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...
@@ -1793,7 +1806,8 @@ function dat = oneLB(dat, model, opt, which)
                                       + dat.v.lb.tr );
                 dat.v.lb.val = -0.5*( - K ...
                                       - model.mixreg.w(1) * K * loglam ...
-                                      - dat.v.lb.ld + opt.pg.ld  ...
+                                      - opt.pg.ld  ...
+                                      + dat.v.lb.ld ...
                                       + model.mixreg.w(1) * model.v.l * dat.v.lb.reg ...
                                       + model.mixreg.w(2) * dat.v.lb.regv ...
                                       + model.mixreg.w(1) * model.v.l * dat.v.lb.tr ...

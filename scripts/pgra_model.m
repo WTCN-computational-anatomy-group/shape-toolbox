@@ -206,8 +206,9 @@ function [model, dat, opt] = pgra_model(varargin)
         % -----------------------------------------------------------------
         % We store some values to avoid unneeded computation
         spm_diffeo('boundary', opt.pg.bnd);
-        [~, opt.pg.ld] = spm_shoot_greens('kernel', double(opt.tpl.lat), double([opt.tpl.vs opt.pg.prm]), opt.pg.bnd);
-        opt.pg.ld = opt.pg.ld(1);
+%         [~, opt.pg.ld] = spm_shoot_greens('kernel', double(opt.tpl.lat), double([opt.tpl.vs opt.pg.prm]), opt.pg.bnd);
+%         opt.pg.ld = opt.pg.ld(1);
+        opt.pg.ld = ldapprox(opt.pg.prm, 'vs', opt.tpl.vs, 'dim', [opt.tpl.lat 3]);
         ker = spm_diffeo('kernel', double(opt.tpl.lat), double([opt.tpl.vs opt.pg.prm]));
         opt.pg.ker = [ker(1,1,1,1,1) ker(1,1,1,2,2) ker(1,1,1,3,3)];
         clear ker
