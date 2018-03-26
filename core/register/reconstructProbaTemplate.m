@@ -1,18 +1,28 @@
 function mu = reconstructProbaTemplate(a, varargin)
-% FORMAT mu = reconstructProbaTemplate(a, ('type', type),
-%                                      ('loop', loop), ('par', par))
+% _________________________________________________________________________
 %
-% ** Required **
+% Reconstruct the template probability maps from their log-space. 
+% Only useful for bernoulli and categorical matching terms.
+%
+% -------------------------------------------------------------------------
+% FORMAT mu = reconstructProbaTemplate(a, ...)
+%
+% REQUIRED
+% --------
 % a    - Log-Template
-% ** Keyword arguments **
-% type - Mapping type ('sigmoid' or 'softmax') [auto]
-% loop - Specify how to split data processing ('slice' or 'none') [auto]
-% par  - If true, parallelise processing [false]
-% ** Output **
-% mu  - Reconstructed template
 %
-% Reconstruct the template probability maps from their log-space. Only
-% useful for bernoulli and categorical matching terms.
+% KEYWORD ARGUMENTS
+% -----------------
+% type   - Mapping type ('sigmoid' or 'softmax')                    [auto]
+% loop   - Specify how to split data processing ('slice'/'none')    [auto]
+% par    - If true, parallelise processing                          [false]
+% output - file_array where to store the output                     []
+% debug  - Debugging talk                                           [false]
+%
+% OUTPUT
+% ------
+% mu  - Reconstructed template
+% _________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
@@ -30,7 +40,7 @@ function mu = reconstructProbaTemplate(a, varargin)
     output = p.Results.output;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* reconstructProbaTemplate\n'); end;
+    if debug, fprintf('* reconstructProbaTemplate\n'); end
 
     % --- Automatic par/loop setting
     [par, loop] = autoParLoop(par, loop, isa(a, 'file_array'), size(a, 3), 1);
@@ -54,7 +64,7 @@ function mu = reconstructProbaTemplate(a, varargin)
 
     % --- No loop
     if strcmpi(loop, 'none')
-        if debug, fprintf('   - No loop\n'); end;
+        if debug, fprintf('   - No loop\n'); end
         if strcmpi(type, 'sigmoid')
             mu(:,:,:,:) = sigmoid(a);
         else
@@ -93,8 +103,9 @@ function mu = sigmoid(a)
     mu = a./ (1 + a);
 end
 
-function mu = softmax(a)
-    a = exp(single(numeric(a)));
-    s = sum(a, 4);
-    mu = bsxfun(@rdivide, a, s);
+function a = softmax(a)
+    a = single(numeric(a));               % read from disk if needed
+    a = bsxfun(@minus, a, max(a, [], 4)); % safe softmax -> avoid overflow
+    a = exp(a);                           % exponentiate
+    a = bsxfun(@rdivide, a, sum(a, 4));   % normalise
 end

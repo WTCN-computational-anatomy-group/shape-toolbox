@@ -1,16 +1,34 @@
 function gmu = templateGrad(mu, varargin)
-% FORMAT gmu = templateGrad(mu, (itrp), (bnd), ...)
-%
-% ** Required **
-% mu   - Template
-% ** Optional **
-% itrp - 1 or 3 Interpolation order [1]
-% bnd  - 1 or 3 Boundary condition (0/1 = mirror/circulant) [1]
-% ** Output **
-% gmu  - Template spatial gradients
+% _________________________________________________________________________
 %
 % Compute spatial gradients (w.r.t. local deformations) of the template
 % image.
+%
+% -------------------------------------------------------------------------
+% FORMAT gmu = templateGrad(mu, (itrp), (bnd), ...)
+%
+% REQUIRED
+% --------
+% mu   - (log)-Template
+%
+% OPTIONAL
+% --------
+% bnd    - 1 or 3 Boundary condition (0/1 = mirror/circulant)   [1]
+% output - file_array where to store the output                 []
+% debug  - Debugging talk                                       [false]
+%
+% OUTPUT
+% ------
+% gmu  - Template spatial gradients
+%
+% -------------------------------------------------------------------------
+% Gradients are computed at the control points. In this context, the 1st
+% order is ill-suited (even if it is the order used when actually
+% interpolating the template). Here, we use second order interpolation in
+% the gradient direction and zero-th order in the other directions. This
+% yields gradients that are coherent with those that would be returned by
+% Matlab's `gradient` function.
+% _________________________________________________________________________
 
     % --- Parse inputs
     p = inputParser;
@@ -30,11 +48,11 @@ function gmu = templateGrad(mu, varargin)
     if debug, fprintf('* templateGrad\n'); end
     
     % --- Default parameters
-    if numel(itrp) == 1
-        itrp = itrp * [double(size(mu, 1) > 1) ...
-                       double(size(mu, 2) > 1) ...
-                       double(size(mu, 3) > 1)];
-    end
+%     if numel(itrp) == 1
+%         itrp = itrp * [double(size(mu, 1) > 1) ...
+%                        double(size(mu, 2) > 1) ...
+%                        double(size(mu, 3) > 1)];
+%     end
     if numel(bnd) == 1
         bnd = [bnd bnd bnd];
     end
@@ -60,11 +78,9 @@ function gmu = templateGrad(mu, varargin)
     % 4) Store data
     for i=1:nc
         mu1 = single(mu(:,:,:,i));
-        [~, G1, G2, G3] = spm_diffeo('bsplins', mu1, id, [itrp bnd]);
-        gmu(:,:,:,i,1) = G1;
-        gmu(:,:,:,i,2) = G2;
-        gmu(:,:,:,i,3) = G3;
-        clear G1 G2 G3
+        [~,gmu(:,:,:,i,1),~,~] = spm_diffeo('bsplins', mu1, id, [2 0 0 bnd]);
+        [~,~,gmu(:,:,:,i,2),~] = spm_diffeo('bsplins', mu1, id, [0 2 0 bnd]);
+        [~,~,~,gmu(:,:,:,i,3)] = spm_diffeo('bsplins', mu1, id, [0 0 2 bnd]);
     end
 
     % --- Write on disk
