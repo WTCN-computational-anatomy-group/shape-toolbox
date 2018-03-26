@@ -294,11 +294,37 @@ function dat = oneInitPull(dat, model, opt)
     % Warp
     % ----
     if opt.tpl.cat
+        dat.tpl.scale = ones(1, opt.model.nc);
+        dat.f.ss0 = 0;
+        dat.f.ss1 = zeros(1, opt.model.nc);
+        for z=1:size(dat.f.f, 3)
+            f1        = dat.f.f(:,:,z,:);
+            msk       = all(isfinite(f1), 4);
+            dat.f.ss0 = dat.f.ss0 + sumall(msk);
+            for k=1:opt.model.nc
+                fk = f1(:,:,:,k);
+                dat.f.ss1(k) = dat.f.ss1(k) + sum(fk(msk));
+            end
+            clear fk f1 msk
+        end
         dat.tpl.wa = pullTemplate(dat.v.ipsi, model.tpl.a, ...
             'par', par, 'output', dat.tpl.wa, 'debug', opt.ui.debug);
-        dat.tpl.wmu = reconstructProbaTemplate(dat.tpl.wa, ...
+        [dat.tpl.wmu, ssmu] = reconstructProbaTemplate(dat.tpl.wa, ...
+            'scale', dat.tpl.scale, ...
             'loop', loop, 'par', par, 'output', dat.tpl.wmu, ...
             'debug', opt.ui.debug);
+        if opt.optimise.tpl.scale
+            % Individual probability scaling
+            % ------------------------------
+            for i=1:opt.iter.scl
+                dimf = [size(dat.f.f) 1];
+                dat.tpl.scale = (dat.f.ss1(:) * prod(dimf(1:3)) ./ (ssmu(:) * dat.f.ss0));
+                [dat.tpl.wmu, ssmu] = reconstructProbaTemplate(dat.tpl.wa, ...
+                    'scale', dat.tpl.scale, ...
+                    'loop', loop, 'par', par, 'output', dat.tpl.wmu, ...
+                    'debug', opt.ui.debug);
+            end
+        end
         dat.tpl.wa = rmarray(dat.tpl.wa);
     else
         dat.tpl.wmu = pullTemplate(dat.v.ipsi, model.tpl.mu, ...
@@ -1594,9 +1620,22 @@ function dat = oneLB(dat, model, opt, which)
                 if opt.tpl.cat
                     dat.tpl.wa = pullTemplate(dat.v.ipsi, model.tpl.a, ...
                         'par', par, 'output', dat.tpl.wa, 'debug', opt.ui.debug);
-                    dat.tpl.wmu = reconstructProbaTemplate(dat.tpl.wa, ...
+                    [dat.tpl.wmu,ssmu] = reconstructProbaTemplate(dat.tpl.wa, ...
+                        'scale', dat.tpl.scale, ...
                         'loop', loop, 'par', par, 'output', dat.tpl.wmu, ...
                         'debug', opt.ui.debug);
+                    if opt.optimise.tpl.scale
+                        % Individual probability scaling
+                        % ------------------------------
+                        for i=1:opt.iter.scl
+                            dimf = [size(dat.f.f) 1];
+                            dat.tpl.scale = (dat.f.ss1(:) * dat.f.ss0) ./ (ssmu(:) * prod(dimf(1:3)));
+                            [dat.tpl.wmu, ssmu] = reconstructProbaTemplate(dat.tpl.wa, ...
+                                'scale', dat.tpl.scale, ...
+                                'loop', loop, 'par', par, 'output', dat.tpl.wmu, ...
+                                'debug', opt.ui.debug);
+                        end
+                    end
                     dat.tpl.wa = rmarray(dat.tpl.wa);
                 else
                     dat.tpl.wmu = pullTemplate(dat.v.ipsi, model.tpl.mu, ...

@@ -249,6 +249,11 @@ function opt = pgva_model_default(opt)
         % updates)
         opt.iter.pena = true;
     end
+    if ~isfield(opt.iter, 'scl')
+        % Number of iterations when updating probability scales
+        % (Because the scheme is inexact and, as such, only GEM)
+        opt.iter.scl = 1;
+    end
     
     % ---------------------------------------------------------------------
     % Lower bound
@@ -399,10 +404,14 @@ function opt = pgva_model_default(opt)
     end
     if islogical(opt.optimise.tpl)
         [opt.optimise.tpl, val] = deal(struct, opt.optimise.tpl);
-        opt.optimise.tpl.a = val;
+        opt.optimise.tpl.a     = val;
+        opt.optimise.tpl.scale = val;
     end
     if ~isfield(opt.optimise.tpl, 'a')
         opt.optimise.tpl.a = true;
+    end
+    if ~isfield(opt.optimise.tpl, 'scale')
+        opt.optimise.tpl.scale = true;
     end
     if ~isfield(opt.optimise, 'mixreg')
         opt.optimise.mixreg = struct;
@@ -417,6 +426,11 @@ function opt = pgva_model_default(opt)
     end
     if ~isfield(opt.optimise.mixreg, 'w')
         opt.optimise.mixreg.w = true;
+    end
+    
+    if ~any(strcmpi(opt.model.name, {'categorical', 'multinomial'}))
+        % No need to scale probabilities if not categorical mode
+        opt.optimise.tpl.scale = false;
     end
     
     % =====================================================================
