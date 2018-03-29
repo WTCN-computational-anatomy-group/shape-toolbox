@@ -15,14 +15,15 @@ function mu = updateMuCategoricalML(varargin)
 %
 % OPTIONAL KEYWORD (LIST)
 % -----------------------
-% bb   - Bounding boxes (if different from template)
+% bb   - Bounding boxes      [full FOV]
+% scl  - Probability scales  [1]
 %
 % KEYWORD ARGUMENTS
 % -----------------
-% lat  - Template lattice [first image]
-% fwhm - Smoothing kernel used as pseudo prior [do not use]
-% loop - How to split processing: 'component', 'slice', 'none' or '' [auto]
-% par  - Distribute compute [auto]
+% lat  - Template lattice                                    [first image]
+% fwhm - Smoothing kernel used as pseudo prior               [do not use]
+% loop - How to split processing: 'component'/'slice'/'none'/[auto]
+% par  - Distribute compute                                  [auto]
 %
 % OUTPUT
 % ------
@@ -48,19 +49,27 @@ function mu = updateMuCategoricalML(varargin)
     if ischar(varargin{1}) && strcmpi(varargin{1}, 'c')
         c = varargin(2:N+1);
         varargin = varargin(N+2:end);
+        if numel(c) ~= N
+            error('There should be as many count as images')
+        end
     end
     bb = {};
     if ischar(varargin{1}) && strcmpi(varargin{1}, 'bb')
         bb = varargin(2:N+1);
         varargin = varargin(N+2:end);
+        if numel(bb) > 0 && numel(bb) ~= N
+            error('There should be as many bounding boxes as images')
+        end
+    end
+    scl = {};
+    if ischar(varargin{1}) && strcmpi(varargin{1}, 'scl')
+        scl = varargin(2:N+1);
+        varargin = varargin(N+2:end);
+        if numel(scl) > 0 && numel(scl) ~= N
+            error('There should be as many scales as images')
+        end
     end
 
-    if numel(c) ~= N
-        error('There should be as many count as intensity images')
-    end
-    if numel(bb) > 0 && numel(bb) ~= N
-        error('There should be as many bounding boxes as intensity images')
-    end
 
     % --- Parse inputs
     p = inputParser;
@@ -93,7 +102,7 @@ function mu = updateMuCategoricalML(varargin)
     switch lower(loop)
         case 'none'
             if debug, fprintf('   - No loop\n'); end
-            mu = loopNone(f, c, bb, lat, output, fwhm);
+            mu = loopNone(f, c, bb, scl, lat, output, fwhm);
         case 'slice'
             if debug
                 if par > 0
@@ -109,7 +118,7 @@ function mu = updateMuCategoricalML(varargin)
 
 end
 
-function mu = loopSlice(f, c, bb, lat, par, output)
+function mu = loopSlice(f, c, bb, scl, lat, par, output)
 
     nc = size(f{1}, 4);
     mu = prepareOnDisk(output, [lat nc], 'type', 'float32');
@@ -143,9 +152,14 @@ function mu = loopSlice(f, c, bb, lat, par, output)
                     by = 1:lat(2);
                     bz = 1:lat(3);
                 end
+                if isempty(scl)
+                    scl1 = ones([1 1 1 size(f{n}, 4)]);
+                else
+                    scl1 = reshape(scl{n}, [1 1 1 size(f{n}, 4)]);
+                end
                 fz = z-bz(1)+1;
                 if fz >= 1 && fz <= size(f{n}, 3)
-                    tmpf(bx,by,1,:) = tmpf(bx,by,1,:) + single(f{n}(:,:,fz,:));
+                    tmpf(bx,by,1,:) = tmpf(bx,by,1,:) + bsxfun(@rdivide,single(f{n}(:,:,fz,:)), scl1);
                 end
             end
             tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
@@ -166,9 +180,14 @@ function mu = loopSlice(f, c, bb, lat, par, output)
                     by = 1:lat(2);
                     bz = 1:lat(3);
                 end
+                if isempty(scl)
+                    scl1 = ones([1 1 1 size(f{n}, 4)]);
+                else
+                    scl1 = reshape(scl{n}, [1 1 1 size(f{n}, 4)]);
+                end
                 fz = z-bz(1)+1;
                 if fz >= 1 && fz <= size(f{n}, 3)
-                    tmpf(bx,by,1,:) = tmpf(bx,by,1,:) + single(slicevol(f{n}, fz, 3));
+                    tmpf(bx,by,1,:) = tmpf(bx,by,1,:) + bsxfun(@rdivide, single(slicevol(f{n}, fz, 3)), scl1);
                 end
             end
             tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
@@ -189,9 +208,14 @@ function mu = loopSlice(f, c, bb, lat, par, output)
                     by = 1:lat(2);
                     bz = 1:lat(3);
                 end
+                if isempty(scl)
+                    scl1 = ones([1 1 1 size(f{n}, 4)]);
+                else
+                    scl1 = reshape(scl{n}, [1 1 1 size(f{n}, 4)]);
+                end
                 fz = z-bz(1)+1;
                 if fz >= 1 && fz <= size(f{n}, 3)
-                    tmpf(bx,by,1,:) = tmpf(bx,by,1,:) + single(f{n}(:,:,fz,:));
+                    tmpf(bx,by,1,:) = tmpf(bx,by,1,:) + bsxfun(@rdivide,single(f{n}(:,:,fz,:)),scl1);
                 end
             end
             tmpf = bsxfun(@rdivide, tmpf, tmpc(:,:,z));
@@ -206,7 +230,7 @@ function mu = loopSlice(f, c, bb, lat, par, output)
     end
 end
 
-function mu = loopNone(f, c, bb, lat, output, fwhm)
+function mu = loopNone(f, c, bb, scl, lat, output, fwhm)
 
     nc = size(f{1}, 4);
     
@@ -222,7 +246,12 @@ function mu = loopNone(f, c, bb, lat, output, fwhm)
             by = 1:lat(2);
             bz = 1:lat(3);
         end
-        mu(bx,by,bz,:) = mu(bx,by,bz,:) + single(numeric(f{n}));
+        if isempty(scl)
+            scl1 = ones([1 1 1 size(f{n}, 4)]);
+        else
+            scl1 = reshape(scl{n}, [1 1 1 size(f{n}, 4)]);
+        end
+        mu(bx,by,bz,:) = mu(bx,by,bz,:) + bsxfun(@rdivide,single(numeric(f{n})),scl1);
         tmpc(bx,by,bz) = tmpc(bx,by,bz) + single(numeric(c{n}));
     end
     mu   = smooth_gaussian(mu, fwhm);

@@ -44,6 +44,12 @@ function mu = updateMuML(model, dat, varargin)
                 dat(n).bb = tmp(n).f.bb;
             end
         end
+        if isfield(tmp(1).tpl, 'scale')
+            [dat.scl] = deal([]);
+            for n=1:numel(dat)
+                dat(n).scl = tmp(n).tpl.scale;
+            end
+        end
         if isfield(tmp(1).f, 'sigma2')
             [dat.sigma2] = deal([]);
             for n=1:numel(dat)
@@ -99,12 +105,24 @@ function mu = updateMuML(model, dat, varargin)
             end
         case {'categorical', 'multinomial'}
             if isfield(dat, 'bb')
-                mu = updateMuCategoricalML('f', dat.pf, 'c', dat.c, ...
-                                           'bb', dat.bb, ...
-                                            varargin{:});
+                if isfield(dat, 'scl')
+                    mu = updateMuCategoricalML('f', dat.pf, 'c', dat.c, ...
+                                               'bb', dat.bb, 'scl', dat.scl, ...
+                                                varargin{:});
+                else
+                    mu = updateMuCategoricalML('f', dat.pf, 'c', dat.c, ...
+                                               'bb', dat.bb, ...
+                                                varargin{:});
+                end
             else
-                mu = updateMuCategoricalML('f', dat.pf, 'c', dat.c, ... 
-                                           varargin{:});
+                if isfield(dat, 'scl')
+                    mu = updateMuCategoricalML('f', dat.pf, 'c', dat.c, ...
+                                               'scl', dat.scl, ...
+                                                varargin{:});
+                else
+                    mu = updateMuCategoricalML('f', dat.pf, 'c', dat.c, ... 
+                                               varargin{:});
+                end
             end
     end
 

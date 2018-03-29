@@ -1,4 +1,4 @@
-function mu = reconstructProbaTemplate(a, varargin)
+function [mu, s] = reconstructProbaTemplate(a, varargin)
 % _________________________________________________________________________
 %
 % Reconstruct the template probability maps from their log-space. 
@@ -14,6 +14,7 @@ function mu = reconstructProbaTemplate(a, varargin)
 % KEYWORD ARGUMENTS
 % -----------------
 % type   - Mapping type ('sigmoid' or 'softmax')                    [auto]
+% scale  - Image-wide probability scaling factor                    [ones]
 % loop   - Specify how to split data processing ('slice'/'none')    [auto]
 % par    - If true, parallelise processing                          [false]
 % output - file_array where to store the output                     []
@@ -22,6 +23,8 @@ function mu = reconstructProbaTemplate(a, varargin)
 % OUTPUT
 % ------
 % mu  - Reconstructed template
+% s   - Sufficient statistics for scale update, i.e.:
+%         s_k = sum[ exp(a_k)/sum[exp(a_l + scl_l)] ]
 % _________________________________________________________________________
 
     % --- Parse inputs
@@ -29,12 +32,14 @@ function mu = reconstructProbaTemplate(a, varargin)
     p.FunctionName = 'reconstructProbaTemplate';
     p.addRequired('a',              @checkarray);
     p.addParameter('type',   '',    @(X) ischar(X) && any(strcmpi(X, {'sigmoid', 'softmax'})));
+    p.addParameter('scale',  1,     @isnumeric);
     p.addParameter('loop',   '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'none', ''})));
     p.addParameter('par',    false, @isscalar);
     p.addParameter('output', []);
     p.addParameter('debug',  false, @isscalar);
     p.parse(a, varargin{:});
     type   = p.Results.type;
+    scale  = p.Results.scale;
     par    = p.Results.par;
     loop   = p.Results.loop;
     output = p.Results.output;
@@ -58,9 +63,19 @@ function mu = reconstructProbaTemplate(a, varargin)
             type = 'softmax';
         end
     end
+    
+    % --- Scale factor
+    if numel(scale) == 1
+        scale = repmat(scale, 1, nc);
+    end
+    scale = reshape(scale, [1 1 1 nc]);
   
     % --- Reserve space on disk
     mu = prepareOnDisk(output, [lat nc]);
+    s  = 0;
+    if strcmpi(type, 'sigmoid')
+        s = nan;
+    end
 
     % --- No loop
     if strcmpi(loop, 'none')
@@ -68,7 +83,8 @@ function mu = reconstructProbaTemplate(a, varargin)
         if strcmpi(type, 'sigmoid')
             mu(:,:,:,:) = sigmoid(a);
         else
-            mu(:,:,:,:) = softmax(a);
+            mu(:,:,:,:) = softmax(a, scale);
+            s = s + sum(sum(sum(softmax(a),1),2),3);
         end
         
     % --- Loop on slices
@@ -87,11 +103,14 @@ function mu = reconstructProbaTemplate(a, varargin)
             end
         else
             parfor (z=1:lat(3), par)
-                mu(:,:,z,:) = softmax(a(:,:,z,:));
+                mu(:,:,z,:) = softmax(a(:,:,z,:), scale);
+                s = s + sum(sum(sum(softmax(a(:,:,z,:)),1),2),3);
             end
         end
         
     end
+    
+    s = s(:);
 
     % --- Write on disk
     mu = saveOnDisk(output, mu);
@@ -100,11 +119,15 @@ end
 
 function mu = sigmoid(a)
     a = exp(single(numeric(a)));
-    mu = a./ (1 + a);
+    mu = a./(1 + a);
 end
 
-function a = softmax(a)
+function a = softmax(a, scale)
+    if nargin < 2
+        scale = 1;
+    end
     a = single(numeric(a));               % read from disk if needed
+    a = bsxfun(@plus, a, log(scale));     % rescale probabilities
     a = bsxfun(@minus, a, max(a, [], 4)); % safe softmax -> avoid overflow
     a = exp(a);                           % exponentiate
     a = bsxfun(@rdivide, a, sum(a, 4));   % normalise

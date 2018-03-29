@@ -78,16 +78,17 @@ function [model, dat, opt] = pgva_model(varargin)
 % q.hapx   - Approximate affine hessian [true]
 % f.M      - Force same voxel-to-world to all images [read from file]
 %
-% optimise.pg.w     - Optimise subspace [true] or keep if fixed (false)
-% optimise.z.z      - Optimise latent coordinates [true]
-% optimise.z.A      - Optimise latent precision [true]
-% optimise.q.q      - Optimise affine coordinates [true]
-% optimise.q.A      - Optimise affine precision [true]
-% optimise.v.v      - Optimise velocity fields [true]
-% optimise.v.l      - Optimise residual precision [true]
-% optimise.tpl.a    - Optimise template [true]
-% optimise.mixreg.w - Optimise mixture weight [true]
-% optimise.mixreg.a - Optimise mixture weight prior [true]
+% optimise.pg.w      - Optimise subspace                [true]
+% optimise.z.z       - Optimise latent coordinates      [true]
+% optimise.z.A       - Optimise latent precision        [true]
+% optimise.q.q       - Optimise affine coordinates      [true]
+% optimise.q.A       - Optimise affine precision        [true]
+% optimise.v.v       - Optimise velocity fields         [true]
+% optimise.v.l       - Optimise residual precision      [true]
+% optimise.tpl.a     - Optimise template                [true]
+% optimise.tpl.scale - Optimise template scaling        [false]
+% optimise.mixreg.w  - Optimise mixture weight          [true]
+% optimise.mixreg.a  - Optimise mixture weight prior    [true]
 %
 % PROCESSING
 % ----------

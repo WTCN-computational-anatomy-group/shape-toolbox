@@ -584,7 +584,8 @@ function [g, h] = onMemory(mu, f, c, gmu, hessian)
     end
     
     if ~hessian
-        g  = bsxfun(@times, c, mu) - f;
+        % Multiply by sum(f, 4) in case responsibilities are not normalised
+        g  = bsxfun(@times, c, bsxfun(@times, mu, sum(f, 4))) - f;
         if ~isempty(gmu)
             g = -spm_matcomp('Pointwise', gmu, g, 't');
         end
@@ -621,7 +622,8 @@ function [g, h] = onMemory(mu, f, c, gmu, hessian)
                 end
             end
         end
-        
+        % Multiply by sum(f, 4) in case responsibilities are not normalised
+        h = bsxfun(@times, h, sum(f, 4));
         h(~isfinite(h)) = 0;
     end
 
