@@ -411,7 +411,7 @@ function opt = pgva_model_default(opt)
         opt.optimise.tpl.a = true;
     end
     if ~isfield(opt.optimise.tpl, 'scale')
-        opt.optimise.tpl.scale = true;
+        opt.optimise.tpl.scale = false;
     end
     if ~isfield(opt.optimise, 'mixreg')
         opt.optimise.mixreg = struct;
