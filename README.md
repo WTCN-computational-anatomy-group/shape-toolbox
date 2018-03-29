@@ -50,10 +50,10 @@ The illustrative JSON files are commented. However, comments are not allowed in 
            "dat":   "~/my_shape_model/"},
  "model": {"name": "categorical",               // Observed images are segmentations
            "nc":   3},                          // There are 3 classes, even though only 2 were provided.
-                                                //   This allows the third class to be automatically created 
+                                                //   This allows the third class to be automatically created
                                                 //   by "filling probabilities up to one"
  "pg":    {"K": 32},                            // Use 32 principal components
- "split": {"par": 0}                            // Do not use parallelisation 
+ "split": {"par": 0}                            // Do not use parallelisation
  }
 ```
 
@@ -81,12 +81,12 @@ Command line
            "dat":   "~/normalised_images/"},
  "model": {"name": "categorical",               // Observed images are segmentations
            "nc":   3},                          // There are 3 classes, even though only 2 were provided.
-                                                //   This allows the third class to be automatically created 
+                                                //   This allows the third class to be automatically created
                                                 //   by "filling probabilities up to one"
  "pg":    {"K": 32},                            // Use 32 principal components
  "z":     {"A0": [0.0016, 0.0030, ...]},        // Diagonal elements of the latent precision matrix
  "r":     {"l0": 18.8378},                      // Residual precision
- "split": {"par": 0}                            // Do not use parallelisation 
+ "split": {"par": 0}                            // Do not use parallelisation
  }
 ```
 
@@ -125,12 +125,12 @@ The following parameters are manually set and impact the model's behaviour:
 
   Cons:
   * Since latent coordinates are obtained from velocity fields, it might take a few iterations before the shape model appropriately captures the main modes of variation.
- 
+
 - The PGRA model (Principal Geodesic + Residual field + Affine) directly fits the different components of velocity fields &ndash; subspace, latent coordinatesm residual field &ndash; using Gauss-Newton optimisation.
 
   Pros:
   * Principal directions are directly picked up by optimising the data term, which might be faster and more robust.
-  
+
   Cons:
   * Laplace approximations are used for both the residual field and latent coordinates.
   * A line search is necessary when updating the principal subspace, which is quite costly as we need to reshoot all diffeomorphisms for each factor of the line search.
@@ -178,7 +178,7 @@ mixreg.n0      - Prior DF value for the regularisation mixture weight       - [1
 v.l0           - Prior expected anatomical noise precision                  - [17]
 v.n0           - Prior DF of the anatomical noise precision                 - [10]
 z.init         - Latent initialisation mode ('auto'/'zero'/'rand')          - ['auto']
-z.A0           - Prior expected latent precision matrix                     - [eye(K)] 
+z.A0           - Prior expected latent precision matrix                     - [eye(K)]
 z.n0           - Prior DF of the latent precision matrix                    - [K]
 q.A0           - Prior expected affine precision matrix                     - [eye(M)]
 q.n0           - Prior DF of the affine precision matrix                    - [M]
@@ -186,20 +186,21 @@ q.B            - Affine_basis                                               - ['
 q.hapx         - Approximate affine hessian                                 - [true]
 f.M            - Force same voxel-to-world to all images                    - [read from file]
  ```
- 
+
 #### Optimise parameters
- 
+
  ```
-optimise.pg.w  - Optimise subspace (true) or keep if fixed (false)          - [true]
-optimise.z.z   - Optimise latent coordinates                                - [true]
-optimise.z.A   - Optimise latent precision                                  - [true]
-optimise.q.q   - Optimise affine coordinates                                - [true]
-optimise.q.A   - Optimise affine precision                                  - [true]
-optimise.v.v   - Optimise velocity fields                                   - [true]
-optimise.v.l   - Optimise residual precision                                - [true]
-optimise.tpl.a - Optimise template                                          - [true]
-"    .mixreg.w - Optimise regularisation weight                             - [true]
-"    .mixreg.a - Optimise regularisation prior weight                       - [true]
+optimise.pg.w       - Optimise subspace                                     - [true]
+optimise.z.z        - Optimise latent coordinates                           - [true]
+optimise.z.A        - Optimise latent precision                             - [true]
+optimise.q.q        - Optimise affine coordinates                           - [true]
+optimise.q.A        - Optimise affine precision                             - [true]
+optimise.v.v        - Optimise velocity fields                              - [true]
+optimise.v.l        - Optimise residual precision                           - [true]
+optimise.tpl.a      - Optimise template                                     - [true]
+optimise.tpl.scale  - Optimise template scaling (PGVA/categorical only)     - [false]
+optimise.mixreg.w   - Optimise regularisation weight                        - [true]
+optimise.mixreg.a   - Optimise regularisation prior weight                  - [true]
 ```
 
 #### Processing
@@ -220,14 +221,14 @@ ui.debug       - Further debuging talk                                      - [f
 ui.ftrack      - Figure object for the lower bound tracking                 - [gcf]
 dist           - Distributed processing                                     - See `help distribute_default`.
 ```
- 
+
 #### I/O
- 
+
 ```
 dir.model      - Directory where to store model arrays and workspace       - ['.']
 dir.dat        - Directory where to store data array                       - [next to input]
 fnames.result  - Filename for the result environment saved after each EM   - ['pg_result.mat']
-                 iteration                                                  
+                 iteration
 fnames.model   - Structure of filenames for all file arrays
 fnames.dat     - Structure of filenames for all file arrays
 ondisk.model   - Structure of logical for temporary array                  - [default_ondisk]
@@ -249,7 +250,7 @@ ondisk.dat     - "      "       "       "       "       "
   * `*_default.m` sets all default parameters,
   * `*_data.m` sets all working data structures,
   * `*_init.m` initialises the model.
-  
+
 - [`utility-functions`](utility-functions): Various very basic utility functions. Some of them might get moved to the [`auxiliary-functions` toolbox](https://github.com/WTCN-computational-anatomy-group/auxiliary-functions) in the future.
 
 ## Dependencies
