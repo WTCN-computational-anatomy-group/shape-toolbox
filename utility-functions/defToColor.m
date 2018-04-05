@@ -1,11 +1,14 @@
-function out = defToColor(d)
+function out = defToColor(d, nrm)
 % FORMAT c = defToColor(d)
 % d   - categorical (4D) image.
 %
 % Generate an RGB volume from a displacement (e.g. initial velocity)
 % volume.
+
     d = numeric(d);
-    nrm = max(max(max(sum(d.^2, 4)))); % normalising constant
+    if nargin < 2 || ~isfinite(nrm)
+        nrm = max(max(max(sum(d.^2, 4)))); % normalising constant
+    end
 
     % Create HSV
     dim = [size(d) 1 1];
