@@ -93,6 +93,7 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
     hessian = p.Results.hessian;
     par     = p.Results.par;
     loop    = p.Results.loop;
+    output  = p.Results.output;
     
     if p.Results.debug, fprintf('* ghCategorical\n'); end
     
@@ -139,7 +140,6 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
     end
     
     % --- Prepare output
-    output = p.Results.output;
     if ~iscell(output)
         output = {output};
     end

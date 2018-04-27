@@ -1,12 +1,19 @@
-function a = reconstructLogProbaTemplate(na, varargin)
-% FORMAT a = reconstructLogProbaTemplate(na, ...)
+function a = unrotateLogTemplate(na, varargin)
+% FORMAT a = unrotateLogTemplate(na, ...)
 % 
-% ** Required **
+% REQUIRED
+% --------
 % na - Encoding of the log-probability template in the null space
-% ** Keyword arguments **
-% loop - How to split data processing ('none', 'slice') [auto]
-% par  - If true, parallelise processing [false]
-% ** Output **
+%
+% KEYWORD ARGUMENTS
+% -----------------
+% loop   - How to split data processing ('none', 'slice') [auto]
+% par    - If true, parallelise processing [false]
+% output - File array to store the output [not used]
+% debug  - Debugging talk [false]
+%
+% OUTPUT
+% ------
 % a  - Log-probabilities in the "classical" space
 %
 % This function allows to deal with log-probabilities which are encoded in
@@ -17,7 +24,7 @@ function a = reconstructLogProbaTemplate(na, varargin)
 
     % --- Parse inputs
     p = inputParser;
-    p.FunctionName = 'reconstructLogProbaTemplate';
+    p.FunctionName = 'unrotateLogTemplate';
     p.addRequired('na',  @checkarray);
     p.addParameter('loop',   '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'none'})));
     p.addParameter('par',    false, @isscalar);
@@ -29,7 +36,7 @@ function a = reconstructLogProbaTemplate(na, varargin)
     output = p.Results.output;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* reconstructLogProbaTemplate\n'); end
+    if debug, fprintf('* unrotateLogTemplate\n'); end
     
     % --- Optimise parallelisation and splitting schemes
     [par, loop] = autoParLoop(par, loop, isa(na, 'file_array'), size(na, 3));
@@ -46,7 +53,7 @@ function a = reconstructLogProbaTemplate(na, varargin)
     
     % --- No loop
     if strcmpi(loop, 'none')
-        if debug, fprintf('   - No loop\n'); end;
+        if debug, fprintf('   - No loop\n'); end
         a(:,:,:,:) = reshape(reshape(na, [], nc-1) * R', [lat nc]);
         
     % --- Loop on slices

@@ -1,5 +1,5 @@
 function out = copyarray(in, out)
-% FORMAT out = checkarray(in, (out))
+% FORMAT out = copyarray(in, (out))
 % in  - array or file_array to copy
 % out - array/file_array/filename where to copy
 %
