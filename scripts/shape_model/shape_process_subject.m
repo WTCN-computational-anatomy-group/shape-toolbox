@@ -69,18 +69,10 @@ function dat = shape_process_subject(dat, model, opt)
 %     end
     
     % =====================================================================
-    % [TODO] Update template gradient/Hessian
-%     if opt.optimse.tpl.a && strcmpi(opt.tpl.update, 'map')
-%         [dat.tpl.g, dat.tpl.h] = ghTemplate(...
-%             noisemodel, ...         % Matching term (Categorical/Normal/...)
-%             dat.tpl.wmu, ...        % Warped+Softmaxed+Rescaled template
-%             dat.f.f, ...            % Observed image (class responsibilities)
-%             'ipsi', dat.v.ipsi, ... % Rigid+diffeo transform to push grad/hess
-%             'lat', opt.tpl.lat, ... % Template lattice (to push)
-%             'output', {dat.tpl.g, dat.tpl.h}, ... % Output file_array (saves memory)
-%             'par', par, ...         % parallelise processing? (usually no)
-%             'debug', opt.ui.debug); % Write debugging stuff? (usually no)
-%     end
+    % Update template gradient/Hessian
+    if opt.optimse.tpl.a && strcmpi(opt.tpl.update, 'map')
+        dat = updateTemplateGradHess(dat, omdel, opt);
+    end
     
     % =====================================================================
     % Exit

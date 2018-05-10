@@ -31,6 +31,8 @@ function dat = updateWarpedTemplate(dat, model, opt)
         wout = pullTemplate(...
             dat.v.ipsi, ...             % Inverse diffeo+rigid transform
             model.tpl.a, ...            % Template (log)-coefficients
+            'order',  opt.tpl.itrp, ... % Interpolation order
+            'bnd',   ~opt.tpl.bnd, ...  % Boundary condition
             'output', wout, ...         % Output file_array (saves memory)
             'par',    opt.par.within_subject, ... % parallelise processing? (usually no)
             'debug',  opt.ui.debug);    % Write debugging stuff? (usually no)

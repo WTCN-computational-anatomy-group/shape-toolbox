@@ -1,4 +1,4 @@
-function model = aggregateVelocity(dat, model, ~)
+function model = aggregateVelocity(dat, model, opt)
 % FORMAT model = aggregateVelocity(dat, model, opt)
 % dat   - Subject-specific data
 % model - Model-specific data
@@ -15,7 +15,7 @@ function model = aggregateVelocity(dat, model, ~)
 
     % =====================================================================
     % Read input from disk (if needed)
-    [dat, ~, model, modelpath] = fileToStruct(dat, model);
+    [dat, ~, model, modelpath, opt] = fileToStruct(dat, model, opt);
 
     % =====================================================================
     % Aggregate data
@@ -25,8 +25,16 @@ function model = aggregateVelocity(dat, model, ~)
     model.v.tr      = 0; % For lambda update
     model.v.reg     = 0; % For lambda update
     model.v.uncty   = 0; % For lambda update
-    model.lb.v1.val = 0; % Log-likelihood (observed velocity)
-    model.lb.v2.val = 0; % KL-divergence  (latent velocity)
+    if opt.v.N
+        model.lb.v1.val = 0; % Log-likelihood (observed velocity)
+        model.lb.v1.type = 'll';
+        model.lb.v1.name = 'LL Velocity';
+    end
+    if opt.f.N
+        model.lb.v2.val = 0; % KL-divergence  (latent velocity)
+        model.lb.v2.type = 'kl';
+        model.lb.v2.name = '-KL Velocity';
+    end
     for n=1:numel(dat)
         if iscell(dat)
             dat1 = dat{n};
@@ -40,22 +48,13 @@ function model = aggregateVelocity(dat, model, ~)
             nf = nf + 1;
             model.v.tr    = model.v.tr    + dat1.v.lb.tr;
             model.v.uncty = model.v.uncty + dat1.v.lb.uncty;
-            model.lb.v2.val = model.lb.v2.val + model.v.lb.val;
+            model.lb.v2.val = model.lb.v2.val + dat1.v.lb.val;
         else
             nv = nv + 1;
-            model.lb.v1.val = model.lb.v1.val + model.v.lb.val;
+            model.lb.v1.val = model.lb.v1.val + dat1.v.lb.val;
         end
-        model.v.n      = model.v.n      + 1;
-        model.v.reg    = model.v.reg    + dat1.v.lb.reg;
-    end
-    if nf == 0
-        model.lb.v.val = model.lb.v1.val;
-        model.lb = rmfield(model.lb, 'v1');
-        model.lb = rmfield(model.lb, 'v2');
-    elseif nv == 0
-        model.lb.v.val = model.lb.v2.val;
-        model.lb = rmfield(model.lb, 'v1');
-        model.lb = rmfield(model.lb, 'v2');
+        model.v.n      = model.v.n   + 1;
+        model.v.reg    = model.v.reg + dat1.v.lb.reg;
     end
         
     % =====================================================================

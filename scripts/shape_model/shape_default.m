@@ -15,6 +15,8 @@ function opt = shape_default(opt)
     %    MODEL
     % =====================================================================
     
+    opt.match = 'pull';
+    
     % ---------------------------------------------------------------------
     % Data model
     % ---------------------------------------------------------------------
@@ -89,11 +91,8 @@ function opt = shape_default(opt)
     if ~isfield(opt, 'mixreg')
         opt.mixreg = struct;
     end
-    if ~isfield(opt.mixreg, 'a0')
-        opt.mixreg.a0 = 0.5;
-    end
-    if ~isfield(opt.mixreg, 'n0')
-        opt.mixreg.n0 = 1e-4;
+    if ~isfield(opt.mixreg, 'w0')
+        opt.mixreg.w0 = 1; % 0.95;
     end
     
     % ---------------------------------------------------------------------
@@ -103,6 +102,9 @@ function opt = shape_default(opt)
     if ~isfield(opt, 'tpl')
         opt.tpl = struct;
     end
+    if ~isfield(opt.tpl, 'update')
+        opt.tpl.update = 'map';
+    end
     if ~isfield(opt.tpl, 'prm')
         % Parameters of the differential operator
         % 1) Absolute displacement
@@ -111,10 +113,10 @@ function opt = shape_default(opt)
         opt.tpl.prm = [1e-3  1e-1 0];
     end
     if ~isfield(opt.tpl, 'bnd')
-        % Boundary condition for interpolation
-        % 0 = Mirror
-        % 1 = Circulant
-        opt.tpl.bnd = 1;
+        % Boundary condition (should be inversed for interpolation)
+        % 0 = Circulant 
+        % 1 = Mirror/Neumann
+        opt.tpl.bnd = 0;
     end
     if ~isfield(opt.tpl, 'itrp')
         % Interpolation order when warping the template to subjects
@@ -125,9 +127,6 @@ function opt = shape_default(opt)
     end
     if isfield(opt.tpl, 'lat')
         opt.tpl.lat = opt.tpl.lat(:)'; % always horizontal
-    end
-    if isfield(opt.tpl, 'update')
-        opt.tpl.update = 'map';
     end
     
     % ---------------------------------------------------------------------
@@ -160,7 +159,7 @@ function opt = shape_default(opt)
         % 'auto' = If a subspace is provided, 'zero', else, 'rand'.
         % 'zero' = Start from zero coordinates
         % 'rand' = Start from random coordinates
-        opt.z.init = 'auto';
+        opt.z.init = 'rand';
     end
     if ~isfield(opt.z, 'A0')
         % Prior value for the latent precision matrix
@@ -268,35 +267,9 @@ function opt = shape_default(opt)
         % Number of EM iterations to take into account for moving average
         opt.lb.moving = 3;
     end
-    
-    % ---------------------------------------------------------------------
-    % Parallel/Distributed processing
-    % ---------------------------------------------------------------------
-    if ~isfield(opt, 'par')
-        opt.par = struct;
-    end
-    if ~isfield(opt.par, 'subjects')
-        opt.par.subjects = struct;
-    end
-    if ~isstruct(opt.par.subject)
-        nworkers = opt.par.subject;
-        opt.par.subject = struct;
-        opt.par.subject.client.workers = nworkers;
-        if nworkers > 0
-            opt.par.subject.mode = 'parfor';
-        else
-            opt.par.subject.mode = 'for';
-        end
-    end
-    if ~isfield(opt.par.subjects, 'mode')
-        opt.par.subjects.mode = 'for';
-    end
-     opt.par.subjects = distribute_default(opt.par.subjects);
-    if ~isfield(opt.par, 'within_main')
-        opt.par.within_main = 0;
-    end
-    if ~isfield(opt.par, 'within_subject')
-        opt.par.within_subject = 0;
+    if ~isfield(opt.lb,  'exact')
+        % Number of EM iterations to take into account for moving average
+        opt.lb.exact = true;
     end
     
     % ---------------------------------------------------------------------
@@ -317,6 +290,38 @@ function opt = shape_default(opt)
     if ~isfield(opt.ui, 'ftrack')
         % Figure object where to plot the lower bound
         opt.ui.ftrack = gcf;
+    end
+    
+    % ---------------------------------------------------------------------
+    % Parallel/Distributed processing
+    % ---------------------------------------------------------------------
+    if ~isfield(opt, 'par')
+        opt.par = struct;
+    end
+    if ~isfield(opt.par, 'subject')
+        opt.par.subjects = struct;
+    end
+    if ~isstruct(opt.par.subjects)
+        nworkers = opt.par.subjects;
+        opt.par.subjects = struct;
+        opt.par.subjects.client.workers = nworkers;
+        if nworkers > 0
+            opt.par.subjects.mode = 'parfor';
+        else
+            opt.par.subjects.mode = 'for';
+        end
+    end
+    if ~isfield(opt.par.subjects, 'mode')
+        opt.par.subjects.mode = 'for';
+        opt.par.subjects.client.workers = 0;
+    end
+    opt.par.subjects.verbose = opt.ui.verbose;
+    opt.par.subjects = distribute_default(opt.par.subjects);
+    if ~isfield(opt.par, 'within_main')
+        opt.par.within_main = 0;
+    end
+    if ~isfield(opt.par, 'within_subject')
+        opt.par.within_subject = 0;
     end
     
     
@@ -467,6 +472,12 @@ function opt = shape_default(opt)
     if ~isfield(opt.ondisk.model.tpl, 'a')
         opt.ondisk.model.tpl.a = true;
     end
+    if ~isfield(opt.ondisk.model.tpl, 'g')
+        opt.ondisk.model.tpl.g = true;
+    end
+    if ~isfield(opt.ondisk.model.tpl, 'h')
+        opt.ondisk.model.tpl.h = true;
+    end
         
     % --- Subjects
         
@@ -501,6 +512,9 @@ function opt = shape_default(opt)
     end
     if ~isfield(opt.ondisk.dat.v, 'r')
         opt.ondisk.dat.v.r = false;
+    end
+    if ~isfield(opt.ondisk.dat.v, 'wz')
+        opt.ondisk.dat.v.wz = false;
     end
     if ~isfield(opt.ondisk.dat.v, 'g')
         opt.ondisk.dat.v.g = false;
@@ -590,10 +604,16 @@ function opt = shape_default(opt)
         opt.fnames.model.tpl.mu = 'template.nii';
     end
     if ~isfield(opt.fnames.model.tpl, 'gmu')
-        opt.fnames.model.tpl.gmu = 'grad_template.nii';
+        opt.fnames.model.tpl.gmu = 'spatial_gradients.nii';
     end
     if ~isfield(opt.fnames.model.tpl, 'a')
         opt.fnames.model.tpl.a = 'log_template.nii';
+    end
+    if ~isfield(opt.fnames.model.tpl, 'g')
+        opt.fnames.model.tpl.g = 'gradient_template.nii';
+    end
+    if ~isfield(opt.fnames.model.tpl, 'h')
+        opt.fnames.model.tpl.h = 'hessian_template.nii';
     end
     
     % ---------------------------------------------------------------------
@@ -654,6 +674,13 @@ function opt = shape_default(opt)
             opt.fnames.dat.v.r = 'r_';
         else
             opt.fnames.dat.v.r = 'residual_field.nii';
+        end
+    end
+    if ~isfield(opt.fnames.dat.v, 'wz')
+        if isempty(opt.dir.dat)
+            opt.fnames.dat.v.wz = 'wz_';
+        else
+            opt.fnames.dat.v.wz = 'mean_velocity.nii';
         end
     end
     if ~isfield(opt.fnames.dat.v, 'g')

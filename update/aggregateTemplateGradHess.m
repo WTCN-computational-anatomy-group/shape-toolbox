@@ -19,7 +19,7 @@ function model = aggregateTemplateGradHess(dat, model, opt)
 
     % =====================================================================
     % Prepare on disk
-    if ~isempty(opt.fastdir)
+    if isfield(opt, 'fastdir') && ~isempty(opt.fastdir)
         if exist('java.util.UUID', 'class')
             uid = char(java.util.UUID.randomUUID()); % Session UID
         else
@@ -28,16 +28,19 @@ function model = aggregateTemplateGradHess(dat, model, opt)
         mkdir
     	dir = fullfile(opt.fastdir, uid);
         mkdir(dir);
-    end
-    if ~isempty(opt.fastdir) % copy for faster summation
+        
         g = file_array(fullfile(dir,'g.nii'));
         h = file_array(fullfile(dir,'h.nii'));
     else
         g = model.tpl.g;
         h = model.tpl.h;
     end
-    dat1 = dat{1};
-    if isstring(dat1)
+    if iscell(dat)
+        dat1 = dat{1};
+    else
+        dat1 = dat(1);
+    end
+    if ischar(dat1)
         dat1 = load(dat1);
     end
     g = prepareOnDisk(g,size(dat1.tpl.g));
@@ -55,11 +58,11 @@ function model = aggregateTemplateGradHess(dat, model, opt)
         else
             dat1 = dat(n);
         end
-        if isstring(dat1)
+        if ischar(dat1)
             dat1 = load(dat1);
         end
         if defval(dat1.f, '.observed', true)
-            if ~isempty(opt.fastdir)
+            if isfield(opt, 'fastdir') && ~isempty(opt.fastdir)
                 g1 = rmarray(dat1.tpl.g);
                 h1 = rmarray(dat1.tpl.h);
                 copyfile(dat1.tpl.g.fname, fullfile(dir,'g1.nii'));
@@ -83,7 +86,7 @@ function model = aggregateTemplateGradHess(dat, model, opt)
     
     % =====================================================================
     % Push data
-    if ~isempty(opt.fastdir)
+    if isfield(opt, 'fastdir') && ~isempty(opt.fastdir)
         copyfile(g.fname, model.tpl.g.fname);
         copyfile(h.fname, model.tpl.h.fname);
         rmarray(g);

@@ -39,6 +39,12 @@ function setonepath(component)
             addpath(fullfile(path, 'scripts', 'pgva'));
             addpath(fullfile(path, 'core', 'register'));
             addpath(fullfile(path, 'core', 'shape'));
+        case 'shape_model'
+            addpath(fullfile(path, 'scripts'));
+            addpath(fullfile(path, 'scripts', 'shape_model'));
+            addpath(fullfile(path, 'core', 'register'));
+            addpath(fullfile(path, 'core', 'shape'));
+            addpath(fullfile(path, 'update'));
         case 'pgra'
             addpath(fullfile(path, 'scripts'));
             addpath(fullfile(path, 'scripts', 'pgra'));

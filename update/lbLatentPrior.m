@@ -20,8 +20,8 @@ function model = lbLatentPrior(model, opt)
     if isfinite(opt.z.n0) && opt.z.n0 > 0
         % if n0 >  0 : Bayesian update -> KL divergence
         model.lb.Az.val = spm_prob('Wishart', 'kl', ...
-                                   model.q.n, model.q.A, ...
-                                   opt.q.A0,  opt.q.n0);
+                                   model.z.A, model.z.n, ...
+                                   opt.z.A0,  opt.z.n0);
         model.lb.Az.type = 'kl';
         model.lb.Az.name = '-KL Latent precision';
     end

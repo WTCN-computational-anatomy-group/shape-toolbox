@@ -1,4 +1,4 @@
-function model = aggregateAffine(dat, model, ~)
+function model = aggregateAffine(dat, model, opt)
 % FORMAT model = aggregateAffine(dat, model, opt)
 % dat   - Subject-specific data
 % model - Model-specific data
@@ -15,7 +15,7 @@ function model = aggregateAffine(dat, model, ~)
 
     % =====================================================================
     % Read input from disk (if needed)
-    [dat, ~, model, modelpath] = fileToStruct(dat, model);
+    [dat, ~, model, modelpath, opt] = fileToStruct(dat, model, opt);
 
     % =====================================================================
     % Aggregate data
@@ -23,7 +23,11 @@ function model = aggregateAffine(dat, model, ~)
     model.q.qq     = 0;
     model.q.S      = 0;
     model.q.n      = 0;
-    model.lb.q.val = 0;
+    if opt.q.Mr
+        model.lb.q.val = 0;
+        model.lb.q.type = 'kl';
+        model.lb.q.name = '-KL Affine';
+    end
     for n=1:numel(dat)
         if iscell(dat)
             dat1 = dat{n};
@@ -38,7 +42,9 @@ function model = aggregateAffine(dat, model, ~)
             model.q.q      = model.q.q      + dat1.q.q;
             model.q.qq     = model.q.qq     + dat1.q.qq;
             model.q.S      = model.q.S      + dat1.q.S;
-            model.lb.q.val = model.lb.q.val + model.q.lb.val;
+            if opt.q.Mr
+                model.lb.q.val = model.lb.q.val + model.q.lb.val;
+            end
         end
     end  
         

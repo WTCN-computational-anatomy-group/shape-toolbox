@@ -6,10 +6,10 @@ function shape_plot_all(model, opt)
     
     if opt.ui.verbose
         try
-            figure(opt.ui.ftrack);
+            set(0, 'CurrentFigure', opt.ui.ftrack);   
             clf(opt.ui.ftrack);
         catch
-            figure(gcf);
+            set(0, 'CurrentFigure', gcf);
             clf(gcf);
         end
         
@@ -87,9 +87,9 @@ function shape_plot_all(model, opt)
             % Data likelihood
             i = i + 1;
             subplot(nh,nw,i)
-            plot([model.lb.lb.it model.lb.lb.curit], model.lb.m.list, ...
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.f.list, ...
                  colors(mod(i, length(colors))+1))
-            title(model.lb.m.name)
+            title(model.lb.f.name)
         else
             i = i +1;
         end
@@ -117,9 +117,16 @@ function shape_plot_all(model, opt)
             % LL velocity
             i = i + 1;
             subplot(nh,nw,i)
-            plot([model.lb.lb.it model.lb.lb.curit], model.lb.v2.list, ...
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.v1.list, ...
                  colors(mod(i, length(colors))+1))
-            title(model.lb.v2.name)
+            title(model.lb.v1.name)
+        elseif opt.optimise.tpl.a && strcmpi(opt.tpl.update, 'map')
+            % Template prior
+            i = i + 1;
+            subplot(nh,nw,i)
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.a.list, ...
+                 colors(mod(i, length(colors))+1))
+            title(model.lb.a.name)
         else
             i = i + 1;
         end
@@ -127,9 +134,9 @@ function shape_plot_all(model, opt)
             % KL velocity
             i = i + 1;
             subplot(nh,nw,i)
-            plot([model.lb.lb.it model.lb.lb.curit], model.lb.v1.list, ...
+            plot([model.lb.lb.it model.lb.lb.curit], model.lb.v2.list, ...
                  colors(mod(i, length(colors))+1))
-            title(model.lb.v1.name)
+            title(model.lb.v2.name)
         else
             i = i + 1;
         end

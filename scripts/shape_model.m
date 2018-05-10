@@ -211,28 +211,23 @@ function [model, dat, opt] = shape_model(varargin)
         % -----------------------------------------------------------------
         % We store some values to avoid unneeded computation
         spm_diffeo('boundary', opt.pg.bnd);
-        opt.pg.LogDetL = ldapprox(opt.pg.prm, 'vs', opt.tpl.vs, 'dim', [opt.tpl.lat 3]);
-        ker = spm_diffeo('kernel', double(opt.tpl.lat), double([opt.tpl.vs opt.pg.prm]));
-        opt.pg.ker = [ker(1,1,1,1,1) ker(1,1,1,2,2) ker(1,1,1,3,3)];
-        clear ker
+        opt.pg.LogDetL  = ldapprox(opt.pg.prm,  'vs', opt.tpl.vs, 'dim', [opt.tpl.lat 3], 'type', 'diffeo');
+        opt.tpl.LogDetL = ldapprox(opt.tpl.prm, 'vs', opt.tpl.vs, 'dim', opt.tpl.lat,     'type', 'field');
         
         % Initialise all arrays (= model variables)
         % -----------------------------------------------------------------
-        if opt.ui.verbose
-            fprintf(['%10s | %10s | ' repmat('=',1,50) ' |\n'], 'EM', 'Init');
-        end
         [dat, model] = shape_init(dat, model, opt);
         
         % Some more stuff regarding processing
         % -----------------------------------------------------------------
-        model.emit = 1;
+        model.emit = 0;
     end
     
     
     % =====================================================================
     %    Processing
     % =====================================================================
-    switch lower(opt.par.mode)
+    switch lower(opt.par.subjects.mode)
         case 'qsub.tree'
             
             % -------------------------------------------------------------
@@ -252,14 +247,24 @@ function [model, dat, opt] = shape_model(varargin)
             
             for emit=model.emit:opt.iter.em
                 
-                % Subject-specific processing
-                % ---------------------------------------------------------
-                [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
-                    'shape_process_subject', 'iter', dat, model, opt);
+                model = updateLowerBound(model, 'gain');
                 
-                % Population-specific processing
-                % ---------------------------------------------------------
-                model = shape_process_pop(dat, model, opt);
+                if opt.lb.exact
+                    
+                    [dat, model] = shape_process(dat, model, opt);
+                    
+                else % Most efficient 
+                
+                    % Subject-specific processing
+                    % -----------------------------------------------------
+                    [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
+                        'shape_process_subject', 'iter', dat, model, opt);
+
+                    % Population-specific processing
+                    % -----------------------------------------------------
+                    model = shape_process_pop(dat, model, opt);
+                    
+                end
                 
                 % Check convergence
                 % ---------------------------------------------------------

@@ -22,27 +22,35 @@ function dat = shape_init_subject(dat, model, opt)
     % Affine coordinates
     if defval(opt.f, '.observed', true) && opt.optimise.q.q
         dat = initAffine(dat, model, opt);
-        dat = lbAffine(dat, model, opt);
     end
 
     % =====================================================================
     % Latent coordinates
-    dat = initLatent(dat, model, opt);
-    dat = lbLatent(dat, model, opt);
+    if opt.optimise.z.z
+        dat = initLatent(dat, model, opt);
+        dat = lbLatent(dat, model, opt);
+    end
 
     % =====================================================================
     % Velocity / transforms
-    dat = initVelocity(dat, model, opt);
-    dat = lbVelocity(dat, model, opt);
+    if opt.optimise.v.v
+        dat = initVelocity(dat, model, opt);
+    end
+    
+    % ====================================================================
+    % Tissue scales
+    dat = initTissueScale(dat, model, opt);
     
     % ====================================================================
     % Template
-    switch lower(opt.tpl.update)
-        case 'ml'
-            dat = initPush(dat, model, opt);
-        case 'map'
-            dat = initTemplateGradHess(dat, model, opt);
-            dat = lbMatching(dat, model, opt);
+    if opt.optimise.tpl.a
+        switch lower(opt.tpl.update)
+            case 'ml'
+                dat = initPush(dat, model, opt);
+            case 'map'
+                dat = updateWarpedTemplate(dat, model, opt);
+                dat = updateTemplateGradHess(dat, model, opt);
+        end
     end
     
     % =====================================================================

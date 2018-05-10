@@ -29,6 +29,7 @@ function [g, h, htype] = ghLaplace(mu, f, varargin)
 %         > If provided on top of ga, compute push(gM) * gA
 %           In this case, ga size is [nx ny nz k 3]
 % lat   - Output lattice size (not needed if ga provided)
+% circ  - (Push only) Boundary conditions for pushing [1]
 % count - Pushed voxel count.
 % bb    - Bounding box (if different between template and pushed image)
 % loop  - Specify how to split data processing
@@ -80,6 +81,7 @@ function [g, h, htype] = ghLaplace(mu, f, varargin)
     p.addOptional('gmu', []);
     p.addParameter('ipsi',   []);
     p.addParameter('lat',    []);
+    p.addParameter('circ',    1);
     p.addParameter('count',  [],     @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('bb',     struct, @isstruct);
     p.addParameter('loop',   '',    @ischar);
@@ -581,8 +583,12 @@ function [g, h, htype] = ghLaplace(mu, f, varargin)
     % --- Push gradient if needed
     if checkarray(ipsi)
         if hessian || nargin > 1
-            h = pushImage(ipsi, h, lat, 'output', h, ...
-                'loop', p.Results.loop, 'par', p.Results.par, 'debug', p.Results.debug);
+            h = pushImage(ipsi, h, lat, ...
+                'output', h, ...
+                'circ',   p.Results.circ, ...
+                'loop',   p.Results.loop, ...
+                'par',    p.Results.par, ...
+                'debug',  p.Results.debug);
             if ~isempty(ga)
                 [indv, len] = spm_matcomp('SymIndices', nvec, 'n');
                 [hc, h] = deal(h, zeros([lat len], 'single'));
@@ -602,8 +608,12 @@ function [g, h, htype] = ghLaplace(mu, f, varargin)
             end
         end
         if ~hessian
-            g = pushImage(ipsi, g, lat, 'output', g, ...
-                'loop', p.Results.loop, 'par', p.Results.par, 'debug', p.Results.debug);
+            g = pushImage(ipsi, g, lat, ...
+                'output', g, ...
+                'circ',   p.Results.circ, ...
+                'loop',   p.Results.loop, ...
+                'par',    p.Results.par, ...
+                'debug',  p.Results.debug);
             if ~isempty(ga)
                 [gc, g] = deal(g, zeros([lat nvec], 'single'));
                 for z=1:lat(3)

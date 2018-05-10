@@ -35,7 +35,7 @@ function dat = lbAffine(dat, model, opt)
     
         % =================================================================
         % Exit
-    dat = structToFile(dat, datpath);
+        dat = structToFile(dat, datpath);
         
     end
 end

@@ -47,7 +47,7 @@ function [lat, Mmu, vs] = autoTemplateLattice(dims, M, vs)
                 continue
             end
             count = count + 1;
-            vs    = vs + sqrt(M{i}(1:3,1:3).^2);
+            vs    = vs + sqrt(sum(M{i}(1:3,1:3).^2));
         end
         vs = vs/count;
     end

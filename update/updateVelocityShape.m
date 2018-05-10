@@ -1,5 +1,5 @@
 function dat = updateVelocityShape(dat, model, opt)
-% FORMAT dat = updateAffine(dat, model, opt)
+% FORMAT dat = updateVelocityShape(dat, model, opt)
 % dat   - Subject-specific data
 % model - Model-specific data
 % opt   - Options
@@ -28,7 +28,7 @@ function dat = updateVelocityShape(dat, model, opt)
     % > if option activated and previous update failed, do not try
     if opt.iter.pena && dat.v.ok < 0
         dat.v.ok = dat.v.ok + 1;
-        dat = exit_function(dat, ondisk.dat);
+        dat = structToFile(dat, datpath);
         return
     end
     
@@ -61,6 +61,7 @@ function dat = updateVelocityShape(dat, model, opt)
             dat.f.f, ...                % Observed matched image (responsibility)
             model.tpl.gmu, ...          % (Log)-template spatial gradients
             'ipsi',  dat.v.ipsi, ...    % Complete (rigid+diffeo) inverse transform
+            'circ',  ~opt.tpl.bnd, ...  % Boundary conditions
             'par',   opt.par.within_subject, ... % Parallelise stuff? (usually no)
             'debug', opt.ui.debug);     % Write debuging stuff? (usually no)
 
@@ -68,19 +69,28 @@ function dat = updateVelocityShape(dat, model, opt)
         % -----------------------------------------------------------------
         % Gradient/Hessian of the prior term
         % g = g - w * lam * LWz
-        wz = single(numeric(dat.v.wz));
+        wz = reconstructVelocity(...
+                'latent',   dat.z.z, ...
+                'subspace', model.pg.w, ...
+                'par',      opt.par.within_subject);
         g = g - spm_diffeo('vel2mom', wz, double([opt.tpl.vs (model.mixreg.w(1) * model.v.l * opt.pg.prm)]));
         v = numeric(dat.v.v);
         r = v - wz;
         clear wz
         % g = g + (w * lam + (1-w)) * Lv
         g = g + ghPriorVel(v, opt.tpl.vs, (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.prm, opt.pg.bnd);
+        if opt.model.dim == 2
+            g(:,:,:,3) = 0;   % 2D case: ensure null gradient in 3rd dim
+        end
 
         % -----------------------------------------------------------------
         % Search direction
         dv = -spm_diffeo('fmg', single(h), single(g), ...
             double([opt.tpl.vs (model.mixreg.w(1)*model.v.l + model.mixreg.w(2)) * opt.pg.prm 2 2]));
         clear g
+        if opt.model.dim == 2
+            dv(:,:,:,3) = 0;   % 2D case: ensure null velocity in 3rd dim
+        end
 
         % -----------------------------------------------------------------
         % Line search
@@ -93,7 +103,7 @@ function dat = updateVelocityShape(dat, model, opt)
             dat.f.f, ...
             'v0',       v, ...                 % Previous velocity field (only needed if w(2) > 0)
             'lam',      model.v.l, ...         % Residual precision
-            'w',        model.mixreg.w(1), ... % Mixture of regularisations weight
+            'w',        model.mixreg.w(2), ... % Mixture of regularisations weight
             'prm',      opt.pg.prm, ...        % Regularisation parameters
             'itgr',     opt.iter.itg, ...      % Number of integration steps
             'bnd',      opt.pg.bnd, ...        % Boundary conditions
@@ -120,7 +130,6 @@ function dat = updateVelocityShape(dat, model, opt)
             if model.mixreg.w(2)
                 dat.v.lb.regv = result.v(:)' * m(:);
             end
-            dat.v.m       = copyarray(m, dat.v.m);
             clear m
             dat.v.r       = copyarray(result.r,    dat.v.r);
             dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
@@ -171,7 +180,8 @@ function dat = updateVelocityShape(dat, model, opt)
             dat.tpl.wmu, ...            % Warped (+ softmaxed) template
             dat.f.f, ...                % Observed matched image (responsibility)
             model.tpl.gmu, ...          % (Log)-template spatial gradients
-            'ipsi',    dat.v.ipsi, ...  % Complete (rigid+diffeo) inverse transform
+            'ipsi',    ipsi, ...        % Complete (rigid+diffeo) inverse transform
+            'circ',  ~opt.tpl.bnd, ...  % Boundary conditions
             'hessian', true, ...        % Do not compute gradient
             'par',     opt.par.within_subject, ... % Parallelise stuff? (usually no)
             'debug',   opt.ui.debug);   % Write debuging stuff? (usually no)

@@ -19,7 +19,7 @@ function dat = updateAffine(dat, model, opt)
     % =====================================================================
     % If the velocity is an observed -> nothing to do
     if defval(dat.v, '.observed', false)
-        dat = exit_function(dat, ondisk.dat);
+        dat = structToFile(dat, datpath);
         return
     end
 
@@ -35,22 +35,20 @@ function dat = updateAffine(dat, model, opt)
     % =====================================================================
     % If non-rigid transformation
     % > compute direct diffeomorphism and jacobian determinant
-    if opt.q.Mr
-        if isfield(dat.v, 'v')
-            [iphi, phi, jac] = exponentiateVelocity(...
-                dat.v.v, ...               % Current velocity
-                'iphi', 'phi', 'jac', ...  % What to compute?
-                'itgr',  opt.iter.itg, ... % Nb of integration steps
-                'vs',    opt.tpl.vs, ...   % Velocity voxel size
-                'prm',   opt.pg.prm, ...   % Registration regularisation param
-                'bnd',   opt.pg.bnd, ...   % Boundary condition
-                'debug', opt.ui.debug);    % Write debugging stuff (usually no)
-        else
-            % Pure rigid/affine case
-            iphi = spm_warps('identity', opt.tpl.lat);
-            phi  = [];
-            jac  = [];
-        end
+    if isfield(dat.v, 'v')
+        [iphi, phi, jac] = exponentiateVelocity(...
+            dat.v.v, ...               % Current velocity
+            'iphi', 'phi', 'jac', ...  % What to compute?
+            'itgr',  opt.iter.itg, ... % Nb of integration steps
+            'vs',    opt.tpl.vs, ...   % Velocity voxel size
+            'prm',   opt.pg.prm, ...   % Registration regularisation param
+            'bnd',   opt.pg.bnd, ...   % Boundary condition
+            'debug', opt.ui.debug);    % Write debugging stuff (usually no)
+    else
+        % Pure rigid/affine case
+        iphi = spm_warps('identity', opt.tpl.lat);
+        phi  = [];
+        jac  = [];
     end
     
     % =====================================================================
@@ -83,6 +81,7 @@ function dat = updateAffine(dat, model, opt)
             phi, ...                    % Direct diffeomorphism
             jac, ...                    % Jacobian determinant of the direct diffeo
             'ipsi',   dat.v.ipsi, ...   % Complete (rigid+diffeo) inverse transform
+            'circ',  ~opt.tpl.bnd, ...  % Boundary conditions
             'Mmu',    model.tpl.M, ...  % Template voxel-to-world
             'approx', opt.q.hapx, ....  % Approximate hessian? (usually true)
             'par',    opt.par.within_subject, ... % Parallelise stuff? (usually no)
@@ -96,8 +95,10 @@ function dat = updateAffine(dat, model, opt)
             g(rind)      = g(rind)      + gq;
             h(rind,rind) = h(rind,rind) + hq;
             clear gq hq
+            A = model.q.A;
         else
             rind = [];
+            A    = [];
         end
 
         % -----------------------------------------------------------------
@@ -118,7 +119,7 @@ function dat = updateAffine(dat, model, opt)
             model.tpl.a, ...            % (Log)-template parameters
             dat.f.f, ...                % Observed matched image (responsibility)
             'B',       opt.q.B, ...     % Rigid/affine Lie basis
-            'regq',    model.q.A, ...   % Prior precision matrix (only if not rigid)
+            'regq',    A, ...           % Prior precision matrix (only if not rigid)
             'rind',    rind, ...        % Indices of regularised (affine) param
             'iphi',    iphi, ...        % Inverse diffeomorphism
             'Mf',      dat.f.M, ...     % Image voxel-to-world
@@ -184,6 +185,7 @@ function dat = updateAffine(dat, model, opt)
                 phi, ...                    % Direct diffeomorphism
                 jac, ...                    % Jacobian determinant of the direct diffeo
                 'ipsi',    dat.v.ipsi, ...  % Complete (rigid+diffeo) inverse transform
+                'circ',  ~opt.tpl.bnd, ...  % Boundary conditions
                 'hessian', true, ...        % Do not compute gradient
                 'Mmu',     model.tpl.M, ... % Template voxel-to-world
                 'approx',  opt.q.hapx, .... % Approximate hessian? (usually true)

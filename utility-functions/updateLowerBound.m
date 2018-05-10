@@ -29,12 +29,12 @@ function model = updateLowerBound(model, gain)
         model.lb.lb.it       = [model.lb.lb.it   model.lb.lb.curit];
         model.lb.lb.curlist  = [];
         model.lb.lb.curit    = [];
-        if model.lb.lb.gain < 0
-            strwarn = '!! dropped';
-        else
-            strwarn = '';
-        end
-        fprintf('%10s | %10s | %6.3e\n', 'Gain', strwarn, model.lb.lb.gain);
+%         if model.lb.lb.gain < 0
+%             strwarn = '!! dropped';
+%         else
+%             strwarn = '';
+%         end
+%         fprintf('%10s | %10s | %6.3e\n', 'Gain', strwarn, model.lb.lb.gain);
         return
     end
 
@@ -79,13 +79,13 @@ function model = updateLowerBound(model, gain)
     
     % Print stuff
     % -----------
-    fprintf('%10s | ', 'LB');
+    fprintf('%27s | ', 'LB');
     if diff > 0
-        fprintf('%10s | ', '(+)');
+        fprintf('%10s   ', '(+)');
     elseif diff < 0
-        fprintf('%10s | ', '(-)');
+        fprintf('%10s   ', '(-)');
     else
-        fprintf('%10s | ', '(=)');
+        fprintf('%10s   ', '(=)');
     end
     fprintf(' %6g\n', model.lb.lb.val);
 end

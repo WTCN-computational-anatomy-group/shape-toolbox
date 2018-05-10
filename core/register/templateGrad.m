@@ -5,7 +5,7 @@ function gmu = templateGrad(mu, varargin)
 % image.
 %
 % -------------------------------------------------------------------------
-% FORMAT gmu = templateGrad(mu, (itrp), (bnd), ...)
+% FORMAT gmu = templateGrad(mu, (bnd), ...)
 %
 % REQUIRED
 % --------
@@ -34,12 +34,10 @@ function gmu = templateGrad(mu, varargin)
     p = inputParser;
     p.FunctionName = 'templateGrad';
     p.addRequired('mu', @checkarray);
-    p.addOptional('itrp', 1, @isnumeric);
-    p.addOptional('bnd',  1, @isnumeric);
+    p.addOptional('bnd',  1, @(X) isnumeric(X) || islogical(X));
     p.addParameter('output', []);
     p.addParameter('debug', false);
     p.parse(mu, varargin{:});
-    itrp   = p.Results.itrp;
     bnd    = p.Results.bnd;
     output = p.Results.output;
     debug  = p.Results.debug;
@@ -48,11 +46,6 @@ function gmu = templateGrad(mu, varargin)
     if debug, fprintf('* templateGrad\n'); end
     
     % --- Default parameters
-%     if numel(itrp) == 1
-%         itrp = itrp * [double(size(mu, 1) > 1) ...
-%                        double(size(mu, 2) > 1) ...
-%                        double(size(mu, 3) > 1)];
-%     end
     if numel(bnd) == 1
         bnd = [bnd bnd bnd];
     end

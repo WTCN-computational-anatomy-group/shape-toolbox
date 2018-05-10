@@ -27,8 +27,9 @@ function dat = updateLatent(dat, model, opt)
    
     % =====================================================================
     % Update mean
+    spm_diffeo('boundary', opt.pg.bnd);
     wm = zeros([opt.pg.K 1]);
-    m  = numeric(dat.v.m);
+    m = spm_diffeo('vel2mom', single(numeric(dat.v.v)), double([opt.tpl.vs opt.pg.prm]));
     for k=1:opt.pg.K
         w1    = model.pg.w(:,:,:,:,k);
         wm(k) = w1(:)'*m(:);
@@ -36,14 +37,6 @@ function dat = updateLatent(dat, model, opt)
     clear m w1
     dat.z.z  = model.mixreg.w(1) * model.v.l * dat.z.S * wm;
     dat.z.zz = dat.z.z * dat.z.z';
-    
-    % =====================================================================
-    % Reconstruct "mean" velocity
-    dat.v.wz = reconstructVelocity(...
-        'latent',   dat.z.z, ...        % Latent coordinates
-        'subspace', model.pg.w, ...     % Principal subspace
-        'par',      opt.par.within_subject, ... % Parallelise stuff? (usually no)
-        'output',   dat.v.wz);          % Provide output file_array
                              
     % =====================================================================
     % Exit

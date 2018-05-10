@@ -1,4 +1,4 @@
-function model = aggregateLatent(dat, model, ~)
+function model = aggregateLatent(dat, model, opt)
 % FORMAT model = aggregateLatent(dat, model, opt)
 % dat   - Subject-specific data
 % model - Model-specific data
@@ -15,7 +15,7 @@ function model = aggregateLatent(dat, model, ~)
 
     % =====================================================================
     % Read input from disk (if needed)
-    [dat, ~, model, modelpath] = fileToStruct(dat, model);
+    [dat, ~, model, modelpath, opt] = fileToStruct(dat, model, opt);
 
     % =====================================================================
     % Aggregate data
@@ -23,7 +23,10 @@ function model = aggregateLatent(dat, model, ~)
     model.z.zz     = 0;
     model.z.S      = 0;
     model.z.n      = 0;
+    model.z.Z      = zeros(opt.pg.K, opt.v.N+opt.f.N);
     model.lb.z.val = 0;
+    model.lb.z.type = 'kl';
+    model.lb.z.name = '-KL Latent';
     for n=1:numel(dat)
         if iscell(dat)
             dat1 = dat{n};
@@ -33,11 +36,12 @@ function model = aggregateLatent(dat, model, ~)
         if isstring(dat1)
             dat1 = load(dat1);
         end
+        model.z.Z(:,n) = dat1.z.z;
         model.z.n      = model.z.n      + 1;
-        model.z.z      = model.z.q      + dat1.z.z;
-        model.z.zz     = model.z.qq     + dat1.z.zz;
+        model.z.z      = model.z.z      + dat1.z.z;
+        model.z.zz     = model.z.zz     + dat1.z.zz;
         model.z.S      = model.z.S      + dat1.z.S;
-        model.lb.z.val = model.lb.z.val + model.z.lb.val;
+        model.lb.z.val = model.lb.z.val + dat1.z.lb.val;
     end  
         
     % =====================================================================

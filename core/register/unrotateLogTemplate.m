@@ -48,6 +48,17 @@ function a = unrotateLogTemplate(na, varargin)
     
     R = null(ones(1, nc));
     
+    % --- Check input == output
+    tmp_file = false;
+    if isa(na, 'file_array') && isa(output, 'file_array') ...
+            && strcmpi(na.fname, output.fname)
+        [path, name, ext] = fileparts(na.fname);
+        fname = fullfile(path, ['tmp_' name ext]);
+        copyfile(na.fname, fname);
+        na.fname = fname;
+        tmp_file = true;
+    end
+    
     % --- Allocate output
     a = prepareOnDisk(output, [lat nc]);
     
@@ -67,13 +78,28 @@ function a = unrotateLogTemplate(na, varargin)
             end
         end
         latz = [lat(1:2) 1];
-        parfor (z=1:lat(3), par)
-            a(:,:,z,:) = reshape(reshape(na(:,:,z,:), [], nc-1) * R', [latz nc])
+        if par > 0
+            if isa(na, 'file_array')
+                parfor (z=1:lat(3), par)
+                    a(:,:,z,:) = reshape(reshape(slicevol(na, z, 3), [], nc-1) * R', [latz nc]);
+                end
+            else
+                parfor (z=1:lat(3), par)
+                    a(:,:,z,:) = reshape(reshape(na(:,:,z,:), [], nc-1) * R', [latz nc]);
+                end
+            end
+        else
+            for z=1:lat(3)
+                a(:,:,z,:) = reshape(reshape(na(:,:,z,:), [], nc-1) * R', [latz nc]);
+            end
         end
         
     end
     
     % --- Write on disk
     a = saveOnDisk(output, a);
+    if tmp_file
+        delete(fname);
+    end
 
 end

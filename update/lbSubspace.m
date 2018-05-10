@@ -17,7 +17,10 @@ function model = lbSubspace(model, opt)
      
     % =====================================================================
     % Lower Bound
-    model.lb.w.val = llPriorSubpsace(model.pg.w, model.pg.ww, opt.pg.LogDetL);
+    model.lb.w.val = llPriorSubspace(...
+        model.pg.w, ...                 % Principal subspace (to have lattice size)
+        model.pg.n * model.pg.ww, ...   % Trace of that = regularisation term
+        opt.pg.LogDetL + prod(opt.tpl.lat)*3*log(model.pg.n)); % LogDet for normalising term
     model.lb.w.type = 'll';
     model.lb.w.name = 'Subspace prior';
                    

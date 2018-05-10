@@ -11,7 +11,6 @@ function model = shape_process_pop(dat, model, opt)
 % files. It is also read/written if needed.
 %--------------------------------------------------------------------------
 % Perform population-specific updates.
-% This function can be run as an independent job on a cluster.
 %__________________________________________________________________________
 % Copyright (C) 2018 Wellcome Centre for Human Neuroimaging
 
@@ -61,75 +60,31 @@ function model = shape_process_pop(dat, model, opt)
     % =====================================================================
     % AFFINE PRIOR
     if model.q.active
-        % Aggregate sufficient statistics
         model = aggregateAffine(dat, model, opt);
         if opt.optimise.q.A && opt.q.Mr
-            
-            % Update
-            model = updateAffinePrior(model, opt);
-            % Lower bound
             model = lbAffinePrior(model, opt);
-            if iscell(dat)
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat{n} = lbAffine(dat{n}, model, opt);
-                end
-            else
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat(n) = lbAffine(dat(n), model, opt);
-                end
-            end
-            model = aggregateAffine(dat, model, opt);
-            model = updateLowerBound(model);
+            model = updateAffinePrior(model, opt);
         end
     end
     
     % =====================================================================
     % VELOCITY RESIDUAL PRECISION
     if model.v.active
-        % Aggregate sufficient statistics
         model = aggregateVelocity(dat, model, opt);
         if opt.optimise.v.l
-            
-            % Update
-            model = updateResidualPrecision(dat, model, opt);
-            % Lower bound
             model = lbResidualPrecision(dat, model, opt);
-            if iscell(dat)
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat{n} = lbVelocityShape(dat{n}, model, opt);
-                end
-            else
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat(n) = lbVelocityShape(dat(n), model, opt);
-                end
-            end
-            model = aggregateVelocity(dat, model, opt);
-            model = updateLowerBound(model);
+            model = updateResidualPrecision(dat, model, opt);
         end
     end
     
     % =====================================================================
     % PRINCIPAL SUBSPACE
     if model.pg.active
-        % Aggregate sufficient statistics
         model = aggregateLatent(dat, model, opt);
         if opt.optimise.pg.w
-            
-            % Update
-            model = updateSubspace(dat, model, opt);
-            % Lower bound
             model = lbSubspace(model, opt);
-            if iscell(dat)
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat{n} = lbVelocityShape(dat{n}, model, opt);
-                end
-            else
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat(n) = lbVelocityShape(dat(n), model, opt);
-                end
-            end
-            model = aggregateVelocity(dat, model, opt);
-            model = updateLowerBound(model);
+            model = updateSubspace(dat, model, opt);
+            
         end
     end
     
@@ -137,44 +92,14 @@ function model = shape_process_pop(dat, model, opt)
     % ORTHOGONALISATION / LATENT PRIOR
     if model.pg.active 
         orthogonalise = opt.optimise.z.z && opt.optimise.z.A && opt.optimise.pg.w;
-        [~,p] = chol(model.pg.ww); % Check pos-def
+        [~,p] = chol(model.pg.ww);
         if orthogonalise && p == 0
-            
-            % Update
-            model = orthogonaliseSubspace(model, opt);
-            % Lower bound
             model = lbLatentPrior(model, opt);
             model = lbSubspace(model, opt);
-            if iscell(dat)
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat{n} = lbLatent(dat{n}, model, opt);
-                end
-            else
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat(n) = lbLatent(dat(n), model, opt);
-                end
-            end
-            model = aggregateLatent(dat, model, opt);
-            model = updateLowerBound(model);
-            
+            model = orthogonaliseSubspace(model, opt);
         elseif opt.optimise.z.A
-            
-            % Update
-            model = updateLatentPrior(model, opt);
-            % Lower bound
             model = lbLatentPrior(model, opt);
-            if iscell(dat)
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat{n} = lbLatent(dat{n}, model, opt);
-                end
-            else
-                parfor (n=1:numel(dat), opt.par.within_main)
-                    dat(n) = lbLatent(dat(n), model, opt);
-                end
-            end
-            model = aggregateLatent(dat, model, opt);
-            model = updateLowerBound(model);
-            
+            model = updateLatentPrior(model, opt);
         end
     end
     
@@ -185,6 +110,7 @@ function model = shape_process_pop(dat, model, opt)
         switch lower(opt.tpl.update)
             case 'map'
                 model = aggregateTemplateGradHess(dat, model, opt);
+                model = lbTemplate(model, opt);
                 model = updateTemplate(model, opt);
             case 'ml'
                 model = updateTemplateML(dat, model, opt);
