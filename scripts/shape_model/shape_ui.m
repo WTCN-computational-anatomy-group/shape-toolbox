@@ -32,6 +32,9 @@ function start = title(text, newline, time)
         start = 0;
     end
     fprintf('%-27s | ', text);
+    if time
+        fprintf('%s | ', datestr(now,'mmmm dd, yyyy HH:MM:SS'));
+    end
     if newline
         fprintf('\n');
     end
