@@ -82,7 +82,10 @@ function opt = shape_default(opt)
         % 3 = Sliding   (rotation invariant)
         opt.pg.bnd = 0;
     end
-    
+    if opt.pg.bnd ~= 0
+        warning('Boundry condition %d not implemented yet. Switch to circulant.', opt.pg.bnd)
+        opt.pg.bnd = 0;
+    end
     
     % ---------------------------------------------------------------------
     % Mixture of regularisations
