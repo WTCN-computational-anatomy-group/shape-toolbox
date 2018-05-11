@@ -89,12 +89,15 @@ function [dat, model] = shape_process(dat, model, opt)
         % Update affine prior
         if opt.optimise.q.A && opt.q.Mr
             if opt.ui.verbose
-                shape_ui('Title', 'Update Affine prec');
+                t0 = shape_ui('Title', 'Update Affine prec', false, true);
             end
             model = updateAffinePrior(model, opt);
             model = lbAffinePrior(model, opt);
             [~, dat] = distribute([], 'lbAffine', 'inplace', dat, model, opt);
             model = aggregateAffine(dat, model, opt);
+            if opt.ui.verbose
+                shape_ui('PostTitle', toc(t0));
+            end
             model = updateLowerBound(model, opt);
             shape_plot_all(model,opt);
         end
@@ -133,12 +136,14 @@ function [dat, model] = shape_process(dat, model, opt)
         % Update velocity residual precision
         if opt.optimise.v.l
             if opt.ui.verbose
-                shape_ui('Title', 'Update Residual prec', false);
-                fprintf('%5.3f -> ', model.v.l);
+                t0 = shape_ui('Title', 'Update Residual prec', false, true);
+                l0 = model.v.l;
             end
             model = updateResidualPrecision(model, opt);
             if opt.ui.verbose
-                fprintf('%5.3f\n', model.v.l);
+                shape_ui('PostTitle', toc(t0));
+                shape_ui('Title', '', false);
+                fprintf('%5.3f -> %5.3f\n', l0, model.v.l);
             end
             model = lbResidualPrior(model, opt);
             [~, dat] = distribute([], 'lbVelocityShape', 'inplace', dat, model, opt);
@@ -215,12 +220,15 @@ function [dat, model] = shape_process(dat, model, opt)
             shape_plot_all(model,opt);
         elseif opt.optimise.z.A
             if opt.ui.verbose
-                t0 = shape_ui('Title', 'Update Latent prec');
+                t0 = shape_ui('Title', 'Update Latent prec', false, true);
             end
             model = updateLatentPrior(model, opt);
             model = lbLatentPrior(model, opt);
             [~, dat] = distribute([], 'lbLatent', 'inplace', dat, model, opt);
             model = aggregateLatent(dat, model, opt);
+            if opt.ui.verbose
+                shape_ui('PostTitle', toc(t0));
+            end
             model = updateLowerBound(model, opt);
             shape_plot_all(model,opt);
         end
