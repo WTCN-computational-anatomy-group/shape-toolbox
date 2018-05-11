@@ -44,6 +44,10 @@ function dat = updateAffine(dat, model, opt)
             'prm',   opt.pg.prm, ...   % Registration regularisation param
             'bnd',   opt.pg.bnd, ...   % Boundary condition
             'debug', opt.ui.debug);    % Write debugging stuff (usually no)
+        if opt.model.dim == 2
+            iphi(:,:,:,3) = 1;
+            phi(:,:,:,3)  = 1;
+        end
     else
         % Pure rigid/affine case
         iphi = spm_warps('identity', opt.tpl.lat);
