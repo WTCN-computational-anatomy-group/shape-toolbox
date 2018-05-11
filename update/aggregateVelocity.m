@@ -33,7 +33,7 @@ function model = aggregateVelocity(dat, model, opt)
     if opt.f.N
         model.lb.v2.val = 0; % KL-divergence  (latent velocity)
         model.lb.v2.type = 'kl';
-        model.lb.v2.name = '-KL Velocity';
+        model.lb.v2.name = '-KL Velocity (~)';
     end
     for n=1:numel(dat)
         if iscell(dat)
