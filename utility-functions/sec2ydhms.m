@@ -34,10 +34,10 @@ function str_end_2 = sec2ydhms(time, compact)
     for i=1:numel(elapsed)
         if elapsed(i) > 0
             str_end_2 = [str_end_2 sprintf('%d%s%s', elapsed(i), space, units{i})];
-            if compact && elapsed(i) > 1
+            if ~compact && elapsed(i) > 1
                 str_end_2 = [str_end_2 's'];
             end
-            if compact && sum(elapsed(i+1:end)) > 0
+            if ~compact && sum(elapsed(i+1:end)) > 0
                 str_end_2 = [str_end_2 ', '];
             end
         end
