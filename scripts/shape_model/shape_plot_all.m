@@ -4,14 +4,13 @@ function shape_plot_all(model, opt)
 % come up with a generic "plotModel" function, even though it could be
 % nice.
     
-    if opt.ui.verbose
-        try
-            set(0, 'CurrentFigure', opt.ui.ftrack);   
-            clf(opt.ui.ftrack);
-        catch
-            set(0, 'CurrentFigure', gcf);
-            clf(gcf);
+    if opt.ui.verbose && ischar(opt.ui.figure_pop)
+        f = findobj('Type', 'Figure', 'Name', opt.ui.figure_pop);
+        if isempty(f)
+            f = figure('Name', opt.ui.figure_pop, 'NumberTitle', 'off');
         end
+        set(0, 'CurrentFigure', f);   
+        clf(f);
         
         nw = 3;
         nh = 5;

@@ -1,5 +1,5 @@
-function model = shape_process_pop(dat, model, opt)
-% FORMAT dat = shape_process_pop(dat, model, opt)
+function [dat,model] = shape_process_pop(dat, model, opt)
+% FORMAT [dat,model] = shape_process_pop(dat, model, opt)
 % dat   - Subject-specific data
 % model - Model-specific data
 % opt   - Options
@@ -11,12 +11,13 @@ function model = shape_process_pop(dat, model, opt)
 % files. It is also read/written if needed.
 %--------------------------------------------------------------------------
 % Perform population-specific updates.
+% Nothing is distributed.
 %__________________________________________________________________________
 % Copyright (C) 2018 Wellcome Centre for Human Neuroimaging
 
     % =====================================================================
     % Read input from disk (if needed)
-    [dat, ~, model, modelpath, opt] = fileToStruct(dat, model, opt);
+    [dat, datpath, model, modelpath, opt] = fileToStruct(dat, model, opt);
     
     if model.converged
         if opt.verbose
@@ -24,114 +25,134 @@ function model = shape_process_pop(dat, model, opt)
         end
         return
     end
-        
-    % =====================================================================
-    % GENERAL TRACKING
-    % > Compute LB gain (eventually, performin a moving average to smooth
-    %   changes due to stochastic trace and log-determinant approximations.
-    % > If LB converged, activate new components (or exit)
-    
-    model.emit = model.emit + 1;
 
-    N = numel(model.lb.lb.gainlist);
-    moving_gain = mean(abs(model.lb.lb.gainlist(N:-1:max(1,N-opt.lb.moving+1))));
-    if moving_gain < opt.lb.threshold
-        if opt.optimise.q.q && ~model.q.active
-            model.q.active = true;
-            fprintf('%10s | %10s\n', 'Activate', 'Affine');
-        elseif opt.optimise.v.v && ~model.v.active
-            model.v.active = true;
-            fprintf('%10s | %10s\n', 'Activate', 'Velocity');
-        elseif (opt.optimise.pg.w || opt.optimise.z.z) && ~model.pg.active
-            model.pg.active = true;
-            fprintf('%10s | %10s\n', 'Activate', 'PG');
-        else
-            fprintf('Converged :D\n');
-            model.converged = true;
-            model = exit_function(model, ondisk.model);
-            return
-        end
-    end
-    
-    if opt.ui.verbose
-        fprintf(['%10s | %10d | ' repmat('=',1,50) ' |\n'], 'VEM', model.emit);
-    end
 
     % =====================================================================
-    % AFFINE PRIOR
+    %   AFFINE
     if model.q.active
-        model = aggregateAffine(dat, model, opt);
+        % -----------------------------------------------------------------
+        % Update affine prior
         if opt.optimise.q.A && opt.q.Mr
-            model = lbAffinePrior(model, opt);
+            if opt.ui.verbose
+                t0 = shape_ui('Title', 'Update Affine prec', false, true);
+            end
             model = updateAffinePrior(model, opt);
+            model = lbAffinePrior(model, opt);
+            [~, dat] = distribute([], 'lbAffine', 'inplace', dat, model, opt);
+            model = aggregateAffine(dat, model, opt);
+            if opt.ui.verbose
+                shape_ui('PostTitle', toc(t0));
+            end
         end
     end
     
     % =====================================================================
-    % VELOCITY RESIDUAL PRECISION
+    %   VELOCITY
     if model.v.active
-        model = aggregateVelocity(dat, model, opt);
+        
+        % -----------------------------------------------------------------
+        % Update velocity residual precision
         if opt.optimise.v.l
-            model = lbResidualPrecision(dat, model, opt);
-            model = updateResidualPrecision(dat, model, opt);
+            if opt.ui.verbose
+                t0 = shape_ui('Title', 'Update Residual prec', false, true);
+                l0 = model.v.l;
+            end
+            model = updateResidualPrecision(model, opt);
+            if opt.ui.verbose
+                shape_ui('PostTitle', toc(t0));
+                shape_ui('Title', '', false);
+                fprintf('%5.3f -> %5.3f\n', l0, model.v.l);
+            end
+            model = lbResidualPrior(model, opt);
+            [~, dat] = distribute([], 'lbVelocityShape', 'inplace', dat, model, opt);
+            model = aggregateVelocity(dat, model, opt);
         end
     end
     
     % =====================================================================
-    % PRINCIPAL SUBSPACE
+    %   SHAPE
     if model.pg.active
-        model = aggregateLatent(dat, model, opt);
+        
+        % -----------------------------------------------------------------
+        % Update principal subspace
         if opt.optimise.pg.w
-            model = lbSubspace(model, opt);
+            if opt.ui.verbose
+                t0 = shape_ui('Title', 'Update Subspace', false, true);
+            end
+            model = aggregateLatent(dat,model,opt);
             model = updateSubspace(dat, model, opt);
-            
+            model = lbSubspace(model, opt);
+            [~, dat] = distribute([], 'updateResidualLB', 'inplace', dat, model, opt);
+            [~, dat] = distribute([], 'lbLatent', 'inplace', dat, model, opt);
+            [~, dat] = distribute([], 'lbVelocityShape', 'inplace', dat, model, opt);
+            model = aggregateLatent(dat, model, opt);
+            model = aggregateVelocity(dat, model, opt);
+            if opt.ui.verbose
+                shape_ui('PostTitle', toc(t0));
+            end
         end
-    end
-    
-    % =====================================================================
-    % ORTHOGONALISATION / LATENT PRIOR
-    if model.pg.active 
+        
+        % -----------------------------------------------------------------
+        % Orthogonalisation / Update latent prior
         orthogonalise = opt.optimise.z.z && opt.optimise.z.A && opt.optimise.pg.w;
         [~,p] = chol(model.pg.ww);
         if orthogonalise && p == 0
-            model = lbLatentPrior(model, opt);
+            if opt.ui.verbose
+                t0 = shape_ui('Title', 'Orthogonalise Subspace', false, true);
+            end
+            [model,Q] = orthogonaliseSubspace(model, opt);
+            [~, dat] = distribute([], 'rotateLatent', Q, 'inplace', dat);
+            [~, dat] = distribute([], 'lbLatent', 'inplace', dat, model, opt);
+            model = aggregateLatent(dat,model,opt);
             model = lbSubspace(model, opt);
-            model = orthogonaliseSubspace(model, opt);
-        elseif opt.optimise.z.A
             model = lbLatentPrior(model, opt);
+            if opt.ui.verbose
+                shape_ui('PostTitle', toc(t0));
+            end
+            
+        elseif opt.optimise.z.A
+            if opt.ui.verbose
+                t0 = shape_ui('Title', 'Update Latent prec', false, true);
+            end
             model = updateLatentPrior(model, opt);
+            model = lbLatentPrior(model, opt);
+            [~, dat] = distribute([], 'lbLatent', 'inplace', dat, model, opt);
+            model = aggregateLatent(dat, model, opt);
+            if opt.ui.verbose
+                shape_ui('PostTitle', toc(t0));
+            end
         end
     end
     
-    
     % =====================================================================
-    % TEMPLATE
+    %   TEMPLATE
     if opt.f.N && opt.optimise.tpl.a
+            
+        % -----------------------------------------------------------------
+        % Update template
+        if opt.ui.verbose
+            t0 = shape_ui('Title', 'Update Template', false, true);
+        end
+        model = aggregateMatching(dat, model, opt);
         switch lower(opt.tpl.update)
             case 'map'
                 model = aggregateTemplateGradHess(dat, model, opt);
-                model = lbTemplate(model, opt);
                 model = updateTemplate(model, opt);
+                model = lbTemplate(model, opt);
             case 'ml'
                 model = updateTemplateML(dat, model, opt);
         end
+        model = updateTemplateDerivatives(model, opt);
+        if opt.ui.verbose
+            shape_ui('PostTitle', toc(t0));
+        end
     end
     
+    model = updateLowerBound(model, opt);
+    shape_plot_all(model,opt);
     
     % =====================================================================
     % Write (if needed)
+    dat   = structToFile(dat,   datpath);
     model = structToFile(model, modelpath);
-    
-    % =====================================================================
-    % Save everything (to allow starting from a previous state)
-    if ~isempty(opt.fnames.result)
-        % Ensure nifti headers are ok
-        createAllNifti(dat, model, opt);
-        % Write workspace
-        ftrack = opt.ui.ftrack;
-        opt.ui.ftrack = nan;
-        save(fullfile(opt.dir.model, opt.fnames.result), ...
-             'model', 'dat', 'opt');
-        opt.ui.ftrack = ftrack;
-    end
 end

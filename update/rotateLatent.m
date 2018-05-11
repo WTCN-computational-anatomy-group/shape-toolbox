@@ -18,7 +18,7 @@ function dat = rotateLatent(R, dat, ~, ~)
    
     % =====================================================================
     % Rotate
-    z        = R * dat.z.z;
+    z        = R * dat.z.z(:);
     dat.z.z  = z;
     dat.z.zz = z*z';
     dat.z.S  = R * dat.z.S * R';

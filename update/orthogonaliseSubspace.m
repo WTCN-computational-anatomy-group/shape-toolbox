@@ -40,7 +40,7 @@ function [model,Q] = orthogonaliseSubspace(model, opt)
     % ---------------------------------------------------------------------
     % Rotate sufficient statistics
     model.pg.ww = iQ' * model.pg.ww * iQ;
-    model.z.z   = Q   * model.z.z;
+    model.z.z   = Q   * model.z.z(:);
     model.z.zz  = Q   * model.z.zz  * Q';
     model.z.S   = Q   * model.z.S   * Q';
     model.z.Z   = Q   * model.z.Z;

@@ -290,9 +290,13 @@ function opt = shape_default(opt)
         % Talk more
         opt.ui.debug = false;
     end
-    if ~isfield(opt.ui, 'ftrack')
+    if ~isfield(opt.ui, 'figure_pop')
         % Figure object where to plot the lower bound
-        opt.ui.ftrack = gcf;
+        opt.ui.figure_pop = 'Lower Bound';
+    end
+    if ~isfield(opt.ui, 'figure_sub')
+        % Figure object where to show random subjects
+        opt.ui.figure_sub = 'Subjects';
     end
     
     % ---------------------------------------------------------------------
@@ -580,13 +584,13 @@ function opt = shape_default(opt)
     % ---------------------------------------------------------------------
     
     if ~isfield(opt.fnames, 'result')
-        opt.fnames.result = 'pgva_model.mat';
+        opt.fnames.result = 'shape_model.mat';
     end
     if ~isfield(opt.fnames, 'log')
-        opt.fnames.log = 'pgva_model.log';
+        opt.fnames.log = 'shape_model.log';
     end
     if ~isfield(opt.fnames, 'fig')
-        opt.fnames.fig = 'pgva_model_track.png';
+        opt.fnames.fig = 'shape_model_track.png';
     end
     
     if ~isfield(opt.fnames, 'model')

@@ -10,8 +10,9 @@ function [dat, model] = shape_process(dat, model, opt)
 % `dat` is either a structure array, a cell of structures or a cell of mat
 % files. It is also read/written if needed.
 %--------------------------------------------------------------------------
-% Perform all updates the "right" (but less efficient) way.
-% It allows to accurately track the lower bound all along.
+% This function is (basically) pipelining all posterior and mode updates.
+% It perform all updates the "right" (but less efficient) way to accurately 
+% track the lower bound all along.
 %__________________________________________________________________________
 % Copyright (C) 2018 Wellcome Centre for Human Neuroimaging
 
@@ -25,36 +26,6 @@ function [dat, model] = shape_process(dat, model, opt)
         end
         return
     end
-        
-    % =====================================================================
-    %   GENERAL TRACKING
-    % > Compute LB gain (eventually, performin a moving average to smooth
-    %   changes due to stochastic trace and log-determinant approximations.
-    % > If LB converged, activate new components (or exit)
-    
-    model.emit = model.emit + 1;
-
-    N = numel(model.lb.lb.gainlist);
-    moving_gain = mean(abs(model.lb.lb.gainlist(N:-1:max(1,N-opt.lb.moving+1))));
-    if moving_gain < opt.lb.threshold
-        if opt.optimise.q.q && ~model.q.active
-            model.q.active = true;
-            fprintf('%10s | %10s\n', 'Activate', 'Affine');
-        elseif opt.optimise.v.v && ~model.v.active
-            model.v.active = true;
-            fprintf('%10s | %10s\n', 'Activate', 'Velocity');
-        elseif (opt.optimise.pg.w || opt.optimise.z.z) && ~model.pg.active
-            model.pg.active = true;
-            fprintf('%10s | %10s\n', 'Activate', 'PG');
-        else
-            fprintf('Converged :D\n');
-            model.converged = true;
-            model = structToFile(model, modelpath);
-            return
-        end
-    end
-    
-    if opt.ui.verbose, shape_ui('EM',model.emit); end
 
     % =====================================================================
     %   AFFINE
@@ -132,7 +103,7 @@ function [dat, model] = shape_process(dat, model, opt)
             shape_plot_all(model,opt);
         end
         
-        % =================================================================
+        % -----------------------------------------------------------------
         % Update velocity residual precision
         if opt.optimise.v.l
             if opt.ui.verbose
@@ -300,23 +271,4 @@ function [dat, model] = shape_process(dat, model, opt)
     % Write (if needed)
     dat   = structToFile(dat,   datpath);
     model = structToFile(model, modelpath);
-    
-    % =====================================================================
-    % Save everything (to allow starting from a previous state)
-    if ~isempty(opt.fnames.result)
-        if opt.ui.verbose
-            t0 = shape_ui('Title', 'Save model', false, true);
-        end
-        % Ensure nifti headers are ok
-        createAllNifti(dat, model, opt);
-        % Write workspace
-        ftrack = opt.ui.ftrack;
-        opt.ui.ftrack = nan;
-        save(fullfile(opt.dir.model, opt.fnames.result), ...
-             'model', 'dat', 'opt');
-        opt.ui.ftrack = ftrack;
-        if opt.ui.verbose
-            shape_ui('PostTitle', toc(t0));
-        end
-    end
 end

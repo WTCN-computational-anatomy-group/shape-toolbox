@@ -56,7 +56,7 @@ function dat = shape_process_subject(dat, model, opt)
     
     % =====================================================================
     % Update latent coordinates
-    if opt.optimise.z.z
+    if opt.optimise.z.z && model.emit > 1
         dat = updateLatent(dat, model, opt);
         dat = lbLatent(dat, model, opt);
         dat = lbVelocityShape(dat, model, opt); % < depends on E[zz']
@@ -70,8 +70,8 @@ function dat = shape_process_subject(dat, model, opt)
     
     % =====================================================================
     % Update template gradient/Hessian
-    if opt.optimse.tpl.a && strcmpi(opt.tpl.update, 'map')
-        dat = updateTemplateGradHess(dat, omdel, opt);
+    if opt.optimise.tpl.a && strcmpi(opt.tpl.update, 'map')
+        dat = updateTemplateGradHess(dat, model, opt);
     end
     
     % =====================================================================

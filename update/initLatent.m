@@ -24,6 +24,7 @@ function dat = initLatent(dat, model, opt)
         case 'zero'
             dat.z.z   = zero(opt.pg.K, 1);
     end
+    dat.z.z   = dat.z.z(:)';
     dat.z.zz  = dat.z.z * dat.z.z';
     dat.z.S   = inv(model.v.l * model.pg.ww + model.z.A);
     
