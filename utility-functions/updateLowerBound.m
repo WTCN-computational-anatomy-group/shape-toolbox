@@ -81,11 +81,11 @@ function model = updateLowerBound(model, gain)
     % -----------
     fprintf('%27s | ', 'LB');
     if diff > 0
-        fprintf('%10s   ', '(+)');
+        fprintf('%s', '(+)');
     elseif diff < 0
-        fprintf('%10s   ', '(-)');
+        fprintf('%s', '(-)');
     else
-        fprintf('%10s   ', '(=)');
+        fprintf('%s', '(=)');
     end
-    fprintf(' %6g\n', model.lb.lb.val);
+    fprintf('\n');
 end
