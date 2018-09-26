@@ -28,6 +28,7 @@ function [g, h] = ghMatchingLatent(model, mu, f, gmu, w, varargin)
 % ------------------
 % ipsi    - Inverse (subj to template) warp [mx my mz 3]
 %           > If provided, compute "pushed(gradient(pulled))"
+% circ    - (Push only) Boundary conditions for pushing [1]
 % count   - Pushed voxel count ([nx ny nz nc])
 %           > If provided, compute "gradient(pushed)"
 % bb      - Bounding box (if different between template and pushed image)
@@ -50,6 +51,7 @@ function [g, h] = ghMatchingLatent(model, mu, f, gmu, w, varargin)
     p.addRequired('gmu',    @checkarray);
     p.addRequired('w',      @checkarray);
     p.addParameter('ipsi',     [],      @checkarray);
+    p.addParameter('circ',    1);
     p.addParameter('count',    [],      @checkarray);
     p.addParameter('bb',       struct,  @isstruct);
     p.addParameter('hessian',  false,   @islogical);
@@ -63,6 +65,7 @@ function [g, h] = ghMatchingLatent(model, mu, f, gmu, w, varargin)
     bb       = p.Results.bb;
     c        = p.Results.count;
     ipsi     = p.Results.ipsi;
+    circ     = p.Results.circ;
     hessian  = p.Results.hessian;
     
     if p.Results.debug, fprintf('* ghMatchingLatent\n'); end
@@ -137,8 +140,14 @@ function [g, h] = ghMatchingLatent(model, mu, f, gmu, w, varargin)
         wlat = [size(w) 1];
         wlat = wlat(1:3);
         [argout{1:nout}] = ghMatchingVel(model, mu, f, ...
-            'ipsi', ipsi, 'lat', wlat, 'bb', bb, 'hessian', ~do_gradient, ...
-            'loop', loop, 'par', par, 'output', output);
+            'ipsi',    ipsi, ...
+            'lat',     wlat, ...
+            'circ',    circ, ...
+            'bb',      bb, ...
+            'hessian', ~do_gradient, ...
+            'loop',    loop, ...
+            'par',     par, ...
+            'output',  output);
         if do_gradient
             gca = argout{1};
             if do_hessian

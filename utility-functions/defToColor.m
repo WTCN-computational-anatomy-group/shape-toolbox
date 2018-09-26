@@ -23,8 +23,9 @@ function out = defToColor(d, nrm)
         h = h + (k-1)*180/3 * abs(pos) + ((k-1)*180/3+180) * abs(neg);
     end
     clear dk neg pos
-    h = h./sum(abs(d), 4);
-    clear d
+    sumd = sum(abs(d), 4);
+    h(sumd~=0) = h(sumd~=0)./sumd(sumd~=0);
+    clear dumd d
     h = mod(h, 360);
     
     out = ones([dim(1:3) 3]);

@@ -17,16 +17,10 @@ We provided compiled command line routines that can be used without Matlab licen
 - Download your [platform release](https://github.com/WTCN-computational-anatomy-group/shape-toolbox/releases)
 - Run the train or fit functions in a terminal:
   ```shell
-  ./run_pgra_train /path/to/matlab/runtime input.json option.json
+  ./run_shape_train /path/to/matlab/runtime input.json option.json
   ```
   ```shell
-  ./run_pgra_fit /path/to/matlab/runtime input.json option.json
-  ```
-  ```shell
-  ./run_pgva_train /path/to/matlab/runtime input.json option.json
-  ```
-  ```shell
-  ./run_pgva_fit /path/to/matlab/runtime input.json option.json
+  ./run_shape_fit /path/to/matlab/runtime input.json option.json
   ```
 
 ### Basic use cases
@@ -53,13 +47,13 @@ The illustrative JSON files are commented. However, comments are not allowed in 
                                                 //   This allows the third class to be automatically created
                                                 //   by "filling probabilities up to one"
  "pg":    {"K": 32},                            // Use 32 principal components
- "split": {"par": 0}                            // Do not use parallelisation
+ "par":   {"subjects": "for"}                   // Do not use parallelisation
  }
 ```
 
 Command line
 ```shell
-./run_pgra_train /path/to/matlab/runtime input.json option.json
+./run_shape_train /path/to/matlab/runtime input.json option.json
 ```
 
 **Apply a shape model to grey and white matter segmentations obtained with SPM's _New Segment_**
@@ -86,28 +80,27 @@ Command line
  "pg":    {"K": 32},                            // Use 32 principal components
  "z":     {"A0": [0.0016, 0.0030, ...]},        // Diagonal elements of the latent precision matrix
  "r":     {"l0": 18.8378},                      // Residual precision
- "split": {"par": 0}                            // Do not use parallelisation
+ "par":   {"subjects": "for"}                   // Do not use parallelisation
  }
 ```
 
 Command line
 ```shell
-./run_pgra_fit /path/to/matlab/runtime input.json option.json
+./run_shape_fit /path/to/matlab/runtime input.json option.json
 ```
 
 ## The model
 
-This work relies on a generative model of shape in which individual images (of brains, in particular) are assumed to be generated from a mean shape &ndash; commonly named template &ndash; deformed according to a transformation of the coordinate space. Here, these transformations are diffeomorphisms, _i.e._, one-to-one invertible mappings that allow for very large deformations. By using the _geodesic shooting_ framework, we parameterise these transformations by their _initial velocity_, which can be seen as an infinitesimal (very small) deformation. The _a posteriori_ covariance structure of these velocity fields is infered by making use of a technique related to the well-known _principal component analysis_, adapted to the particular structure of the space on which lie velocity fields, called a Riemannian manifold. Our model also includes a rigid-body transform, whose role is to factor out all deformations induces by brains misalignment.
+This work relies on a generative model of shape in which individual images (of brains, in particular) are assumed to be generated from a mean shape &ndash; commonly named template &ndash; deformed according to a transformation of the coordinate space. Here, these transformations are diffeomorphisms, _i.e._, one-to-one invertible mappings that allow for very large deformations. By using the _geodesic shooting_ framework, we parameterise these transformations by their _initial velocity_, which can be seen as an infinitesimal (very small) deformation. The _a posteriori_ covariance structure of these velocity fields is inferred by making use of a technique related to the well-known _principal component analysis_, adapted to the particular structure of the space on which lie velocity fields, called a Riemannian manifold. Our model also includes a rigid-body transform, whose role is to factor out all deformations induces by brains misalignment.
 
 Inputs can be binary or categorical images (_i.e._, segmentations), in which case a Bernoulli or Categorical data term is used, or multimodal intensity images, in which case a uniform Gaussian or Laplace noise data term is used.
 
 All considered, the following variables are infered:
-- `W = [w1 .. wK]`: the principal subspace of deformation, made of K _principal geodesics_ ;
-- `z`: transformation coordinates in the principal subspace, which is a low-dimensional representation of each subject in terms of deformation of the template ;
-- `A`: the precision matrix (_i.e._, inverse covariance) of the latent coordinates. At the optimum, it should be a diagonal matrix that contains the variance along each principal component, or in other words, their scale ;
-- `v`: the velocity field of each subject. It is only an explicit random variable in the PGVA model, in which case the residual field, `r = v - Wz`, can be recovered by substracting the principal representation ;
-- `r`: alternatively, the residual field can be explicitely infered, as is the case in the PGRA model. Then, the initial velocity is reconstructed according to `v = Wz + r` ;
-- `lam`: the precision of the residual field, also named _anatomical noise_ ;
+- `W = [w1 .. wK]`: the principal subspace of deformation, made of K _principal geodesics_;
+- `z`: transformation coordinates in the principal subspace, which is a low-dimensional representation of each subject in terms of deformation of the template;
+- `A`: the precision matrix (_i.e._, inverse covariance) of the latent coordinates. At the optimum, it should be a diagonal matrix that contains the variance along each principal component, or in other words, their scale;
+- `v`: the velocity field of each subject;
+- `lam`: the precision of the residual field, also named _anatomical noise_;
 - `q`: parameters of the rigid-body transform. Note that there are options to use different kind of affine transforms instead, however it is not advised, as differences in size should be captured by the shape model.
 
 The following parameters are manually set and impact the model's behaviour:
@@ -116,17 +109,15 @@ The following parameters are manually set and impact the model's behaviour:
 - `A0` and `n0`: the prior expected value of the latent precision matrix and its degrees of freedom, which should be seen as the virtual number of subjects that weight this prior belief ;
 - `l0` and `n0`: the prior expected value of the residual precision matrix and its degrees of freedom, which should be seen as the virtual number of subjects that weight this prior belief ;
 
-### PGVA vs PGRA
+### Algorithm
 
-- The PGVA model (Principal Geodesic from Velocity + Affine) fits velocity fields before updating the principal subspace and latent coordinates accordingly.
+This algorithm was described in a MICCAI 2018 proceeding:
 
-  Pros:
-  * The principal subspace and latent coordinates have closed-form update equations, meaning that only initial velocities are fit by Gauss Newton (and Laplace approximated).
+  * "Diffeomorphic brain shape modelling using Gauss-Newton optimisation" ([arxiv.org/abs/1806.07109](https://arxiv.org/abs/1806.07109))
 
-  Cons:
-  * Since latent coordinates are obtained from velocity fields, it might take a few iterations before the shape model appropriately captures the main modes of variation.
+_The current implementation, however, differs significantly:_
 
-- The PGRA model (Principal Geodesic + Residual field + Affine) directly fits the different components of velocity fields &ndash; subspace, latent coordinatesm residual field &ndash; using Gauss-Newton optimisation.
+- The model described in the paper assumes that the posterior distribution factorises (mean field) over `W`, `z` and `r`, where `r` is the residual field. This means that the posterior over each of these variables is obtained by making a Laplace approximation, where the mean and precision are assumed to be the maximum and Hessian matrix about that maximum of the negative log-posterior. This maximum is obtained numerically using Gauss-Newton optimisation.
 
   Pros:
   * Principal directions are directly picked up by optimising the data term, which might be faster and more robust.
@@ -135,20 +126,27 @@ The following parameters are manually set and impact the model's behaviour:
   * Laplace approximations are used for both the residual field and latent coordinates.
   * A line search is necessary when updating the principal subspace, which is quite costly as we need to reshoot all diffeomorphisms for each factor of the line search.
 
-Both strategies have advantages and drawbacks. We plan to make a thorough and quantitative evaluation of both models in order to propose rationale principles for choosing one or the other depending on the context and aplication.
+
+- The current implementation assumes a different mean field approximation, where the posterior factorises over `W`, `z` and `v`, where `v` is the complete velocity. This allows us to write the model in terms of the probability distribution `p(v | W, z)`, which yields a closed-form posterior distribution for `W` and `z`. Hence, only the posterior distribution over `v` relies on a Laplace approximation.
+
+  Pros:
+  * The principal subspace and latent coordinates have closed-form update equations, meaning that only initial velocities are fit by Gauss Newton (and Laplace approximated).
+
+  Cons:
+  * Since latent coordinates are obtained from velocity fields, it might take a few iterations before the shape model appropriately captures the main modes of variation.
 
 ## User documentation
 
 ### Input format
 
-If you use compiled routines or their Matlab equivalents ([pgra_train](scripts/pgra/pgra_train), [pgra_fit](scripts/pgra/pgra_fit), [pgva_train](scripts/pgva/pgva_train), [pgva_fit](scripts/pgva/pgva_fit)), inputs should be JSON files containing dictionaries. These routines wrap around the main scripts ([pgra_model](scripts/pgra_model),[pgva_model](scripts/pgva_model)).
+If you use compiled routines or their Matlab equivalents ([shape_train](scripts/shape_train), [shape_fit](scripts/shape_fit)), inputs should be JSON files containing dictionaries. These routines wrap around the main script ([shape_model](scripts/shape_model)).
 
 If you directly use the main scripts in Matlab, inputs are structures.
 
 Regarding of the above choice, there are one mandatory input and one optional one:
 - `input`: \[mandatory\] a dictionary of filenames with fields:
-  * `'f'`: observed images (list or matrix, the first dimension is for subjectsm the second for classes or modalities) ;
-  * `'v'`: \[PGVA only\]  observed velocity fields (list)
+  * `'f'`: observed images (list or matrix, the first dimension is for subjects, the second for classes or modalities) ;
+  * `'v'`: observed velocity fields (list)
   * `'w'`: principal subspace to use or initialise with
   * `'a'`: \[Bernoulli/Categorical only\] log-template to use or initialise with
   * `'mu'`: \[Gaussian/Laplace only\] template to use or initialise with
@@ -167,14 +165,12 @@ model.sigma2   - If normal model: initial noise variance estimate           - [1
 model.nc       - [categorical only] Number of classes                       - [from input]
 pg.K           - Number of principal geodesics                              - [32]
 pg.prm         - Parameters of the geodesic operator                        - [1e-4 1e-3 0.2 0.05 0.2]
-pg.bnd         - Boundary conditions for the geodesic operator              - [1 = circulant]
+pg.bnd         - Boundary conditions for the geodesic operator              - [0 = circulant]
 pg.geod        - Additional geodesic prior on velocity fields               - [true]
 tpl.vs         - Lattice voxel size                                         - [auto]
 tpl.lat        - Lattice dimensions                                         - [auto]
-tpl.bnd        - Boundary conditions                                        - [1 = circulant]
+tpl.bnd        - Boundary conditions                                        - [1 = mirror]
 tpl.itrp       - Interpolation order                                        - [1]
-mixreg.a0      - Prior expected value for the regularisation mixture weight - [0.5]
-mixreg.n0      - Prior DF value for the regularisation mixture weight       - [1e-4]
 v.l0           - Prior expected anatomical noise precision                  - [17]
 v.n0           - Prior DF of the anatomical noise precision                 - [10]
 z.init         - Latent initialisation mode ('auto'/'zero'/'rand')          - ['auto']
@@ -198,28 +194,23 @@ optimise.q.A        - Optimise affine precision                             - [t
 optimise.v.v        - Optimise velocity fields                              - [true]
 optimise.v.l        - Optimise residual precision                           - [true]
 optimise.tpl.a      - Optimise template                                     - [true]
-optimise.tpl.scale  - Optimise template scaling (PGVA/categorical only)     - [false]
-optimise.mixreg.w   - Optimise regularisation weight                        - [true]
-optimise.mixreg.a   - Optimise regularisation prior weight                  - [true]
 ```
 
 #### Processing
 
 ```
-match          - Matching term version 'push'/'pull'                        - ['pull']
 iter.em        - Maximum number of EM iterations                            - [1000]
 iter.gn        - Maximum number of Gauss-Newton iterations                  - [1]
 iter.ls        - Maximum number of line search iterations                   - [6]
 iter.itg       - Number of integration steps for geodesic shooting          - [auto]
+iter.pena      - Penalise Gauss-Newton failures                             - [true]
 lb.threshold   - Convergence criterion (lower bound gain)                   - [1e-5]
 lb.moving      - Moving average over LB gain                                - [3]
-split.loop     - How to split array processing: 'none'/'slice'/'subject'    - ['subject']
-split.par      - Parallelise processing (number of workers): 0/n/inf        - [inf]
-split.batch    - Batch size for parallelisation                             - [auto]
+par.subjects   - How to parallelise subjects (see distribute_default)       - [no parallelisation]
 ui.verbose     - Talk during processing                                     - [true]
-ui.debug       - Further debuging talk                                      - [false]
-ui.ftrack      - Figure object for the lower bound tracking                 - [gcf]
-dist           - Distributed processing                                     - See `help distribute_default`.
+ui.debug       - Further debugging talk                                     - [false]
+ui.fig_pop     - Plot lower bound                                           - [true]
+ui.fig_sub     - Plot a few subjects                                        - [true]
 ```
 
 #### I/O
@@ -227,7 +218,7 @@ dist           - Distributed processing                                     - Se
 ```
 dir.model      - Directory where to store model arrays and workspace       - ['.']
 dir.dat        - Directory where to store data array                       - [next to input]
-fnames.result  - Filename for the result environment saved after each EM   - ['pg_result.mat']
+fnames.result  - Filename for the result environment saved after each EM   - ['shape_model.mat']
                  iteration
 fnames.model   - Structure of filenames for all file arrays
 fnames.dat     - Structure of filenames for all file arrays
@@ -242,15 +233,16 @@ ondisk.dat     - "      "       "       "       "       "
   * [`core/register`](core/register) contains functions related to the registration of single subjects.
   * [`core/shape`](core/shape) contains functions related to population parameters learning (template, principal subspace...).
 - [`scripts`](scripts): Executable functions that implement the complete model.
-  * [`pgva_model.m`](scripts/pgva_model.m) implements a purely variational model based on a Riemannian PCA applied to fitted velocity fields. It can also work with known (observed) velocity fields,
-  * [`pgra_model.m`](scripts/pgra_model.m) implements a _direct fit_ version, where all shape parameters (latent coordinates, principal subspace, residual field) are obtained by maximising the data term using Gauss-Newton optimisation.
-
-  Both models use a set of subfunctions that have the same organisation:
-  * `*_input.m` deals with input files (individual images, eventually some parameters of the model...),
-  * `*_default.m` sets all default parameters,
-  * `*_data.m` sets all working data structures,
-  * `*_init.m` initialises the model.
-
+  * [`shape_model.m`](scripts/shape_model.m) implements a purely variational model based on a Riemannian PCA applied to fitted velocity fields. It can also work with known (observed) velocity fields.
+  * General subfunctions:
+    * `shape_input.m` deals with input files (individual images, eventually some parameters of the model...),
+    * `shape_default.m` sets all default parameters,
+    * `shape_data.m` sets all working data structures,
+    * `shape_init_*.m` initialises the model,
+    * `shape_plot_*.m` plotting utilities,
+    * `shape_ui.m` verbose utilities,
+    * ...
+- [`update`](update): Specialised subfunctions that initialise, update or aggregate specific variables.
 - [`utility-functions`](utility-functions): Various very basic utility functions. Some of them might get moved to the [`auxiliary-functions` toolbox](https://github.com/WTCN-computational-anatomy-group/auxiliary-functions) in the future.
 
 ## Dependencies
@@ -268,6 +260,24 @@ Note that if these toolboxes are all located in the same folder, _i.e._:
 
 a call to [`setpath.m`](setpath.m) adds all necessary folders to Matlab's path.
 
+## How to compile
+
+If no executable is provided for a given platform and/or runtime version, it is possible to compile one yourself using the script [`shape_compile.m`](scripts/shape_model/shape_compile.m). You will need:
+* Matlab (I've used R2017b, I am not sure how far back the code is compatible),
+* A [compatible compiler](https://uk.mathworks.com/support/compilers.html),
+* This code source and all dependencies on your Matlab path.
+
+Then, all you need is to run:
+```
+shape_compile('/output/directory')
+```
+which will generate the files:
+* `shape_fit`
+* `shape_train`
+* `run_shape_fit.sh`
+* `run_shape_train.sh`
+* ... plus a few others.
+
 ## Contributors
 
 This software was developed under the [_Human Brain Project_](https://www.humanbrainproject.eu) (SP2) flagship by John Ashburner's [Computational Anatomy Group](http://www.fil.ion.ucl.ac.uk/Ashburner/) at the [Wellcome Centre for Human Neuroimaging](http://www.fil.ion.ucl.ac.uk/) in UCL.
@@ -281,4 +291,4 @@ If you encounter any difficulty, please shoot an email to `y.balbastre` or `j.as
 This software is released under the [GNU General Public License version 3](LICENSE) (GPL v3). As a result, you may copy, distribute and modify the software as long as you track changes/dates in source files. Any modifications to or software including (via compiler) GPL-licensed code must also be made available under the GPL along with build & install instructions.
 
 
-[TL;DR: GPL v3](https://tldrlegal.com/license/gnu-general-public-license-v3-(gpl-3))
+[TL;DR: GPL v3](https://tldrlegal.com/license/gnu-general-public-license-v3-(gpl-3)

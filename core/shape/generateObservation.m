@@ -1,4 +1,4 @@
-function f = generateObservation(model, opt)
+function [f,v,z] = generateObservation(model, opt)
 
     if isstruct(model.z)
         A   = model.z.A;
@@ -15,20 +15,18 @@ function f = generateObservation(model, opt)
         A   = model.Az;
         w   = model.w;
         vs  = opt.vs;
-        prm = opt.prm;
-        iscat = opt.tpm;
-        if iscat && checkarray(model.a)
-            a = model.a;
+        prm = opt.pg.prm;
+        iscat = opt.tpl.cat;
+        if iscat && checkarray(model.tpl.a)
+            a = model.tpl.a;
         else
-            a = model.mu;
+            a = model.tpl.mu;
         end
     end
 
     z = mvnrnd(zeros(1,size(A,1)), inv(A));
     v = reconstructVelocity('latent', z, 'subspace', w);
-    clear z
     iphi = exponentiateVelocity(v, 'iphi', 'vs', vs, 'prm', prm);
-    clear v
     if iscat
         f = warp(iphi, a);
         f = reconstructProbaTemplate(f);

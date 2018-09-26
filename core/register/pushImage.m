@@ -18,6 +18,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
 %
 % KEYWORD ARGUMENTS
 % -----------------
+% circ   - Circulant boundary conditions [true]
 % loop   - How to split processing ('none', 'component') [auto]
 % par    - If true, parallelise processing over classes/modalities [false]
 % output - Cell of file_array to use as output [return numeric array]
@@ -41,12 +42,14 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     p.addRequired('ipsi', @checkarray);
     p.addRequired('f',    @checkarray);
     p.addOptional('lat',       [],     @(X) isnumeric(X) && length(X) >= 3);
+    p.addParameter('circ',      1);
     p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'component', 'slice', 'none', ''})));
     p.addParameter('par',      false,  @isscalar);
     p.addParameter('output', []);
     p.addParameter('debug',  false);
     p.parse(ipsi, f, varargin{:});
     lat    = p.Results.lat;
+    circ   = p.Results.circ;
     loop   = p.Results.loop;
     par    = p.Results.par;
     output = p.Results.output;
@@ -59,6 +62,12 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
         loop = '';
     end
     [par, loop] = autoParLoop(par, loop, isa(f, 'file_array'), 1, size(f,4));
+    
+    if circ(1)
+        push = 'pushc';
+    else
+        push = 'push';
+    end
     
     % -- Read dim info
     dim = [size(ipsi) 1 1];
@@ -101,7 +110,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
     % --- No loop
     if strcmpi(loop, 'none')
         if debug, fprintf('   - No loop\n'); end
-        [pf1, c1] = spm_diffeo('pushc', single(numeric(f)), ipsi, lat);
+        [pf1, c1] = spm_diffeo(push, single(numeric(f)), ipsi, lat);
         if nargout > 2
             bb = boundingBox(c1);
         else
@@ -124,7 +133,7 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
             if par, fprintf('   - Parallelise on components\n');
             else,   fprintf('   - Serialise on components\n');   end
         end
-        [pf1, c1] = spm_diffeo('pushc', single(f(:,:,:,1)), ipsi, lat);
+        [pf1, c1] = spm_diffeo(push, single(f(:,:,:,1)), ipsi, lat);
         pf1(~isfinite(pf1)) = nan;
         c1(~isfinite(c1))   = nan;
         if nargout > 2
@@ -143,13 +152,13 @@ function [pf, c, bb] = pushImage(ipsi, f, varargin)
         clear c1
         if isa(f, 'file_array')
             for k=2:nc
-                pf1 = spm_diffeo('pushc', single(slicevol(f, k, 4)), ipsi, lat);
+                pf1 = spm_diffeo(push, single(slicevol(f, k, 4)), ipsi, lat);
                 pf1(~isfinite(pf1)) = nan;
                 pf(:,:,:,k) = pf1(bb.x,bb.y,bb.z);
             end
         else
             parfor (k=2:nc, par)
-                pf1 = spm_diffeo('pushc', single(f(:,:,:,k)), ipsi, lat);
+                pf1 = spm_diffeo(push, single(f(:,:,:,k)), ipsi, lat);
                 pf1(~isfinite(pf1)) = nan;
                 pf(:,:,:,k) = pf1(bb.x,bb.y,bb.z);
             end

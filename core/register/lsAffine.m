@@ -32,6 +32,8 @@ function result = lsAffine(model, dq, q0, llm0, mu, f, varargin)
 % nit   - Number of line-search iterations [6]
 % loop  - How to split processing [auto]
 % par   - If true, parallelise processing [false]
+% itrp  - Template interpolation order [1]
+% bnd   - Template Boundary conditions (0=circulant)/[1=neumann]
 % 
 % OUTPUT
 % ------
@@ -68,6 +70,8 @@ function result = lsAffine(model, dq, q0, llm0, mu, f, varargin)
     p.addParameter('match', 'pull', @ischar);
     p.addParameter('par',      false,  @isscalar);
     p.addParameter('loop',     '',     @(X) ischar(X) && any(strcmpi(X, {'slice', 'component', 'none', ''})));
+    p.addParameter('itrp',     1,      @isnumeric);
+    p.addParameter('bnd',      1,      @(X) isscalar(X) && isnumeric(X));
     p.addParameter('pf',  nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('c',   nan, @(X) isnumeric(X) || isa(X, 'file_array'));
     p.addParameter('wa',  nan, @(X) isnumeric(X) || isa(X, 'file_array'));
@@ -87,6 +91,8 @@ function result = lsAffine(model, dq, q0, llm0, mu, f, varargin)
     loop    = p.Results.loop;
     verbose = p.Results.verbose;
     debug   = p.Results.debug;
+    itrp    = p.Results.itrp;
+    bnd     = p.Results.bnd;
     
     matchmode = p.Results.match;
     pf      = p.Results.pf;
@@ -158,27 +164,23 @@ function result = lsAffine(model, dq, q0, llm0, mu, f, varargin)
         printInfo('initial', ll0, llm0, llq0);
     end
     
-    % //!\\ Here, the pushed image is temporarily kept in memory. This
-    % might use up a large ammount of RAM when a lot of classes are used.
-    % I might need to store it in a temporary file_array.
-    
     % --- Loop
     for i=1:nit
         q = q0 + dq / armijo;
         A = exponentiateAffine(q, B, 'debug', debug);
         ipsi = reconstructIPsi(A, iphi, 'lat', latf, 'Mf', Mf, 'Mmu', Mmu, 'debug', debug);
         if strcmpi(matchmode, 'push')
-            [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
+            [pf, c, bb] = pushImage(ipsi, f, latmu, 'circ', ~bnd, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
             llm = llMatching(model, mu, pf, c, 'bb', bb, 'par', par, 'loop', loop, 'debug', debug);
         elseif strcmpi(matchmode, 'pull')
             if cat
-                wa = pullTemplate(ipsi, mu, 'par', par, 'output', wa, 'debug', debug);
+                wa = pullTemplate(ipsi, mu, 'order', itrp, 'bnd', ~bnd, 'par', par, 'output', wa, 'debug', debug);
                 wmu = reconstructProbaTemplate(wa, 'output', wmu, 'loop', loop, 'par', par, 'debug', debug);
                 if ~isa(wa, 'file_array')
                     clear wa
                 end
             else
-                wmu = pullTemplate(ipsi, mu, 'par', par, 'output', wmu, 'debug', debug);
+                wmu = pullTemplate(ipsi, mu, 'order', itrp, 'bnd', ~bnd, 'par', par, 'output', wmu, 'debug', debug);
             end
             llm = llMatching(model, wmu, f, 'par', par, 'loop', loop, 'debug', debug);
         end
@@ -206,13 +208,29 @@ function result = lsAffine(model, dq, q0, llm0, mu, f, varargin)
             result.llm = llm;
             result.ipsi = ipsi;
             if strcmpi(matchmode, 'pull')
-                [pf, c, bb] = pushImage(ipsi, f, latmu, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
+                [pf, c, bb] = pushImage(ipsi, f, latmu, 'circ', ~bnd, 'par', par, 'loop', loop, 'debug', debug, 'output', {pf, c});
                 result.wmu = wmu;
                 result.wa  = wa;
             end
             result.pf = pf;
             result.c  = c;
             result.bb = bb;
+            if pf_bck
+                [path, name, ext] = fileparts(pf.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
+            if c_bck
+                [path, name, ext] = fileparts(c.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
+            if wa_bck
+                [path, name, ext] = fileparts(wa.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
+            if wmu_bck
+                [path, name, ext] = fileparts(wmu.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
             return
         end
     end

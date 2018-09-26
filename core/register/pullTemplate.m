@@ -13,6 +13,8 @@ function [wa, ga] = pullTemplate(phi, a, varargin)
 %
 % KEYWORD ARGUMENTS
 % -----------------
+% order  - Interplation order [1]
+% bnd    - Boundary conditions (1=circulant)/[0=mirror/neumann]
 % grad   - Only compute warped gradients (not the warped image) [false]
 % par    - If true, parallelise processing over classes/modalities [false]
 % output - Cell of file_array to use as output [return numeric array]
@@ -36,11 +38,15 @@ function [wa, ga] = pullTemplate(phi, a, varargin)
     p.FunctionName = 'warp';
     p.addRequired('phi', @checkarray);
     p.addRequired('a',   @checkarray);
+    p.addParameter('order',    1);
+    p.addParameter('bnd',      0);
     p.addParameter('grad',     false,     @islogical);
     p.addParameter('par',      false,     @isscalar);
     p.addParameter('output',   []);
     p.addParameter('debug',    false,     @isscalar);
     p.parse(phi, a, varargin{:});
+    order  = p.Results.order;
+    bnd    = p.Results.bnd;
     grad   = p.Results.grad;
     par    = p.Results.par;
     output = p.Results.output;
@@ -67,6 +73,13 @@ function [wa, ga] = pullTemplate(phi, a, varargin)
     dim = dim(1:4);
     lat = dim(1:3);             % Dimension of the output lattice
     
+    if numel(order) == 1
+        order = repmat(order,1,3);
+    end
+    if numel(bnd) == 1
+        bnd = repmat(bnd,1,3);
+    end
+    
     % --- Allocate output
     compute_image = ~grad;
     compute_grad  = nargout > 1 || grad;
@@ -86,25 +99,25 @@ function [wa, ga] = pullTemplate(phi, a, varargin)
         if compute_image
             for k=1:nc
                 [wa(:,:,:,k), ga(:,:,:,k,1), ga(:,:,:,k,2), ga(:,:,:,k,3)] ...
-                    = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [1 1 1  1 1 1]);
+                    = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), double([order  bnd]));
             end
         else
             for k=1:nc
                 [~, ga(:,:,:,k,1), ga(:,:,:,k,2), ga(:,:,:,k,3)] ...
-                    = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [1 1 1  1 1 1]);
+                    = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), double([order  bnd]));
             end
         end
     elseif ~par
         for k=1:nc
-            wa(:,:,:,k) = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [1 1 1  1 1 1]);
+            wa(:,:,:,k) = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), double([order  bnd]));
         end
     elseif isa(f, 'file_array')
         parfor (k=1:nc, par)
-            wa(:,:,:,k) = spm_diffeo('bsplins', single(slicevol(a, k, 4)), single(numeric(phi)), [1 1 1  1 1 1]);
+            wa(:,:,:,k) = spm_diffeo('bsplins', single(slicevol(a, k, 4)), single(numeric(phi)), double([order  bnd]));
         end
     else
         parfor (k=1:nc, par)
-            wa(:,:,:,k) = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), [1 1 1  1 1 1]);
+            wa(:,:,:,k) = spm_diffeo('bsplins', single(a(:,:,:,k)), single(numeric(phi)), double([order  bnd]));
         end
     end
     

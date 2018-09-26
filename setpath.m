@@ -7,7 +7,7 @@ function setpath(component)
     warning('off','MATLAB:dispatcher:nameConflict')
 
     if nargin == 0
-        component = {'pgva', 'pgra', 'pg', 'affine', 'diffeo'};
+        component = {'shape'};
     end
     if ~iscell(component)
         component = {component};
@@ -34,16 +34,12 @@ function setonepath(component)
             if exist(fullfile(path, '..', 'distributed-computing'), 'dir')
                 addpath(fullfile(path, '..', 'distributed-computing'));
             end
-        case 'pgva'
+        case 'shape_model'
             addpath(fullfile(path, 'scripts'));
-            addpath(fullfile(path, 'scripts', 'pgva'));
+            addpath(fullfile(path, 'scripts', 'shape_model'));
             addpath(fullfile(path, 'core', 'register'));
             addpath(fullfile(path, 'core', 'shape'));
-        case 'pgra'
-            addpath(fullfile(path, 'scripts'));
-            addpath(fullfile(path, 'scripts', 'pgra'));
-            addpath(fullfile(path, 'core', 'register'));
-            addpath(fullfile(path, 'core', 'shape'));
+            addpath(fullfile(path, 'update'));
         otherwise
             warning('Component %s not implemented yet', component)
     end
