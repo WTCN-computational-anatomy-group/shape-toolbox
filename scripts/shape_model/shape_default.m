@@ -119,7 +119,7 @@ function opt = shape_default(opt)
         % Boundary condition (should be inversed for interpolation)
         % 0 = Circulant 
         % 1 = Mirror/Neumann
-        opt.tpl.bnd = 0;
+        opt.tpl.bnd = 1;
     end
     if ~isfield(opt.tpl, 'itrp')
         % Interpolation order when warping the template to subjects
