@@ -25,16 +25,17 @@ function [g, h, htype] = ghNormal(mu, f, varargin)
 %
 % KEYWORD ARGUMENTS
 % -----------------
-% ipsi  - Inverse (subj to template) warp [mx my mz 3]
-%         > If provided on top of ga, compute push(gM) * gA
-%           In this case, ga size is [nx ny nz k 3]
-% lat   - Output lattice size (not needed if ga provided)
-% circ  - (Push only) Boundary conditions for pushing [1]
-% count - Pushed voxel count.
-% bb    - Bounding box (if different between template and pushed image)
-% loop  - Specify how to split data processing
-%         ('component', 'slice' or 'none') ['none']
-% par   - If true, parallelise processing  [false]
+% ipsi    - Inverse (subj to template) warp [mx my mz 3]
+%           > If provided on top of ga, compute push(gM) * gA
+%             In this case, ga size is [nx ny nz k 3]
+% lat     - Output lattice size (not needed if ga provided)
+% circ    - (Push only) Boundary conditions for pushing [1]
+% count   - Pushed voxel count.
+% bb      - Bounding box (if different between template and pushed image)
+% hessian - Compute only hessian (not gradient) [false]
+% loop    - Specify how to split data processing
+%           ('component', 'slice' or 'none') ['none']
+% par     - If true, parallelise processing  [false]
 %
 % OUTPUT
 % ------
@@ -509,6 +510,7 @@ function [g, h, htype] = ghNormal(mu, f, varargin)
                 if ~par
                     for z=1:dlat(3)
                         [g1, h1] = onMemory(mu(bbx,bby,oz+z,:), f(:,:,z,:), c(:,:,z), s);
+                        g(:,:,z,:) = g(:,:,z,:) + g1;
                         h(:,:,z,:) = h(:,:,z,:) + h1;
                     end
                 elseif isa(mu, 'file_array') && isa(f, 'file_array')
