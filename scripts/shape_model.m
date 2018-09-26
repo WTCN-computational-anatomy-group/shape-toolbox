@@ -106,7 +106,7 @@ function [model, dat, opt] = shape_model(varargin)
 % dir.model     - Directory where to store model arrays and workspace ['.']
 % dir.dat       - Directory where to store data array [next to input]
 % fnames.result - Filename for the result environment saved after each EM
-%                 iteration ['pgva_model.mat']
+%                 iteration ['shape_model.mat']
 % fnames.model  - Structure of filenames for all file arrays
 % fnames.dat    - Structure of filenames for all file arrays
 % ondisk.model  - Structure of logical for temporary array [default_ondisk]
