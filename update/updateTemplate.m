@@ -59,7 +59,7 @@ function model = updateTemplate(model, opt)
     % update one modality at a time.
     else
         
-        for k=1:K
+        for k=1:size(model.tpl.a,4)
             % -------------------------------------------------------------
             % Load one class/modality
             a = single(model.tpl.a(:,:,:,k));

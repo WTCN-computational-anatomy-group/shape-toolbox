@@ -24,14 +24,20 @@ function shape_plot_all(model, opt)
         if opt.f.N && opt.optimise.tpl.a
             i = i + 1;
             subplot(nh, nw, i)
-            tpl = catToColor(model.tpl.mu(:,:,ceil(size(model.tpl.mu,3)/2),:));
+            if any(strcmpi(opt.model.name, {'categorical', 'multinomial', 'cat', 'mult'}))
+                tpl = catToColor(model.tpl.mu(:,:,ceil(size(model.tpl.mu,3)/2),:));
+                implot = @(X) image(X);
+            else
+                tpl = model.tpl.mu(:,:,ceil(size(model.tpl.mu,3)/2),1);
+                implot = @(X) colormap(get(imagesc(X), 'Parent'), 'gray');
+            end
             dim = [size(tpl) 1 1];
             if dim(4) > 1
                 tpl = reshape(tpl, [dim(1:2) dim(4)]);
             end
             tpl = permute(tpl, [2 1 3]);
             asp = 1./[opt.tpl.vs(2) opt.tpl.vs(1) 1];
-            image(tpl(end:-1:1,:,:));
+            implot(tpl(end:-1:1,:,:));
             daspect(asp);
             axis off
             npg = npg - 1;
@@ -39,14 +45,20 @@ function shape_plot_all(model, opt)
                 title('template (axial)')
                 i = i + 1;
                 subplot(nh, nw, i)
-                tpl = catToColor(model.tpl.mu(:,ceil(size(model.tpl.mu,2)/2),:,:));
+                if any(strcmpi(opt.model.name, {'categorical', 'multinomial', 'cat', 'mult'}))
+                    tpl = catToColor(model.tpl.mu(:,ceil(size(model.tpl.mu,2)/2),:,:));
+                    implot = @(X) image(X);
+                else
+                    tpl = model.tpl.mu(:,:,ceil(size(model.tpl.mu,3)/2),1);
+                    implot = @(X) colormap(get(imagesc(X), 'Parent'), 'gray');
+                end
                 dim = [size(tpl) 1 1];
                 if dim(4) > 1
                     tpl = reshape(tpl, [dim(1) dim(3) dim(4)]);
                 end
                 tpl = permute(tpl, [2 1 3]);
                 asp = 1./[opt.tpl.vs(3) opt.tpl.vs(1) 1];
-                image(tpl(end:-1:1,:,:));
+                implot(tpl(end:-1:1,:,:));
                 daspect(asp);
                 axis off
                 title('template (coronal)')

@@ -39,6 +39,8 @@ function model = updateTemplateDerivatives(model, opt)
             'par',    opt.par.within_main, ... % Parallelise processing?
             'debug',  opt.ui.debug,  ...   % Write debugging stuff?
             'output', model.tpl.mu);       % Output file array (saves memory)
+    else
+        model.tpl.mu = model.tpl.a;
     end
 
     % =====================================================================

@@ -34,20 +34,24 @@ function [dat, model] = shape_init(dat, model, opt)
     
     % ---
     % Try to estimate max memory consumption
-    optmem = opt.par.subjects.job.est_mem;
-    maxmem = opt.par.subjects.job.mem;
-    maxmem1 = (prod(opt.tpl.lat)*3*4*10)/(1024^2)+1.5; % 1.5G + 10 velocity fields
-    maxmem1 = ceil(maxmem1 * 10)/10;
-    opt.par.subjects.job.mem     = [num2str(maxmem1) 'G'];
-    opt.par.subjects.job.est_mem = false;
+    if strcmpi(opt.par.subjects.mode, 'qsub')
+        optmem = opt.par.subjects.job.est_mem;
+        maxmem = opt.par.subjects.job.mem;
+        maxmem1 = (prod(opt.tpl.lat)*3*4*10)/(1024^2)+1.5; % 1.5G + 10 velocity fields
+        maxmem1 = ceil(maxmem1 * 10)/10;
+        opt.par.subjects.job.mem     = [num2str(maxmem1) 'G'];
+        opt.par.subjects.job.est_mem = false;
+    end
     % ---
     
     [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
         'shape_init_subject', 'inplace', dat, model, opt);
     
     % ---
-    opt.par.subjects.job.est_mem = optmem;
-    opt.par.subjects.job.mem     = maxmem;
+    if strcmpi(opt.par.subjects.mode, 'qsub')
+        opt.par.subjects.job.est_mem = optmem;
+        opt.par.subjects.job.mem     = maxmem;
+    end
     % ---
     
     % ---------------------------------------------------------------------
@@ -81,20 +85,24 @@ function [dat, model] = shape_init(dat, model, opt)
     
     % ---
     % Try to estimate max memory consumption
-    optmem = opt.par.subjects.job.est_mem;
-    maxmem = opt.par.subjects.job.mem;
-    maxmem1 = (prod(opt.tpl.lat)*3*4*10)/(1024^2)+1.5; % 1.5G + 10 velocity fields
-    maxmem1 = ceil(maxmem1 * 10)/10;
-    opt.par.subjects.job.mem     = [num2str(maxmem1) 'G'];
-    opt.par.subjects.job.est_mem = false;
+    if strcmpi(opt.par.subjects.mode, 'qsub')
+        optmem = opt.par.subjects.job.est_mem;
+        maxmem = opt.par.subjects.job.mem;
+        maxmem1 = (prod(opt.tpl.lat)*3*4*10)/(1024^2)+1.5; % 1.5G + 10 velocity fields
+        maxmem1 = ceil(maxmem1 * 10)/10;
+        opt.par.subjects.job.mem     = [num2str(maxmem1) 'G'];
+        opt.par.subjects.job.est_mem = false;
+    end
     % ---
     
     [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
         'shape_init_subject2', 'inplace', dat, model, opt);
     
     % ---
-    opt.par.subjects.job.est_mem = optmem;
-    opt.par.subjects.job.mem     = maxmem;
+    if strcmpi(opt.par.subjects.mode, 'qsub')
+        opt.par.subjects.job.est_mem = optmem;
+        opt.par.subjects.job.mem     = maxmem;
+    end
     % ---
     
     % ---------------------------------------------------------------------

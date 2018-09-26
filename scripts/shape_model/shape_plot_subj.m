@@ -40,7 +40,13 @@ function i = plot_one(dat, model, opt, i, nh, nw)
         % Observed image
         i = i+1;
         subplot(nh, nw, i);
-        im = catToColor(dat.f.f(:,:,ceil(size(dat.f.f,3)/2),:));
+        if any(strcmpi(opt.model.name, {'categorical', 'multinomial', 'cat', 'mult'}))
+            im     = catToColor(dat.f.f(:,:,ceil(size(dat.f.f,3)/2),:));
+            implot = @(X) image(X);
+        else
+            im     = dat.f.f(:,:,ceil(size(dat.f.f,3)/2),1);
+            implot = @(X) colormap(get(imagesc(X), 'Parent'), 'gray');
+        end
         dim = [size(im) 1 1];
         if dim(4) > 1
             im = reshape(im, [dim(1:2) dim(4)]);
@@ -48,7 +54,7 @@ function i = plot_one(dat, model, opt, i, nh, nw)
         im = permute(im, [2 1 3]);
         vs = sqrt(sum(dat.f.M(1:3,1:3).^2));
         asp = 1./[vs(2) vs(1) 1];
-        image(im(end:-1:1,:,:));
+        implot(im(end:-1:1,:,:));
         daspect(asp);
         axis off
 
@@ -56,7 +62,13 @@ function i = plot_one(dat, model, opt, i, nh, nw)
         % Warped template
         i = i+1;
         subplot(nh, nw, i);
-        im = catToColor(dat.tpl.wmu(:,:,ceil(size(dat.tpl.wmu,3)/2),:));
+        if any(strcmpi(opt.model.name, {'categorical', 'multinomial', 'cat', 'mult'}))
+            im     = catToColor(dat.tpl.wmu(:,:,ceil(size(dat.tpl.wmu,3)/2),:));
+            implot = @(X) image(X);
+        else
+            im     = dat.tpl.wmu(:,:,ceil(size(dat.tpl.wmu,3)/2),1);
+            implot = @(X) colormap(get(imagesc(X), 'Parent'), 'gray');
+        end
         dim = [size(im) 1 1];
         if dim(4) > 1
             im = reshape(im, [dim(1:2) dim(4)]);
@@ -64,7 +76,7 @@ function i = plot_one(dat, model, opt, i, nh, nw)
         im = permute(im, [2 1 3]);
         vs = sqrt(sum(dat.f.M(1:3,1:3).^2));
         asp = 1./[vs(2) vs(1) 1];
-        image(im(end:-1:1,:,:));
+        implot(im(end:-1:1,:,:));
         daspect(asp);
         axis off
 
@@ -73,7 +85,15 @@ function i = plot_one(dat, model, opt, i, nh, nw)
         i = i + 1;
         subplot(nh,nw,i)
         def = numeric(dat.v.ipsi);
-        id = reconstructIPsi(dat.q.A, spm_warps('identity', opt.tpl.lat));
+        latf = [size(dat.f.f) 1];
+        latf = latf(1:3);
+        if isfield(dat.q, 'A')
+            Aq = dat.q.A;
+        else
+            Aq = eye(4);
+        end
+        id = reconstructIPsi(Aq, spm_warps('identity', opt.tpl.lat), ...
+            'lat', latf, 'Mf', dat.f.M, 'Mmu', opt.tpl.M);
         def = def - id;
         clear id
         im = defToColor(def(:,:,ceil(size(def,3)/2),:));

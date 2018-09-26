@@ -30,7 +30,7 @@ function result = lsVelocityShape(model, dv, r0, match0, mu, f, varargin)
 % prm  - Regularisation parameters (L matrix) [0.0001 0.001 0.2 0.05 0.2]
 % vs   - Lattice voxel size [[] = from Mmu]
 % itgr - Number of integration steps for geodesic shooting [NaN = auto]
-% bnd  - Differential operator boundary conditions: [0]/1/2/3$
+% bnd  - Differential operator boundary conditions: [0]/1/2/3
 % > Affine
 % A     - Affine transform [eye(4)]
 % Mf    - Image voxel-to-world mappinf [eye(4)]
@@ -82,7 +82,7 @@ function result = lsVelocityShape(model, dv, r0, match0, mu, f, varargin)
     
     p = inputParser;
     p.FunctionName = 'lsVelocity';
-    p.addRequired('model',  @(X) isstruct(X) && isfield(X, 'name'));
+    p.addRequired('model',  @(X) ischar(X) || (isstruct(X) && isfield(X, 'name')));
     p.addRequired('dv',     @checkarray);
     p.addRequired('r0',     @checkarray);
     p.addRequired('match0', @isscalar);
@@ -155,6 +155,9 @@ function result = lsVelocityShape(model, dv, r0, match0, mu, f, varargin)
     
     if debug, fprintf('* lsVelocityShape\n'); end
     
+    if ischar(model)
+        model = struct('name', model);
+    end
     cat = any(strcmpi(model.name, {'bernoulli', 'binomial', 'categorical', 'multinomial'}));
     
     % --- Save previous pushed/pull
@@ -276,6 +279,22 @@ function result = lsVelocityShape(model, dv, r0, match0, mu, f, varargin)
             result.pf = pf;
             result.c  = c;
             result.bb = bb;
+            if pf_bck
+                [path, name, ext] = fileparts(pf.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
+            if c_bck
+                [path, name, ext] = fileparts(c.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
+            if wa_bck
+                [path, name, ext] = fileparts(wa.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
+            if wmu_bck
+                [path, name, ext] = fileparts(wmu.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
             return
         end
     end

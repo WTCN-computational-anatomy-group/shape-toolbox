@@ -147,8 +147,13 @@ function dat = updateAffine(dat, model, opt)
             dat.q.A       = result.A;
             dat.f.lb.val  = result.llm;
             dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
-            dat.f.pf      = copyarray(result.pf,   dat.f.pf);
-            dat.f.c       = copyarray(result.c,    dat.f.c);
+            if strcmpi(opt.tpl.update, 'ml')
+                dat.f.pf      = copyarray(result.pf,   dat.f.pf);
+                dat.f.c       = copyarray(result.c,    dat.f.c);
+            else
+                rmarray(result.pf);
+                rmarray(result.c);
+            end
             dat.f.bb      = result.bb;
             dat.tpl.wmu   = copyarray(result.wmu, dat.tpl.wmu);
             rmarray(result.wa);

@@ -215,6 +215,22 @@ function result = lsAffine(model, dq, q0, llm0, mu, f, varargin)
             result.pf = pf;
             result.c  = c;
             result.bb = bb;
+            if pf_bck
+                [path, name, ext] = fileparts(pf.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
+            if c_bck
+                [path, name, ext] = fileparts(c.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
+            if wa_bck
+                [path, name, ext] = fileparts(wa.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
+            if wmu_bck
+                [path, name, ext] = fileparts(wmu.fname);
+                rmarray(fullfile(path, [name '_bck' ext]));
+            end
             return
         end
     end

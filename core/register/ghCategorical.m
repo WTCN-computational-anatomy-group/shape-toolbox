@@ -154,33 +154,22 @@ function [g, h, htype] = ghCategorical(mu, f, varargin)
     if numel(output) < 2
         output = [output {[]}];
     end
-    if hessian
+    if ~hessian
+        if isempty(gmu)
+            g = prepareOnDisk(output{1}, [dlat nc]);
+            g(:) = 0;
+        else
+            g = prepareOnDisk(output{1}, [dlat nvec]);
+            g(:) = 0;
+        end
+    end
+    if hessian || nargout > 1
         if isempty(gmu)
             h = prepareOnDisk(output{1}, [dlat nc*(nc+1)/2]);
             h(:) = 0;
         else
             h = prepareOnDisk(output{1}, [dlat nvec*(nvec+1)/2]);
             h(:) = 0;
-        end
-    elseif nargout > 1
-        if isempty(gmu)
-            g = prepareOnDisk(output{1}, [dlat nc]);
-            g(:) = 0;
-            h = prepareOnDisk(output{2}, [dlat nc*(nc+1)/2]);
-            h(:) = 0;
-        else
-            g = prepareOnDisk(output{1}, [dlat nvec]);
-            g(:) = 0;
-            h = prepareOnDisk(output{2}, [dlat nvec*(nvec+1)/2]);
-            h(:) = 0;
-        end
-    else
-        if isempty(gmu)
-            g = prepareOnDisk(output{1}, [dlat nc]);
-            g(:) = 0;
-        else
-            g = prepareOnDisk(output{1}, [dlat nvec]);
-            g(:) = 0;
         end
     end
     

@@ -302,7 +302,7 @@ function opt = shape_default(opt)
     % ---------------------------------------------------------------------
     % Parallel/Distributed processing
     % ---------------------------------------------------------------------
-    if ~isfield(opt, 'par')
+    if ~isfield(opt, '<')
         opt.par = struct;
     end
     if ~isfield(opt.par, 'subject')

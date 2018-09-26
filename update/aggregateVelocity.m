@@ -22,8 +22,8 @@ function model = aggregateVelocity(dat, model, opt)
     nf = 0;
     nv = 0;
     model.v.n       = 0; % For lambda update
-    model.v.tr      = 0; % For lambda update
     model.v.reg     = 0; % For lambda update
+    model.v.tr      = 0; % For lambda update
     model.v.uncty   = 0; % For lambda update
     if opt.v.N
         model.lb.v1.val = 0; % Log-likelihood (observed velocity)
@@ -46,8 +46,8 @@ function model = aggregateVelocity(dat, model, opt)
         end
         if defval(dat1.f, '.observed', true)
             nf = nf + 1;
-            model.v.tr    = model.v.tr    + dat1.v.lb.tr;
-            model.v.uncty = model.v.uncty + dat1.v.lb.uncty;
+            model.v.tr      = model.v.tr      + defval(dat1.v.lb, 'tr', 0);
+            model.v.uncty   = model.v.uncty   + defval(dat1.v.lb, 'uncty', 0);
             model.lb.v2.val = model.lb.v2.val + dat1.v.lb.val;
         else
             nv = nv + 1;

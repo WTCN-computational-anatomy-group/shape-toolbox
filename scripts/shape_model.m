@@ -267,7 +267,6 @@ function [model, dat, opt] = shape_model(varargin)
                     else
                         fprintf('Converged :D\n');
                         model.converged = true;
-                        model = exit_function(model, ondisk.model);
                         return
                     end
                 end
