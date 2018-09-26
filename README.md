@@ -263,7 +263,7 @@ a call to [`setpath.m`](setpath.m) adds all necessary folders to Matlab's path.
 ## How to compile
 
 If no executable is provided for a given platform and/or runtime version, it is possible to compile one yourself using the script [`shape_compile.m`](scripts/shape_model/shape_compile.m). You will need:
-* Matlab (I've used R2017b, I am not sure how far back the code is compatible),
+* Matlab (I used R2017b, I am not sure how far back the code is compatible),
 * A [compatible compiler](https://uk.mathworks.com/support/compilers.html),
 * This code source and all dependencies on your Matlab path.
 
@@ -284,11 +284,11 @@ This software was developed under the [_Human Brain Project_](https://www.humanb
 - The shape toolbox was mainly developed by Yaël Balbastre with invaluable help from John Ashburner.
 - The `auxiliary-functions` and `distributed-computing` toolboxes were developed by Mikael Brudfors and Yaël Balbastre.
 
-If you encounter any difficulty, please shoot an email to `y.balbastre` or `j.ashburner` _at_ `ucl.ac.uk`
+If you encounter any difficulty, please send an email to `y.balbastre` or `j.ashburner` *at* `ucl.ac.uk`
 
 ## License
 
 This software is released under the [GNU General Public License version 3](LICENSE) (GPL v3). As a result, you may copy, distribute and modify the software as long as you track changes/dates in source files. Any modifications to or software including (via compiler) GPL-licensed code must also be made available under the GPL along with build & install instructions.
 
 
-[TL;DR: GPL v3](https://tldrlegal.com/license/gnu-general-public-license-v3-(gpl-3)
+[TL;DR: GPL v3](https://tldrlegal.com/license/gnu-general-public-license-v3-(gpl-3))
