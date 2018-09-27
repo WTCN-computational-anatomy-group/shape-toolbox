@@ -493,7 +493,7 @@ function [g, h, htype] = ghBernoulli(mu, f, varargin)
     
     % --- Push gradient if needed
     if checkarray(ipsi)
-        if hessian || nargin > 1
+        if hessian || nargout > 1
             h = pushImage(ipsi, h, lat, ...
                 'output', h, ...
                 'circ',   p.Results.circ, ...
@@ -553,7 +553,7 @@ function [g, h, htype] = ghBernoulli(mu, f, varargin)
         end
         g = [];
         [g, h, htype] = deal(h, htype, g);
-    elseif nargin > 1
+    elseif nargout > 1
         if ~isempty(output{1})
             g = saveOnDisk(output{1}, g, 'name', 'g');
         end

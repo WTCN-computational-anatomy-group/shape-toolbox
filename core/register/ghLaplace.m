@@ -168,11 +168,12 @@ function [g, h, htype] = ghLaplace(mu, f, varargin)
         end
     end
     if hessian || nargout > 1
+        if hessian, idx = 1; else, idx = 2; end
         if isempty(gmu)
-            h = prepareOnDisk(output{2}, [dlat nc]);
+            h = prepareOnDisk(output{idx}, [dlat nc]);
             h(:) = 0;
         else
-            h = prepareOnDisk(output{2}, [dlat nvec*(nvec+1)/2]);
+            h = prepareOnDisk(output{idx}, [dlat nvec*(nvec+1)/2]);
             h(:) = 0;
         end
     end
@@ -756,7 +757,7 @@ function [g, h, htype] = ghLaplace(mu, f, varargin)
     
     % --- Push gradient if needed
     if checkarray(ipsi)
-        if hessian || nargin > 1
+        if hessian || nargout > 1
             h = pushImage(ipsi, h, lat, ...
                 'output', h, ...
                 'circ',   p.Results.circ, ...
@@ -816,7 +817,7 @@ function [g, h, htype] = ghLaplace(mu, f, varargin)
         end
         g = [];
         [g, h, htype] = deal(h, htype, g);
-    elseif nargin > 1
+    elseif nargout > 1
         if ~isempty(output{1})
             g = saveOnDisk(output{1}, g, 'name', 'g');
         end
