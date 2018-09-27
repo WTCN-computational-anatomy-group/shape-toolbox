@@ -37,19 +37,23 @@ function [dat, model] = shape_process(dat, model, opt)
                 shape_ui('Title', 'Update Affine', false);
             end
             okpre = sum(toArray(dat, '.q.ok') >= 0);
-            if ~isfield(opt.par.subjects.job, 'mem_affine')
-                opt.par.subjects.job.mem_affine = opt.par.subjects.job.mem;
+            if strcmpi(opt.par.subjects.mode, 'qsub')
+                if ~isfield(opt.par.subjects.job, 'mem_affine')
+                    opt.par.subjects.job.mem_affine = opt.par.subjects.job.mem;
+                end
+                opt.par.subjects.job.mem = opt.par.subjects.job.mem_affine;
             end
-            opt.par.subjects.job.mem = opt.par.subjects.job.mem_affine;
             [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
                 'updateAffine', 'inplace', dat, model, opt);
-            opt.par.subjects.job.mem_affine = opt.par.subjects.job.mem;
+            if strcmpi(opt.par.subjects.mode, 'qsub')
+                opt.par.subjects.job.mem_affine = opt.par.subjects.job.mem;
+            end
             if opt.ui.verbose
                 shape_ui('Title', '', false);
                 okpost = sum(toArray(dat, '.q.ok') > 0);
                 fprintf('success: %d / %d\n', okpost, okpre);
             end
-            [~, dat] = distribute([], 'lbAffine', 'inplace', dat, model, opt);
+            dat   = distribute('lbAffine', 'inplace', dat, model, opt);
             model = aggregateAffine(dat, model, opt);
             model = aggregateMatching(dat, model, opt);
             model = updateLowerBound(model, opt);
@@ -64,7 +68,7 @@ function [dat, model] = shape_process(dat, model, opt)
             end
             model = updateAffinePrior(model, opt);
             model = lbAffinePrior(model, opt);
-            [~, dat] = distribute([], 'lbAffine', 'inplace', dat, model, opt);
+            dat   = distribute('lbAffine', 'inplace', dat, model, opt);
             model = aggregateAffine(dat, model, opt);
             if opt.ui.verbose
                 shape_ui('PostTitle', toc(t0));
@@ -84,19 +88,23 @@ function [dat, model] = shape_process(dat, model, opt)
                 shape_ui('Title', 'Update Velocity', false);
             end
             okpre = sum(toArray(dat, '.v.ok') >= 0);
-            if ~isfield(opt.par.subjects.job, 'mem_velocity')
-                opt.par.subjects.job.mem_velocity = opt.par.subjects.job.mem;
+            if strcmpi(opt.par.subjects.mode, 'qsub')
+                if ~isfield(opt.par.subjects.job, 'mem_velocity')
+                    opt.par.subjects.job.mem_velocity = opt.par.subjects.job.mem;
+                end
+                opt.par.subjects.job.mem = opt.par.subjects.job.mem_velocity;
             end
-            opt.par.subjects.job.mem = opt.par.subjects.job.mem_velocity;
             [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
                 'updateVelocityShape', 'inplace', dat, model, opt);
-            opt.par.subjects.job.mem_velocity = opt.par.subjects.job.mem;
+            if strcmpi(opt.par.subjects.mode, 'qsub')
+                opt.par.subjects.job.mem_velocity = opt.par.subjects.job.mem;
+            end
             if opt.ui.verbose
                 shape_ui('Title', '', false);
                 okpost = sum(toArray(dat, '.v.ok') > 0);
                 fprintf('success: %d / %d\n', okpost, okpre);
             end
-            [~, dat] = distribute([], 'lbVelocityShape', 'inplace', dat, model, opt);
+            dat   = distribute('lbVelocityShape', 'inplace', dat, model, opt);
             model = aggregateVelocity(dat, model, opt);
             model = aggregateMatching(dat, model, opt);
             model = updateLowerBound(model, opt);
@@ -117,7 +125,7 @@ function [dat, model] = shape_process(dat, model, opt)
                 fprintf('%5.3f -> %5.3f\n', l0, model.v.l);
             end
             model = lbResidualPrior(model, opt);
-            [~, dat] = distribute([], 'lbVelocityShape', 'inplace', dat, model, opt);
+            dat   = distribute('lbVelocityShape', 'inplace', dat, model, opt);
             model = aggregateVelocity(dat, model, opt);
             model = updateLowerBound(model, opt);
             shape_plot_all(model,opt);
@@ -136,9 +144,9 @@ function [dat, model] = shape_process(dat, model, opt)
             end
             model = updateSubspace(dat, model, opt);
             model = lbSubspace(model, opt);
-            [~, dat] = distribute([], 'updateResidualLB', 'inplace', dat, model, opt);
-            [~, dat] = distribute([], 'lbLatent', 'inplace', dat, model, opt);
-            [~, dat] = distribute([], 'lbVelocityShape', 'inplace', dat, model, opt);
+            dat   = distribute('updateResidualLB', 'inplace', dat, model, opt);
+            dat   = distribute('lbLatent', 'inplace', dat, model, opt);
+            dat   = distribute('lbVelocityShape', 'inplace', dat, model, opt);
             model = aggregateLatent(dat, model, opt);
             model = aggregateVelocity(dat, model, opt);
             if opt.ui.verbose
@@ -154,16 +162,20 @@ function [dat, model] = shape_process(dat, model, opt)
             if opt.ui.verbose
                 shape_ui('Title', 'Update Latent', false);
             end
-            if ~isfield(opt.par.subjects.job, 'mem_latent')
-                opt.par.subjects.job.mem_latent = opt.par.subjects.job.mem;
+            if strcmpi(opt.par.subjects.mode, 'qsub')
+                if ~isfield(opt.par.subjects.job, 'mem_latent')
+                    opt.par.subjects.job.mem_latent = opt.par.subjects.job.mem;
+                end
+                opt.par.subjects.job.mem = opt.par.subjects.job.mem_latent;
             end
-            opt.par.subjects.job.mem = opt.par.subjects.job.mem_latent;
             [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
                 'updateLatent', 'inplace', dat, model, opt);
-            opt.par.subjects.job.mem_latent = opt.par.subjects.job.mem;
-            [~, dat] = distribute([], 'updateResidualLB', 'inplace', dat, model, opt);
-            [~, dat] = distribute([], 'lbLatent', 'inplace', dat, model, opt);
-            [~, dat] = distribute([], 'lbVelocityShape', 'inplace', dat, model, opt);
+            if strcmpi(opt.par.subjects.mode, 'qsub')
+                opt.par.subjects.job.mem_latent = opt.par.subjects.job.mem;
+            end
+            dat   = distribute('updateResidualLB', 'inplace', dat, model, opt);
+            dat   = distribute('lbLatent', 'inplace', dat, model, opt);
+            dat   = distribute('lbVelocityShape', 'inplace', dat, model, opt);
             model = aggregateLatent(dat, model, opt);
             model = aggregateVelocity(dat, model, opt);
             model = updateLowerBound(model, opt);
@@ -179,8 +191,8 @@ function [dat, model] = shape_process(dat, model, opt)
                 t0 = shape_ui('Title', 'Orthogonalise Subspace', false, true);
             end
             [model,Q] = orthogonaliseSubspace(model, opt);
-            [~, dat] = distribute([], 'rotateLatent', Q, 'inplace', dat);
-            [~, dat] = distribute([], 'lbLatent', 'inplace', dat, model, opt);
+            dat   = distribute('rotateLatent', Q, 'inplace', dat);
+            dat   = distribute('lbLatent', 'inplace', dat, model, opt);
             model = aggregateLatent(dat,model,opt);
             model = lbSubspace(model, opt);
             model = lbLatentPrior(model, opt);
@@ -195,7 +207,7 @@ function [dat, model] = shape_process(dat, model, opt)
             end
             model = updateLatentPrior(model, opt);
             model = lbLatentPrior(model, opt);
-            [~, dat] = distribute([], 'lbLatent', 'inplace', dat, model, opt);
+            dat   = distribute('lbLatent', 'inplace', dat, model, opt);
             model = aggregateLatent(dat, model, opt);
             if opt.ui.verbose
                 shape_ui('PostTitle', toc(t0));
@@ -213,13 +225,17 @@ function [dat, model] = shape_process(dat, model, opt)
         if opt.ui.verbose
             shape_ui('Title', 'Update Template Grad', false);
         end
-        if ~isfield(opt.par.subjects.job, 'mem_template')
-            opt.par.subjects.job.mem_template = opt.par.subjects.job.mem;
+        if strcmpi(opt.par.subjects.mode, 'qsub')
+            if ~isfield(opt.par.subjects.job, 'mem_template')
+                opt.par.subjects.job.mem_template = opt.par.subjects.job.mem;
+            end
+            opt.par.subjects.job.mem = opt.par.subjects.job.mem_template;
         end
-        opt.par.subjects.job.mem = opt.par.subjects.job.mem_template;
         [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
             'updateTemplateGradHess', 'inplace', dat, model, opt);
-        opt.par.subjects.job.mem_template = opt.par.subjects.job.mem;
+        if strcmpi(opt.par.subjects.mode, 'qsub')
+            opt.par.subjects.job.mem_template = opt.par.subjects.job.mem;
+        end
             
         % -----------------------------------------------------------------
         % Update template
@@ -244,23 +260,31 @@ function [dat, model] = shape_process(dat, model, opt)
         if opt.ui.verbose
             shape_ui('Title', 'Update Warped Templates', false);
         end
-        if ~isfield(opt.par.subjects.job, 'mem_warp')
-            opt.par.subjects.job.mem_warp = opt.par.subjects.job.mem;
+        if strcmpi(opt.par.subjects.mode, 'qsub')
+            if ~isfield(opt.par.subjects.job, 'mem_warp')
+                opt.par.subjects.job.mem_warp = opt.par.subjects.job.mem;
+            end
+            opt.par.subjects.job.mem = opt.par.subjects.job.mem_warp;
         end
-        opt.par.subjects.job.mem = opt.par.subjects.job.mem_warp;
         [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
             'updateWarpedTemplate', 'inplace', dat, model, opt);
-        opt.par.subjects.job.mem_warp = opt.par.subjects.job.mem;
+        if strcmpi(opt.par.subjects.mode, 'qsub')
+            opt.par.subjects.job.mem_warp = opt.par.subjects.job.mem;
+        end
         if opt.ui.verbose
             shape_ui('Title', 'Update Matching terms', false);
         end
-        if ~isfield(opt.par.subjects.job, 'mem_match')
-            opt.par.subjects.job.mem_match = opt.par.subjects.job.mem;
+        if strcmpi(opt.par.subjects.mode, 'qsub')
+            if ~isfield(opt.par.subjects.job, 'mem_match')
+                opt.par.subjects.job.mem_match = opt.par.subjects.job.mem;
+            end
+            opt.par.subjects.job.mem = opt.par.subjects.job.mem_match;
         end
-        opt.par.subjects.job.mem = opt.par.subjects.job.mem_match;
         [opt.par.subjects, dat] = distribute(opt.par.subjects, ...
             'lbMatching', 'inplace', dat, model, opt);
-        opt.par.subjects.job.mem_match = opt.par.subjects.job.mem;
+        if strcmpi(opt.par.subjects.mode, 'qsub')
+            opt.par.subjects.job.mem_match = opt.par.subjects.job.mem;
+        end
         model = aggregateMatching(dat, model, opt);
         model = updateLowerBound(model, opt);
         shape_plot_all(model,opt);
