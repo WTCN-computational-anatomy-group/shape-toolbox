@@ -7,7 +7,7 @@ function setpath(component)
     warning('off','MATLAB:dispatcher:nameConflict')
 
     if nargin == 0
-        component = {'shape'};
+        component = {'shape_model'};
     end
     if ~iscell(component)
         component = {component};
