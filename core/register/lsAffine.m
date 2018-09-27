@@ -176,9 +176,6 @@ function result = lsAffine(model, dq, q0, llm0, mu, f, varargin)
             if cat
                 wa = pullTemplate(ipsi, mu, 'order', itrp, 'bnd', ~bnd, 'par', par, 'output', wa, 'debug', debug);
                 wmu = reconstructProbaTemplate(wa, 'output', wmu, 'loop', loop, 'par', par, 'debug', debug);
-                if ~isa(wa, 'file_array')
-                    clear wa
-                end
             else
                 wmu = pullTemplate(ipsi, mu, 'order', itrp, 'bnd', ~bnd, 'par', par, 'output', wmu, 'debug', debug);
             end
