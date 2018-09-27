@@ -271,8 +271,8 @@ function opt = shape_default(opt)
         opt.lb.moving = 3;
     end
     if ~isfield(opt.lb,  'exact')
-        % Number of EM iterations to take into account for moving average
-        opt.lb.exact = true;
+        % Exact lower bound (recomputed after each update) or fast lb
+        opt.lb.exact = false;
     end
     
     % ---------------------------------------------------------------------
