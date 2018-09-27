@@ -131,7 +131,7 @@ function shape_plot_all(model, opt)
             plot([model.lb.lb.it model.lb.lb.curit], model.lb.v1.list, ...
                  colors(mod(i, length(colors))+1))
             title(model.lb.v1.name)
-        elseif opt.optimise.tpl.a && strcmpi(opt.tpl.update, 'map')
+        elseif opt.optimise.tpl.a && strcmpi(opt.tpl.update, 'map') && sum(opt.tpl.prm) > 0
             % Template prior
             i = i + 1;
             subplot(nh,nw,i)

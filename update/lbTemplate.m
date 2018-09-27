@@ -17,19 +17,21 @@ function model = lbTemplate(model, opt)
      
     % =====================================================================
     % Lower Bound
-    model.lb.a.val = 0;
-    K = size(model.tpl.a,4);
-    for k=1:K
-        a1 = single(model.tpl.a(:,:,:,k));
-        m1 = spm_field('vel2mom', a1, double([opt.tpl.vs opt.tpl.prm]));
-        model.lb.a.val = model.lb.a.val - 0.5 * a1(:)'*m1(:);
-        clear a1 m1
+    if sum(opt.tpl.prm) > 0
+        model.lb.a.val = 0;
+        K = size(model.tpl.a,4);
+        for k=1:K
+            a1 = single(model.tpl.a(:,:,:,k));
+            m1 = spm_field('vel2mom', a1, double([opt.tpl.vs opt.tpl.prm]));
+            model.lb.a.val = model.lb.a.val - 0.5 * a1(:)'*m1(:);
+            clear a1 m1
+        end
+        model.lb.a.val = model.lb.a.val ...
+            - 0.5 * K*prod(opt.tpl.vs)*log(2*pi) ...
+            + 0.5 * K*opt.tpl.LogDetL;
+        model.lb.a.type = 'll';
+        model.lb.a.name = 'Template prior';
     end
-    model.lb.a.val = model.lb.a.val ...
-        - 0.5 * K*prod(opt.tpl.vs)*log(2*pi) ...
-        + 0.5 * K*opt.tpl.LogDetL;
-    model.lb.a.type = 'll';
-    model.lb.a.name = 'Template prior';
                    
     % =====================================================================
     % Exit
