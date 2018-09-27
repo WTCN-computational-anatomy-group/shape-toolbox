@@ -81,15 +81,16 @@ function mu = updateMuLaplaceML(varargin)
     p.addParameter('loop',   '',    @(X) ischar(X) && any(strcmpi(X, {'slice', 'component', 'subject', 'none', ''})));
     p.addParameter('par',    false, @isscalar);
     p.addParameter('debug',  false, @isscalar);
-    p.addParameter('output', false);
+    p.addParameter('output', []);
     p.parse(varargin{:});
     lat    = p.Results.lat;
     fwhm   = p.Results.fwhm;
     loop   = p.Results.loop;
     par    = p.Results.par;
     debug  = p.Results.debug;
+    output = p.Results.output;
     
-    if debug, fprintf('* updateMuLaplaceML\n'); end;
+    if debug, fprintf('* updateMuLaplaceML\n'); end
 
     if isempty(lat)
         error('For now, the lattice size MUST be provided')
@@ -103,7 +104,7 @@ function mu = updateMuLaplaceML(varargin)
     
     switch lower(loop)
         case 'none'
-            if debug, fprintf('   - No loop\n'); end;
+            if debug, fprintf('   - No loop\n'); end
             mu = loopNone(f, c, b, bb, lat, output, fwhm);
         case 'component'
             if debug
@@ -276,7 +277,11 @@ function mu = loopSlice(f, c, b, bb, lat, par, output)
     end
 end
 
-function mu = loopNone(f, c, b, bb, lat, output)
+function mu = loopNone(f, c, b, bb, lat, output, fwhm)
+
+    if nargin < 7
+        fwhm = 0;
+    end
 
     nc = size(f{1}, 4);
     
@@ -313,13 +318,13 @@ function m = wmedian(f, c)
     sizef = size(f);
     dimc  = length(size(c));
 
-    [f, ind] = sort(f, sizef(end));
-    c = c(:,:,:,ind);
+    [f, ind] = sort(f,dimc);
+    c = c(ind);
     c = bsxfun(@rdivide, cumsum(c, dimc), sum(c, dimc)) > 0.5;
-    [~, ind] = max(c, [], 4);
+    [~, ind] = max(c, [], dimc);
         
-    f = reshape(f, [], sizef(end));
-    f = f(sub2ind(size(f), 1:size(f,1), ind));
+    f = reshape(f, [], sizef(dimc));
+    f = f(sub2ind(size(f), 1:size(f,1), ind(:)'));
     f = reshape(f, sizef(1:end-1));
 
     m = f;
