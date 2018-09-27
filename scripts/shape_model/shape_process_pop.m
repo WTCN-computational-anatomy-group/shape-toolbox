@@ -38,7 +38,7 @@ function [dat,model] = shape_process_pop(dat, model, opt)
             end
             model = updateAffinePrior(model, opt);
             model = lbAffinePrior(model, opt);
-            [~, dat] = distribute([], 'lbAffine', 'inplace', dat, model, opt);
+            dat   = distribute('lbAffine', 'inplace', dat, model, opt);
             model = aggregateAffine(dat, model, opt);
             if opt.ui.verbose
                 shape_ui('PostTitle', toc(t0));
@@ -64,7 +64,7 @@ function [dat,model] = shape_process_pop(dat, model, opt)
                 fprintf('%5.3f -> %5.3f\n', l0, model.v.l);
             end
             model = lbResidualPrior(model, opt);
-            dat = distribute('lbVelocityShape', 'inplace', dat, model, opt);
+            dat   = distribute('lbVelocityShape', 'inplace', dat, model, opt);
             model = aggregateVelocity(dat, model, opt);
         end
     end
@@ -82,9 +82,9 @@ function [dat,model] = shape_process_pop(dat, model, opt)
             model = aggregateLatent(dat,model,opt);
             model = updateSubspace(dat, model, opt);
             model = lbSubspace(model, opt);
-            dat = distribute('updateResidualLB', 'inplace', dat, model, opt);
-            dat = distribute('lbLatent', 'inplace', dat, model, opt);
-            dat = distribute('lbVelocityShape', 'inplace', dat, model, opt);
+            dat   = distribute('updateResidualLB', 'inplace', dat, model, opt);
+            dat   = distribute('lbLatent', 'inplace', dat, model, opt);
+            dat   = distribute('lbVelocityShape', 'inplace', dat, model, opt);
             model = aggregateLatent(dat, model, opt);
             model = aggregateVelocity(dat, model, opt);
             if opt.ui.verbose
@@ -101,8 +101,8 @@ function [dat,model] = shape_process_pop(dat, model, opt)
                 t0 = shape_ui('Title', 'Orthogonalise Subspace', false, true);
             end
             [model,Q] = orthogonaliseSubspace(model, opt);
-            dat = distribute('rotateLatent', Q, 'inplace', dat);
-            dat = distribute('lbLatent', 'inplace', dat, model, opt);
+            dat   = distribute('rotateLatent', Q, 'inplace', dat);
+            dat   = distribute('lbLatent', 'inplace', dat, model, opt);
             model = aggregateLatent(dat,model,opt);
             model = lbSubspace(model, opt);
             model = lbLatentPrior(model, opt);
@@ -116,7 +116,7 @@ function [dat,model] = shape_process_pop(dat, model, opt)
             end
             model = updateLatentPrior(model, opt);
             model = lbLatentPrior(model, opt);
-            dat = distribute('lbLatent', 'inplace', dat, model, opt);
+            dat   = distribute('lbLatent', 'inplace', dat, model, opt);
             model = aggregateLatent(dat, model, opt);
             if opt.ui.verbose
                 shape_ui('PostTitle', toc(t0));
