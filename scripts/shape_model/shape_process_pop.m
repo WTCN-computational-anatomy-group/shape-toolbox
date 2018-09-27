@@ -140,7 +140,9 @@ function [dat,model] = shape_process_pop(dat, model, opt)
                 model = updateTemplate(model, opt);
                 model = lbTemplate(model, opt);
             case 'ml'
-                model = updateTemplateML(dat, model, opt);
+                % model = updateMuML(dat, model, opt);
+                a = updateMuML(opt.model, dat, 'lat', opt.tpl.lat);
+                model.tpl.a(:) = a(:);
         end
         model = updateTemplateDerivatives(model, opt);
         if opt.ui.verbose
