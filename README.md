@@ -135,6 +135,16 @@ _The current implementation, however, differs significantly:_
   Cons:
   * Since latent coordinates are obtained from velocity fields, it might take a few iterations before the shape model appropriately captures the main modes of variation.
 
+### Noise models
+
+Three noise models are implemented:
+
+* __Categorical:__ This model is designed for categorical inputs, typically segmentations into _C_ classes. In this case, the template is called a _tissue probability map_ as it embeds the prior probability of observing each class in a given location. Each input image must be a 4D volume (or a list of 3D volumes), where the fourth dimension corresponds to those classes. In each voxel, the sum over classes should be one, meaning that input volumes can be hard segmentations (where, in each voxel, exactly one class is one and all the other classes are zero) or soft probabilities. This model should be preferred when possible as it is non-parameteric and thus more robust. To learn from MRIs, we would typically advise to segment the images using SPM (or another neuroimaging software) first, and to use the grey and white classes as input for the shape model. Note that it is possible to provide uncomplete classes (which do not sum to one): in this case, the `model.nc` option should be used to specify the complete number of classes, allowing the missing (background) class to be automatically inferred by filling probabilities up to one.
+
+* __Bernoulli__: This is a special case of the Categorical model when there are only two classes. It would typically be used when working with MNIST (intensities should then be normalised to the range [0,1]).
+
+* __Normal/Gaussian:__ This model is classically used in shape modelling applications. Note that a good estimate of the noise variance σ<sup>2</sup> (`model.sigma2`) must be provided. We leave this estimation to the user. Also, if the noise is spatially correlated, regularisation parameters should be made stronger by incorporating a fudge factor.
+
 ## User documentation
 
 ### Input format
@@ -149,7 +159,7 @@ Regarding of the above choice, there are one mandatory input and one optional on
   * `'v'`: observed velocity fields (list)
   * `'w'`: principal subspace to use or initialise with
   * `'a'`: \[Bernoulli/Categorical only\] log-template to use or initialise with
-  * `'mu'`: \[Gaussian/Laplace only\] template to use or initialise with
+  * `'mu'`: \[Gaussian only\] template to use or initialise with
 - `opt`: \[optional\] a dictionary of options
   * All possible fields are provided below.
 
@@ -169,6 +179,8 @@ pg.bnd         - Boundary conditions for the geodesic operator              - [0
 pg.geod        - Additional geodesic prior on velocity fields               - [true]
 tpl.vs         - Lattice voxel size                                         - [auto]
 tpl.lat        - Lattice dimensions                                         - [auto]
+tpl.prm        - Parameters of the field operator                           - [1e-3  1e-1 0] (cat/ber)
+                                                                              [0     0    0] (normal)
 tpl.bnd        - Boundary conditions                                        - [1 = mirror]
 tpl.itrp       - Interpolation order                                        - [1]
 v.l0           - Prior expected anatomical noise precision                  - [17]

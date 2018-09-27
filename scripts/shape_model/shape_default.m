@@ -116,7 +116,11 @@ function opt = shape_default(opt)
         % 1) Absolute displacement
         % 2) Membrane energy
         % 3) Bending energy
-        opt.tpl.prm = [1e-3  1e-1 0];
+        if opt.tpl.cat
+            opt.tpl.prm = [1e-3  1e-1 0];
+        else
+            opt.tpl.prm = [0 0 0]; % Maximum likelihood
+        end
     end
     if ~isfield(opt.tpl, 'bnd')
         % Boundary condition (should be inversed for interpolation)

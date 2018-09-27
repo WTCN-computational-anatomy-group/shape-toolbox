@@ -60,7 +60,8 @@ function [model, dat, opt] = shape_model(varargin)
 % pg.bnd   - Boundary conditions for the geodesic operator [0 = circulant]
 % tpl.vs   - Lattice voxel size [auto]
 % tpl.lat  - Lattice dimensions [auto]
-% tpl.prm  - Parameters of the field operator [1e-3  1e-1 0]
+% tpl.prm  - Parameters of the field operator [1e-3  1e-1 0](cat/ber)
+%                                             [0     0    0](normal)
 % tpl.bnd  - Boundary conditions for the field operator [0 = circulant]
 % tpl.itrp - Interpolation order [1]
 % tpl.ld   - Field operator log-determinant [from prm]
