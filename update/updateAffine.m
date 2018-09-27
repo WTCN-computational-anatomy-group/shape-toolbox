@@ -33,11 +33,38 @@ function dat = updateAffine(dat, model, opt)
     end
 
     % =====================================================================
+    % Load stuff if needed
+    if isempty(defval(dat.buffer, 'f.f', []))
+        if opt.buf, dat.buffer.f.f = numeric(dat.f.f);
+        else,       dat.buffer.f.f = dat.f.f;                   end
+    end
+    if isempty(defval(dat.buffer, 'tpl.wmu', []))
+        if opt.buf, dat.buffer.tpl.wmu = numeric(dat.tpl.wmu);
+        else,       dat.buffer.tpl.wmu = dat.tpl.wmu;           end
+    end
+    if isempty(defval(dat.buffer, 'tpl.a', []))
+        if opt.buf, dat.buffer.tpl.a = numeric(model.tpl.a);
+        else,       dat.buffer.tpl.a = model.tpl.a;             end
+    end
+    if isempty(defval(dat.buffer, 'tpl.gmu', []))
+        if opt.buf, dat.buffer.tpl.gmu = numeric(model.tpl.gmu);
+        else,       dat.buffer.tpl.gmu = model.tpl.gmu;         end
+    end
+    if isempty(defval(dat.buffer, 'v.ipsi', []))
+        if opt.buf, dat.buffer.v.ipsi = numeric(dat.v.ipsi);
+        else,       dat.buffer.v.ipsi = dat.v.ipsi;             end
+    end
+    if isfield(dat.v, 'v') && isempty(defval(dat.buffer, 'v.v', []))
+        if opt.buf, dat.buffer.v.v = numeric(dat.v.v);
+        else,       dat.buffer.v.v = dat.v.v;                   end
+    end
+    
+    % =====================================================================
     % If non-rigid transformation
     % > compute direct diffeomorphism and jacobian determinant
     if isfield(dat.v, 'v')
         [iphi, phi, jac] = exponentiateVelocity(...
-            dat.v.v, ...               % Current velocity
+            dat.buffer.v.v, ...        % Current velocity
             'iphi', 'phi', 'jac', ...  % What to compute?
             'itgr',  opt.iter.itg, ... % Nb of integration steps
             'vs',    opt.tpl.vs, ...   % Velocity voxel size
@@ -76,20 +103,20 @@ function dat = updateAffine(dat, model, opt)
         % -----------------------------------------------------------------
         % Gradient/Hessian of the likelihood term
         [g, h] = ghMatchingAffine(...
-            noisemodel, ...             % Matching model (categorical/normal/...)
-            dat.tpl.wmu, ...            % Warped (+ softmaxed) template
-            dat.f.f, ...                % Observed matched image (responsibility)
-            model.tpl.gmu, ...          % (Log)-template spatial gradients
-            dat.q.A, ...                % Current rigid/affine transform
-            opt.q.B, ...                % Rigid/affine Lie basis
-            phi, ...                    % Direct diffeomorphism
-            jac, ...                    % Jacobian determinant of the direct diffeo
-            'ipsi',   dat.v.ipsi, ...   % Complete (rigid+diffeo) inverse transform
-            'circ',  ~opt.tpl.bnd, ...  % Boundary conditions
-            'Mmu',    model.tpl.M, ...  % Template voxel-to-world
-            'approx', opt.q.hapx, ....  % Approximate hessian? (usually true)
+            noisemodel, ...                  % Matching model (categorical/normal/...)
+            dat.buffer.tpl.wmu, ...          % Warped (+ softmaxed) template
+            dat.buffer.f.f, ...              % Observed matched image (responsibility)
+            dat.buffer.tpl.gmu, ...          % (Log)-template spatial gradients
+            dat.q.A, ...                     % Current rigid/affine transform
+            opt.q.B, ...                     % Rigid/affine Lie basis
+            phi, ...                         % Direct diffeomorphism
+            jac, ...                         % Jacobian determinant of the direct diffeo
+            'ipsi',   dat.buffer.v.ipsi, ... % Complete (rigid+diffeo) inverse transform
+            'circ',  ~opt.tpl.bnd, ...       % Boundary conditions
+            'Mmu',    model.tpl.M, ...       % Template voxel-to-world
+            'approx', opt.q.hapx, ....       % Approximate hessian? (usually true)
             'par',    opt.par.within_subject, ... % Parallelise stuff? (usually no)
-            'debug',  opt.ui.debug);    % Write debuging stuff? (usually no)
+            'debug',  opt.ui.debug);          % Write debuging stuff? (usually no)
 
         % -----------------------------------------------------------------
         % Gradient/Hessian of the prior term (only if not rigid)
@@ -120,7 +147,7 @@ function dat = updateAffine(dat, model, opt)
             dq, ...                     % Search direction
             dat.q.q, ...                % Previous parameters
             dat.f.lb.val, ...           % Previous matching term value
-            model.tpl.a, ...            % (Log)-template parameters
+            dat.buffer.tpl.a, ...       % (Log)-template parameters
             dat.f.f, ...                % Observed matched image (responsibility)
             'B',       opt.q.B, ...     % Rigid/affine Lie basis
             'regq',    A, ...           % Prior precision matrix (only if not rigid)
@@ -131,11 +158,11 @@ function dat = updateAffine(dat, model, opt)
             'nit',     lsiter, ...      % Number of line search iterations
             'par',     opt.par.within_subject, ... % Parallelise processing? (usually no)
             'verbose', opt.ui.verbose > 1, ...     % Talk during line search?
-            'debug',   opt.ui.debug, ...% Write debugging talk? (usually no)
-            'pf',      dat.f.pf, ...    % File array to store the new pushed image
-            'c',       dat.f.c, ...     % File array to store the new count image
-            'wa',      dat.tpl.wa, ...  % File array to store the new warped log-template
-            'wmu',     dat.tpl.wmu);    % File array to store the new warped+softmaxed template
+            'debug',   opt.ui.debug);   % Write debugging talk? (usually no)
+%             'pf',      dat.f.pf, ...    % File array to store the new pushed image
+%             'c',       dat.f.c, ...     % File array to store the new count image
+%             'wa',      dat.tpl.wa, ...  % File array to store the new warped log-template
+%             'wmu',     dat.tpl.wmu);    % File array to store the new warped+softmaxed template
 
         % -----------------------------------------------------------------
         % Store better values
@@ -147,6 +174,7 @@ function dat = updateAffine(dat, model, opt)
             dat.q.A       = result.A;
             dat.f.lb.val  = result.llm;
             dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
+            if opt.buf, dat.buffer.v.ipsi = result.ipsi; end
             if strcmpi(opt.tpl.update, 'ml')
                 dat.f.pf      = copyarray(result.pf,   dat.f.pf);
                 dat.f.c       = copyarray(result.c,    dat.f.c);
@@ -156,6 +184,7 @@ function dat = updateAffine(dat, model, opt)
             end
             dat.f.bb      = result.bb;
             dat.tpl.wmu   = copyarray(result.wmu, dat.tpl.wmu);
+            if opt.buf, dat.buffer.tpl.wmu = result.wmu; end
             rmarray(result.wa);
         else
             break
@@ -186,14 +215,14 @@ function dat = updateAffine(dat, model, opt)
             % Likelihood part
             h = ghMatchingAffine(...
                 noisemodel, ...             % Matching model (categorical/normal/...)
-                dat.tpl.wmu, ...            % Warped (+ softmaxed) template
-                dat.f.f, ...                % Observed matched image (responsibility)
-                model.tpl.gmu, ...          % (Log)-template spatial gradients
+                dat.buffer.tpl.wmu, ...     % Warped (+ softmaxed) template
+                dat.buffer.f.f, ...         % Observed matched image (responsibility)
+                dat.buffer.tpl.gmu, ...     % (Log)-template spatial gradients
                 dat.q.A, ...                % Current rigid/affine transform
                 opt.q.B, ...                % Rigid/affine Lie basis
                 phi, ...                    % Direct diffeomorphism
                 jac, ...                    % Jacobian determinant of the direct diffeo
-                'ipsi',    dat.v.ipsi, ...  % Complete (rigid+diffeo) inverse transform
+                'ipsi',    dat.buffer.v.ipsi, ... % Complete (rigid+diffeo) inverse transform
                 'circ',  ~opt.tpl.bnd, ...  % Boundary conditions
                 'hessian', true, ...        % Do not compute gradient
                 'Mmu',     model.tpl.M, ... % Template voxel-to-world

@@ -45,6 +45,33 @@ function dat = updateVelocityShape(dat, model, opt)
     else,                                         A = eye(4);  end
     
     % =====================================================================
+    % Load stuff if needed
+    if isempty(defval(dat.buffer, 'f.f', []))
+        if opt.buf, dat.buffer.f.f = numeric(dat.f.f);
+        else,       dat.buffer.f.f = dat.f.f;                   end
+    end
+    if isempty(defval(dat.buffer, 'tpl.wmu', []))
+        if opt.buf, dat.buffer.tpl.wmu = numeric(dat.tpl.wmu);
+        else,       dat.buffer.tpl.wmu = dat.tpl.wmu;           end
+    end
+    if isempty(defval(dat.buffer, 'tpl.a', []))
+        if opt.buf, dat.buffer.tpl.a = numeric(model.tpl.a);
+        else,       dat.buffer.tpl.a = model.tpl.a;             end
+    end
+    if isempty(defval(dat.buffer, 'tpl.gmu', []))
+        if opt.buf, dat.buffer.tpl.gmu = numeric(model.tpl.gmu);
+        else,       dat.buffer.tpl.gmu = model.tpl.gmu;         end
+    end
+    if isempty(defval(dat.buffer, 'v.ipsi', []))
+        if opt.buf, dat.buffer.v.ipsi = numeric(dat.v.ipsi);
+        else,       dat.buffer.v.ipsi = dat.v.ipsi;             end
+    end
+    if isempty(defval(dat.buffer, 'v.v', []))
+        if opt.buf, dat.buffer.v.v = numeric(dat.v.v);
+        else,       dat.buffer.v.v = dat.v.v;                   end
+    end
+    
+    % =====================================================================
     % Gauss-Newton iterations
     % It is useful to actually find a mode of the posterior (and not 
     % only an improved value) when we use the Laplace precision for  
@@ -56,14 +83,14 @@ function dat = updateVelocityShape(dat, model, opt)
         % -----------------------------------------------------------------
         % Gradient/Hessian of the likelihood term
         [g, h] = ghMatchingVel(...
-            noisemodel, ...             % Matching model (categorical/normal/...)
-            dat.tpl.wmu, ...            % Warped (+ softmaxed) template
-            dat.f.f, ...                % Observed matched image (responsibility)
-            model.tpl.gmu, ...          % (Log)-template spatial gradients
-            'ipsi',  dat.v.ipsi, ...    % Complete (rigid+diffeo) inverse transform
-            'circ',  ~opt.tpl.bnd, ...  % Boundary conditions
+            noisemodel, ...                      % Matching model (categorical/normal/...)
+            dat.buffer.tpl.wmu, ...              % Warped (+ softmaxed) template
+            dat.buffer.f.f, ...                  % Observed matched image (responsibility)
+            dat.buffer.tpl.gmu, ...              % (Log)-template spatial gradients
+            'ipsi',  dat.buffer.v.ipsi, ...      % Complete (rigid+diffeo) inverse transform
+            'circ',  ~opt.tpl.bnd, ...           % Boundary conditions
             'par',   opt.par.within_subject, ... % Parallelise stuff? (usually no)
-            'debug', opt.ui.debug);     % Write debuging stuff? (usually no)
+            'debug', opt.ui.debug);              % Write debuging stuff? (usually no)
 
 
         % -----------------------------------------------------------------
@@ -74,7 +101,7 @@ function dat = updateVelocityShape(dat, model, opt)
                 'subspace', model.pg.w, ...
                 'par',      opt.par.within_subject);
         g = g - spm_diffeo('vel2mom', wz, double([opt.tpl.vs (model.mixreg.w(1) * model.v.l * opt.pg.prm)]));
-        v = numeric(dat.v.v);
+        v = numeric(dat.buffer.v.v);
         r = v - wz;
         clear wz
         % g = g + (w * lam + (1-w)) * Lv
@@ -99,7 +126,7 @@ function dat = updateVelocityShape(dat, model, opt)
             dv, ...                     % Search direction
             r, ...                      % Previous residual field
             dat.f.lb.val, ...
-            model.tpl.a, ...
+            dat.buffer.tpl.a, ...
             dat.f.f, ...
             'v0',       v, ...                 % Previous velocity field (only needed if w(2) > 0)
             'lam',      model.v.l, ...         % Residual precision
@@ -113,11 +140,11 @@ function dat = updateVelocityShape(dat, model, opt)
             'nit',      lsiter,  ...           % Line search iterations
             'par',      opt.par.within_subject, ... % Parallelise processing? (usually no)
             'verbose',  opt.ui.verbose>1, ...  % Talk during line search?
-            'debug',    opt.ui.debug, ...      % Write debugging talk? (usually no)
-            'pf',       dat.f.pf, ...          % File array to store the new pushed image
-            'c',        dat.f.c, ...           % File array to store the new count image
-            'wa',       dat.tpl.wa, ...        % File array to store the new warped log-template
-            'wmu',      dat.tpl.wmu);          % File array to store the new warped+softmaxed template
+            'debug',    opt.ui.debug);         % Write debugging talk? (usually no)
+%             'pf',       dat.f.pf, ...          % File array to store the new pushed image
+%             'c',        dat.f.c, ...           % File array to store the new count image
+%             'wa',       dat.tpl.wa, ...        % File array to store the new warped log-template
+%             'wmu',      dat.tpl.wmu);          % File array to store the new warped+softmaxed template
 
         % -----------------------------------------------------------------
         % Store better values
@@ -125,14 +152,15 @@ function dat = updateVelocityShape(dat, model, opt)
         compute_hessian = result.ok;
         if result.ok
             dat.f.lb.val  = result.match;
-            dat.v.v       = copyarray(result.v,    dat.v.v);
+            dat.v.v       = copyarray(result.v, dat.v.v);
+            if opt.buf, dat.buffer.v.v = result.v; end
             m = spm_diffeo('vel2mom', result.v, double([opt.tpl.vs opt.pg.prm]));
             if model.mixreg.w(2)
                 dat.v.lb.regv = result.v(:)' * m(:);
             end
             clear m
-            dat.v.r       = copyarray(result.r,    dat.v.r);
             dat.v.ipsi    = copyarray(result.ipsi, dat.v.ipsi);
+            if opt.buf, dat.buffer.v.ipsi = result.ipsi; end
             if strcmpi(opt.tpl.update, 'ml')
                 dat.f.pf      = copyarray(result.pf,   dat.f.pf);
                 dat.f.c       = copyarray(result.c,    dat.f.c);
@@ -142,9 +170,10 @@ function dat = updateVelocityShape(dat, model, opt)
             end
             dat.f.bb      = result.bb;
             dat.tpl.wmu   = copyarray(result.wmu, dat.tpl.wmu);
+            if opt.buf, dat.buffer.tpl.wmu = result.wmu; end
             rmarray(result.wa);
-            r = result.r;
-            ipsi = dat.v.ipsi;
+            r    = result.r;
+            ipsi = result.ipsi;
         else
             break
         end
@@ -173,7 +202,7 @@ function dat = updateVelocityShape(dat, model, opt)
     
     % ---------------------------------------------------------------------
     % Residual regularisation
-    m = spm_diffeo('vel2mom', single(numeric(r)), double([opt.tpl.vs opt.pg.prm]));
+    m = spm_diffeo('vel2mom', single(r), double([opt.tpl.vs opt.pg.prm]));
     dat.v.lb.reg = r(:)' * m(:);
     clear r m
 
@@ -182,8 +211,8 @@ function dat = updateVelocityShape(dat, model, opt)
     if compute_hessian
         h = ghMatchingVel(...
             noisemodel, ...             % Matching model (categorical/normal/...)
-            dat.tpl.wmu, ...            % Warped (+ softmaxed) template
-            dat.f.f, ...                % Observed matched image (responsibility)
+            dat.buffer.tpl.wmu, ...     % Warped (+ softmaxed) template
+            dat.buffer.f.f, ...         % Observed matched image (responsibility)
             model.tpl.gmu, ...          % (Log)-template spatial gradients
             'ipsi',    ipsi, ...        % Complete (rigid+diffeo) inverse transform
             'circ',  ~opt.tpl.bnd, ...  % Boundary conditions

@@ -75,6 +75,10 @@ function dat = shape_process_subject(dat, model, opt)
     end
     
     % =====================================================================
+    % Free buffer
+    dat.buffer = struct;
+    
+    % =====================================================================
     % Exit
     dat = structToFile(dat, datpath);
 end

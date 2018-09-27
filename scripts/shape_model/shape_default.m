@@ -15,7 +15,10 @@ function opt = shape_default(opt)
     %    MODEL
     % =====================================================================
     
-    opt.match = 'pull';
+    opt.match  = 'pull';
+    if ~isfield(opt, 'buf')
+        opt.buf = false;
+    end
     
     % ---------------------------------------------------------------------
     % Data model

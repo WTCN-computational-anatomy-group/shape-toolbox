@@ -147,6 +147,9 @@ function [opt, dat, model] = shape_data(opt, dat, model)
         end
     end
     
+    [dat.buffer] = deal(struct);
+    
+    
     % Create all output directories
     % -----------------------------
     

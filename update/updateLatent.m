@@ -21,6 +21,13 @@ function dat = updateLatent(dat, model, opt)
     % mean:       z = w * lam * S * W'Lv
     
     % =====================================================================
+    % Load stuff if needed
+    if isempty(defval(dat.buffer, 'v.v', []))
+        if opt.buf, dat.buffer.v.v = numeric(dat.v.v);
+        else,       dat.buffer.v.v = dat.v.v;                   end
+    end
+    
+    % =====================================================================
     % Update covariance
     dat.z.S = model.mixreg.w(1) * model.v.l * model.pg.ww + model.z.A;
     dat.z.S = spm_matcomp('Inv', dat.z.S);
@@ -29,7 +36,7 @@ function dat = updateLatent(dat, model, opt)
     % Update mean
     spm_diffeo('boundary', opt.pg.bnd);
     wm = zeros([opt.pg.K 1]);
-    m = spm_diffeo('vel2mom', single(numeric(dat.v.v)), double([opt.tpl.vs opt.pg.prm]));
+    m = spm_diffeo('vel2mom', single(numeric(dat.buffer.v.v)), double([opt.tpl.vs opt.pg.prm]));
     for k=1:opt.pg.K
         w1    = model.pg.w(:,:,:,:,k);
         wm(k) = w1(:)'*m(:);
