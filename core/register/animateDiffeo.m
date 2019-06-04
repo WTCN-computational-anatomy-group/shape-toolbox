@@ -95,29 +95,62 @@ function animateDiffeo(iphi, varargin)
         fprintf('i = %3d', i);
         
         if ~isempty(def)
-            fprintf(' | Def');
+            fprintf(' | Def');
             figure(fig);
             h = imshow_deformation(iphi(:,:,:,:,i)-id, vs, x, slice, nrm);
             frames_def(i) = getframe(h.Parent);
         end
         
         if ~isempty(grid)
-            fprintf(' | Grid');
-            g1 = warp(iphi(:,:,:,:,i), grid_image);
+            fprintf(' | Grid');
+%             g1 = warp(iphi(:,:,:,:,i), grid_image);
+%             switch slice
+%                 case 1
+%                     g1 = reshape(g1(x,:,:), [dim(2) dim(3)]);
+%                 case 2
+%                     g1 = reshape(g1(:,x,:), [dim(1) dim(3)]);
+%                 case 3
+%                     g1 = reshape(g1(:,:,x), [dim(1) dim(2)]);
+%                 otherwise
+%                     error('not handled')
+%             end
+%             g1 = permute(g1, [2 1]);
+%             figure(fig);
+%             h = imagesc(g1);
+%             colormap(gray)
+            figure(fig);
             switch slice
                 case 1
-                    g1 = reshape(g1(x,:,:), [dim(2) dim(3)]);
+                    g11 = reshape(iphi(x,:,:,2,i), [dim(2) dim(3)]);
+                    g12 = reshape(iphi(x,:,:,3,i), [dim(2) dim(3)]);
+                    xmin = min(min(min(iphi(x,:,:,2,:))));
+                    xmax = max(max(max(iphi(x,:,:,2,:))));
+                    ymin = min(min(min(iphi(x,:,:,3,:))));
+                    ymax = max(max(max(iphi(x,:,:,3,:))));
                 case 2
-                    g1 = reshape(g1(:,x,:), [dim(1) dim(3)]);
+                    g11 = reshape(iphi(:,x,:,1,i), [dim(1) dim(3)]);
+                    g12 = reshape(iphi(:,x,:,3,i), [dim(1) dim(3)]);
+                    xmin = min(min(min(iphi(:,x,:,1,:))));
+                    xmax = max(max(max(iphi(:,x,:,1,:))));
+                    ymin = min(min(min(iphi(:,x,:,3,:))));
+                    ymax = max(max(max(iphi(:,x,:,3,:))));
                 case 3
-                    g1 = reshape(g1(:,:,x), [dim(1) dim(2)]);
+                    g11 = reshape(iphi(:,:,x,1,i), [dim(1) dim(2)]);
+                    g12 = reshape(iphi(:,:,x,2,i), [dim(1) dim(2)]);
+                    xmin = min(min(min(iphi(:,:,x,1,:))));
+                    xmax = max(max(max(iphi(:,:,x,1,:))));
+                    ymin = min(min(min(iphi(:,:,x,2,:))));
+                    ymax = max(max(max(iphi(:,:,x,2,:))));
                 otherwise
                     error('not handled')
             end
-            g1 = permute(g1, [2 1]);
-            figure(fig);
-            h = imagesc(g1);
-            colormap(gray)
+            g11 = g11(1:5:end,1:5:end);
+            g12 = g12(1:5:end,1:5:end);
+%             g11 = permute(g11, [2 1]);
+%             g12 = permute(g12, [2 1]);
+            h = plot(g11,g12,'k',g11',g12','k');
+            xlim([xmin xmax])
+            ylim([ymin ymax])
             axis off
             switch slice
                 case 1
@@ -127,12 +160,12 @@ function animateDiffeo(iphi, varargin)
                 case 3
                     daspect([1/vs(1) 1/vs(2) 1]);
             end
-            frames_grid(i) = getframe(h.Parent);
+            frames_grid(i) = getframe(h(1).Parent);
             clear g1
         end
             
         if ~isempty(image)
-            fprintf(' | Image');
+            fprintf(' | Image');
             a1 = warp(iphi(:,:,:,:,i), a);
             if iscat
                 a1 = reconstructProbaTemplate(a1);
@@ -179,18 +212,32 @@ function animateDiffeo(iphi, varargin)
             iter = 1:N;
         end
         framerate = numel(iter)/duration;
-        if endsWith(fname, 'avi')
-            vid = VideoWriter(fname);
-            vid.FrameRate = framerate;
-            open(vid);
-        elseif endsWith(fname, 'mp4')
-            vid = VideoWriter(fname, 'MPEG-4');
+        if endsWith(fname, 'mp4'), vidopt = {'MPEG-4'};
+        else,                      vidopt = {};
+        end
+        if endsWith(fname, 'avi') || endsWith(fname, 'mp4')
+            vid = VideoWriter(fname, vidopt{:});
             vid.FrameRate = framerate;
             open(vid);
         end
         first_frame = true;
         for i=iter
-            fprintf('i: %d\n', i);
+            if i > 1
+                dim1 = size(frames(i).cdata);
+                dim0 = size(frames(1).cdata);
+                if dim1(1) > dim0(1)
+                    frames(i).cdata = frames(i).cdata(1:dim0(1),:,:);
+                end
+                if dim1(2) > dim0(2)
+                    frames(i).cdata = frames(i).cdata(:,1:dim0(2),:);
+                end
+                if dim1(1) < dim0(1)
+                    frames(i).cdata = padarray(frames(i).cdata, [dim0(1)-dim1(1) 0 0], 0, 'post');
+                end
+                if dim1(2) < dim0(2)
+                    frames(i).cdata = padarray(frames(i).cdata, [0 dim0(2)-dim1(2) 0], 0, 'post');
+                end
+            end
             if endsWith(fname, 'gif')
                 [imind, cm] = rgb2ind(frame2im(frames(i)), 256);
                 if first_frame
