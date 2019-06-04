@@ -68,7 +68,7 @@ function varargout = exponentiateVelocity(v, varargin)
     p.addParameter('itgr',   nan);
     p.addParameter('vs',     [1 1 1]);
     p.addParameter('prm',    [0.0001 0.001 0.2 0.05 0.2]);
-    p.addParameter('bnd',      0, @(X) isscalar(X) && isnumeric(X));
+    p.addParameter('bnd',    0, @(X) isscalar(X) && isnumeric(X));
     p.addParameter('output', []);
     p.addParameter('debug',  false);
     p.parse(v, varargin{:});
