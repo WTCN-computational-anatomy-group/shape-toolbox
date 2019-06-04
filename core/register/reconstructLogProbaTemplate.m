@@ -29,7 +29,7 @@ function a = reconstructLogProbaTemplate(na, varargin)
     output = p.Results.output;
     debug  = p.Results.debug;
     
-    if debug, fprintf('* reconstructLogProbaTemplate\n'); end;
+    if debug, fprintf('* reconstructLogProbaTemplate\n'); end
     
     % --- Optimise parallelisation and splitting schemes
     [par, loop] = autoParLoop(par, loop, isa(na, 'file_array'), size(na, 3));

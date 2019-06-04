@@ -87,3 +87,7 @@
 
 ## Mac ignore
 .DS_Store
+
+## data processing folders
+input
+output

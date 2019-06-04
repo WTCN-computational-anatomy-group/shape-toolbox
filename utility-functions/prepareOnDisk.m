@@ -67,5 +67,6 @@ function out = prepareOnDisk(where, dim, varargin)
     end
     
     out.dim = dim;
+    initialise(out);
     
 end

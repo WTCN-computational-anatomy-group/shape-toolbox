@@ -1,25 +1,32 @@
 function varargout = exponentiateVelocity(v, varargin)
-% FORMAT ([iphi, iJ, phi, J]) = exponentiateVelocity(v,
-%   ('iphi'), ('ijac'), ('phi'), ('jac'),
-%   ('itgr', itgr),
-%   ('vs',   vs),
-%   ('prm',  prm),
+%__________________________________________________________________________
 %
-% ** Required **
+% Exponentiate (= shoot) the initial velocity to recover transforms.
+%
+%--------------------------------------------------------------------------
+% FORMAT ([iphi, iJ, phi, J]) = exponentiateVelocity(v,
+%   ('iphi'), ('ijac'), ('phi'), ('jac'), ...)
+%
+% REQUIRED
+% --------
 % v      - Inital velocity (in template space)
-% ** Optional **
+%
+% OPTIONAL
+% --------
 % 'iphi' - Compute iphi (f = mu(iphi) -> Warps template to image)
 % 'ijac' - Compute D(iphi)
 % 'phi'  - Compute phi (f(phi) = mu -> Warps image to template)
 % 'jac'  - Compute D(phi)
-% ** Keyword arguments ии
+%
+% KEYWORD ARGUMENTS
+% -----------------
 % itgr   - Number of integration step (for geodesic shooting) [auto]
 % vs     - Voxel size of the initial velocity lattice [1 1 1]
 % prm    - Parameters of the L operator (see spm_diffeo) 
 %          [0.0001 0.001 0.2 0.05 0.2]
 % bnd    - L differential operator boundary conditions (0/1/2/3) [0]
 %
-% Exponentiate the initial velocity to recover transforms.
+%__________________________________________________________________________
 
     % --- Read which computations to perform
     do      = struct;
@@ -61,7 +68,7 @@ function varargout = exponentiateVelocity(v, varargin)
     p.addParameter('itgr',   nan);
     p.addParameter('vs',     [1 1 1]);
     p.addParameter('prm',    [0.0001 0.001 0.2 0.05 0.2]);
-    p.addParameter('bnd',      0, @(X) isscalar(X) && isnumeric(X));
+    p.addParameter('bnd',    0, @(X) isscalar(X) && isnumeric(X));
     p.addParameter('output', []);
     p.addParameter('debug',  false);
     p.parse(v, varargin{:});

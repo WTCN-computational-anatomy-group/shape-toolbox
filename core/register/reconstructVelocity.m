@@ -1,14 +1,18 @@
 function v = reconstructVelocity(varargin)
-% FORMAT (v) = obj.reconstructVelocity(('latent', z), ('subspace', W,),
-%                                      ('residual' r), ('sigma', s))
-% ** Keyword arguments **
+% FORMAT v = reconstructVelocity(('latent', z), ('subspace', W,),
+%                                ('residual' r), ('sigma', s))
+%
+% KEYWORD ARGUMENTS
+% -----------------
 % z    - Latent coordinates [do not use]
 % W    - Principal subspace [do not use]
 % r    - Residual velocity field [do not use]
 % s    - Variance captured by the residual field [1]
 % loop - How to split computation ('none', 'slice', 'component') [auto]
 % par  - If true, parallelise processing [false]
-% ** Output **
+%
+% OUTPUT
+% ------
 % v    - Output velocity
 %
 % Reconstruct the velocity field from its latent PC coordinates:

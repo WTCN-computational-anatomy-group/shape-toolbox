@@ -39,11 +39,11 @@ function varargout = pgva_batch(id, varargin)
 % FORMAT [dat, model] = pgva_batch('FitAffine', dat, model, opt)
 %   Gauss-Newton update of the affine coordinates
 %
-% FORMAT [dat, model] = pgva_batch('FitLatent', dat, model, opt)
-%   Gauss-Newton update of the latent coordinates
-%
 % FORMAT [dat, model] = pgva_batch('FitVelocity', dat, model, opt)
 %   Gauss-Newton update of the residual fields
+%
+% FORMAT [dat, model] = pgva_batch('FitLatent', dat, model, opt)
+%   Closed-form update of the latent coordinates
 %
 % ----------
 % Correction

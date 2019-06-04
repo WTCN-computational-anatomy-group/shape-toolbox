@@ -1,5 +1,5 @@
 function ll = llPriorSubspace(W, WW, vs, prm, bnd)
-% FORMAT ll = lbSubspace(EW, EWW, (ld / vs, prm, bnd))
+% FORMAT ll = lbSubspace(W, WW, (ld / vs, prm, bnd))
 % W   - MAP subspace W
 % WW  - MAP precision W'*L*W
 % vs  - Voxel size

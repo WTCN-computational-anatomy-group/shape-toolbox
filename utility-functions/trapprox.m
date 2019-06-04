@@ -67,7 +67,7 @@ function t = trapprox(varargin)
     dim   = p.Results.dim;
     which = strcmpi(p.Results.matrix, 'H+L');
     samp  = str2func(p.Results.method);
-    if strcmpi('type', 'field')
+    if strcmpi(p.Results.type, 'field')
         spm_func = @spm_field;
     else
         spm_func = @spm_diffeo;
